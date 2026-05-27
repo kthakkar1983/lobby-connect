@@ -1,4 +1,5 @@
 import { SHARED_PACKAGE_VERSION } from "@lc/shared";
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
@@ -8,6 +9,7 @@ export default function HomePage() {
         <p className="mt-2 text-sm text-text-muted">
           Foundation OK · shared v{SHARED_PACKAGE_VERSION}
         </p>
+        <Button className="mt-6">shadcn primitive renders</Button>
       </div>
     </main>
   );
