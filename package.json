@@ -8,6 +8,18 @@
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev:portal": "pnpm --filter @lc/portal dev",
+    "dev:kiosk": "pnpm --filter @lc/kiosk dev",
+    "build": "pnpm -r --filter=./apps/* build",
+    "lint": "pnpm -r --parallel lint && eslint .",
+    "test": "pnpm -r --parallel test",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop"
+  },
   "devDependencies": {
     "@eslint/js": "^9",
     "eslint": "^9",
