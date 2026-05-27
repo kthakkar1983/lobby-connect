@@ -234,7 +234,6 @@ create table profiles (
   twilio_identity text unique,                  -- null for OWNER role
   status text not null default 'OFFLINE'
     check (status in ('AVAILABLE', 'ON_CALL', 'OFFLINE')),
-  accepting_calls boolean not null default false,  -- ADMIN-only meaningful
   active boolean not null default true,
   mfa_secret text,                              -- v1.1 forward-compat
   last_seen_at timestamptz,
@@ -266,6 +265,7 @@ create table properties (
   playbook_version int default 1,
   logo_url text,                               -- Supabase Storage URL (public bucket)
   kiosk_welcome_message text default 'How can we help?',
+  kiosk_apology_message text default 'We''re sorry, no one is available right now. Please try again or call us directly.',
   geocoded_lat numeric,
   geocoded_long numeric,
   active boolean not null default true,
@@ -299,7 +299,27 @@ create index assignments_agent on property_assignments(primary_agent_id);
 
 **Invariant**: at most one row with `effective_until IS NULL OR effective_until > now()` per `property_id` at any time. Admin UI enforces this on save (closes the prior assignment first); no DB constraint in v1 because of complexity, but a periodic check could be added.
 
-### 5.5 `calls`
+### 5.5 `admin_call_availability`
+
+Per-property call-acceptance toggle for ADMINs. Replaces the former `profiles.accepting_calls` global boolean — availability is now scoped to each property (pod) so an admin can be on-call for Property A but not Property B.
+
+```sql
+create table admin_call_availability (
+  profile_id uuid references profiles(id) on delete cascade not null,
+  property_id uuid references properties(id) on delete cascade not null,
+  operator_id uuid references operators(id) not null,
+  accepting_calls boolean not null default false,
+  updated_at timestamptz default now() not null,
+  primary key (profile_id, property_id)
+);
+
+create index aca_property_accepting on admin_call_availability(property_id)
+  where accepting_calls = true;   -- fast lookup on the inbound-call routing hot path
+```
+
+Rows are upserted (not deleted) when the toggle changes. A missing row is treated the same as `accepting_calls = false`. The routing webhook reads this table with the service role — no RLS concern on the hot path.
+
+### 5.6 `calls`
 
 ```sql
 create table calls (
@@ -332,7 +352,7 @@ create index calls_state_active on calls(state)
   where state in ('RINGING', 'IN_PROGRESS');   -- partial index for active call lookups
 ```
 
-### 5.6 `audit_logs`
+### 5.7 `audit_logs`
 
 ```sql
 create table audit_logs (
@@ -352,10 +372,10 @@ create index audit_entity on audit_logs(entity_type, entity_id);
 ```
 
 **What gets logged (v1):** sign-in, sign-out, password change, user invited, user role changed, user active toggled, property created/edited/deleted, property settings changed.
-**What does NOT get logged:** page views, read queries, heartbeats, `accepting_calls` toggle (high-frequency, low-value).
+**What does NOT get logged:** page views, read queries, heartbeats, `accepting_calls` per-property toggle (high-frequency, low-value).
 **Who reads it:** admins only, via `/audit` route.
 
-### 5.7 `operator_settings`
+### 5.8 `operator_settings`
 
 Per-operator key/value config. Used for things like recording disclosure URL that need to vary per-tenant in v2 SaaS mode.
 
@@ -371,7 +391,7 @@ create table operator_settings (
 
 Known keys: `recording_disclosure_audio_url`, `apology_audio_url`, `default_max_ring_seconds`.
 
-### 5.8 Storage buckets
+### 5.9 Storage buckets
 
 | Bucket | Visibility | Contents |
 |---|---|---|
@@ -403,6 +423,7 @@ RLS is **enabled on every table**. The service role (used by Twilio webhooks, ad
 | `profiles` | Self + same-operator profiles (owner only sees admins/agents on properties they own) | Self update of limited fields (name, password). Admin updates any in own operator. |
 | `properties` | Admin: all in operator. Agent: assigned properties only. Owner: their owned properties. | Admin only |
 | `property_assignments` | Same as properties | Admin only |
+| `admin_call_availability` | Admin: own rows only. Agent/Owner: none. | Admin: own rows only (upserted via toggle API route). Service role reads on routing hot path. |
 | `calls` | Admin: all. Agent: calls they handled. Owner: calls at their properties. | Service role only (webhooks write) |
 | `audit_logs` | Admin only | Service role only |
 | `operator_settings` | Any authenticated user in operator | Admin only |
@@ -436,14 +457,14 @@ Next.js handler:
   1. Verify HMAC signature using Twilio Node SDK
   2. Look up property by routing_did
   3. Look up active property_assignment → primary agent
-  4. Look up admins in same operator with accepting_calls=true
+  4. Look up admins with accepting_calls=true in admin_call_availability for this property
   5. INSERT into calls (state=RINGING, channel=AUDIO)
   6. Build TwiML:
        <Response>
          <Play>{recording_disclosure_audio_url}</Play>
          <Dial timeout="120" action="/api/twilio/voice/dial-result">
            <Client>{primary_agent.twilio_identity}</Client>
-           <Client>{admin1.twilio_identity}</Client>  ← if accepting_calls
+           <Client>{admin1.twilio_identity}</Client>  ← if accepting_calls=true for this property
            <Client>{admin2.twilio_identity}</Client>  ← etc.
          </Dial>
        </Response>
@@ -555,7 +576,7 @@ UPDATE calls state=COMPLETED
 - **Active route**: highlighted with `--color-primary`.
 - **No breadcrumbs** in v1.
 - **Modals**: plain React state (not URL state). Browser back navigates the *page*, not the modal.
-- **Header**: profile menu (sign out), `accepting_calls` toggle (admins only), notifications dot. No theme toggle.
+- **Header**: profile menu (sign out), notifications dot. No theme toggle. `accepting_calls` toggle is per-property — surfaced on each property card in the admin dashboard, not a global header toggle.
 - **Kiosk**: zero navigation chrome. Full-screen, locked-down, only the K-buttons in the spec.
 
 ### 9.4 Feedback (toasts, confirms, validation)
@@ -614,7 +635,7 @@ UPDATE calls state=COMPLETED
 - Admin CRUD: agents, properties, staff (admins, owners), assignments
 - Owner portal (mobile-first responsive): properties, recent calls, recording playback
 - Kiosk video (Agora) with K-01 → K-04 → K-08 flow
-- `accepting_calls` toggle in admin header
+- `accepting_calls` toggle per property in admin dashboard (pod-specific, not global)
 - Audit log with admin-only `/audit` viewer
 - Status page (`/status`) for admin
 - Sentry error tracking
@@ -676,7 +697,7 @@ Doors left open. None of these require destructive migration.
 
 These are not blocking v1 but should be tracked.
 
-1. **Property owner contact details on K-08**: K-08 spec says "try again or call the property directly at `{property_phone_number}`". Confirm the exact copy on the kiosk overlay.
+1. ~~**K-08 apology copy**~~ **Resolved**: `kiosk_apology_message` is now a per-property owner-editable field on the `properties` table (default: `'We're sorry, no one is available right now. Please try again or call us directly.'`). The kiosk K-08 overlay reads this field. `{property_phone_number}` is appended by the kiosk at runtime if the field is non-null.
 2. **Apology TwiML audio file**: needs to be recorded once and uploaded to `audio/` bucket. Voice talent TBD.
 3. **Recording disclosure file**: same. Single universal phrase: "Calls may be recorded for quality and training purposes."
 4. **Kiosk hardware**: tablet model, mount, network connectivity for pilot hotel.
