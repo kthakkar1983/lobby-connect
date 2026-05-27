@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(98% 0.005 240);
+  --color-foreground: oklch(20% 0.02 240);
+  --color-primary: oklch(48% 0.18 256);
+  --color-primary-foreground: oklch(98% 0.005 240);
+  --color-border: oklch(90% 0.01 240);
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Prevent text selection / long-press menus on tablet. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
