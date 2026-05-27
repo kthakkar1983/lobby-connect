@@ -29,6 +29,7 @@ pnpm-debug.log*
 .turbo/
 .cache/
 .vercel/
+*.tsbuildinfo
 
 # Testing
 coverage/

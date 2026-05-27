@@ -14,13 +14,12 @@
     "noEmit": true
   },
   "include": [
-    ".next/types/**/*",
+    "next-env.d.ts",
     "app/**/*",
     "components/**/*",
     "lib/**/*",
-    "next-env.d.ts",
     "tests/**/*",
-    ".next/types/**/*.ts"
+    ".next/types/**/*"
   ],
   "exclude": [
     "node_modules"
