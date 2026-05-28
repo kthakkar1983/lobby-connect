@@ -54,3 +54,64 @@ create policy "profiles_update_admin" on profiles
   for update to authenticated
   using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
   with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
+
+-- =============================================================================
+-- 4. properties
+--    SELECT: admin (all in op) OR owner (own properties) OR agent (assigned)
+--    INSERT/UPDATE/DELETE: admin only
+-- =============================================================================
+
+drop policy if exists "properties_select" on properties;
+create policy "properties_select" on properties
+  for select to authenticated
+  using (
+    operator_id = current_user_operator_id()
+    and (
+      current_user_role() = 'ADMIN'
+      or (current_user_role() = 'OWNER' and owner_user_id = auth.uid())
+      or (
+        current_user_role() = 'AGENT'
+        and exists (
+          select 1 from property_assignments pa
+          where pa.property_id = properties.id
+            and pa.primary_agent_id = auth.uid()
+            and (pa.effective_until is null or pa.effective_until > now())
+        )
+      )
+    )
+  );
+
+drop policy if exists "properties_admin_write" on properties;
+create policy "properties_admin_write" on properties
+  for all to authenticated
+  using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
+  with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
+
+-- =============================================================================
+-- 5. property_assignments
+--    SELECT: admin OR primary agent OR backup agent OR property owner
+--    INSERT/UPDATE/DELETE: admin only
+-- =============================================================================
+
+drop policy if exists "assignments_select" on property_assignments;
+create policy "assignments_select" on property_assignments
+  for select to authenticated
+  using (
+    operator_id = current_user_operator_id()
+    and (
+      current_user_role() = 'ADMIN'
+      or primary_agent_id = auth.uid()
+      or backup_agent_id = auth.uid()
+      or exists (
+        select 1 from properties p
+        where p.id = property_assignments.property_id
+          and p.owner_user_id = auth.uid()
+      )
+    )
+  );
+
+drop policy if exists "assignments_admin_write" on property_assignments;
+create policy "assignments_admin_write" on property_assignments
+  for all to authenticated
+  using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
+  with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
