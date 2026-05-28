@@ -10,6 +10,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./"),
+      // server-only throws in test environments — replace with a no-op module
+      "server-only": path.resolve(import.meta.dirname, "tests/__mocks__/server-only.ts"),
     },
   },
 });
