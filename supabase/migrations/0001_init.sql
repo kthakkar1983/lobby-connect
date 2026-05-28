@@ -201,3 +201,27 @@ create table if not exists operator_settings (
   updated_at timestamptz not null default now(),
   primary key (operator_id, key)
 );
+
+-- =============================================================================
+-- 4. UPDATED_AT TRIGGERS
+-- =============================================================================
+
+drop trigger if exists profiles_set_updated_at on profiles;
+create trigger profiles_set_updated_at
+  before update on profiles
+  for each row execute function set_updated_at();
+
+drop trigger if exists properties_set_updated_at on properties;
+create trigger properties_set_updated_at
+  before update on properties
+  for each row execute function set_updated_at();
+
+drop trigger if exists admin_call_availability_set_updated_at on admin_call_availability;
+create trigger admin_call_availability_set_updated_at
+  before update on admin_call_availability
+  for each row execute function set_updated_at();
+
+drop trigger if exists operator_settings_set_updated_at on operator_settings;
+create trigger operator_settings_set_updated_at
+  before update on operator_settings
+  for each row execute function set_updated_at();
