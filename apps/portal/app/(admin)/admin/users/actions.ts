@@ -14,6 +14,7 @@ import {
 import {
   assertNotSelfDemote,
   assertNotSelfDeactivate,
+  assertNotSelfDelete,
   type UserPatch,
 } from "@/lib/users/guards";
 import { env } from "@/lib/env";
@@ -190,6 +191,56 @@ export async function updateUserAction(
       entityId: input.targetUserId,
       details: evt.details as never,
     });
+  }
+
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+export async function hardDeleteUserAction(input: {
+  targetUserId: string;
+  confirmEmail: string;
+}): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const guardError = assertNotSelfDelete({
+    actorId: actor.id,
+    targetId: input.targetUserId,
+  });
+  if (guardError) return { ok: false, error: guardError };
+
+  const supabase = await createServerClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("id, operator_id, email, full_name")
+    .eq("id", input.targetUserId)
+    .maybeSingle();
+
+  if (!target || target.operator_id !== actor.operator_id) {
+    return { ok: false, error: "User not found in your operator." };
+  }
+
+  if (input.confirmEmail.trim().toLowerCase() !== target.email.toLowerCase()) {
+    return {
+      ok: false,
+      error: "Email confirmation did not match. Deletion aborted.",
+    };
+  }
+
+  // Audit BEFORE delete so the actor's profile + the target snapshot exist.
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: "user.deleted",
+    entityType: "user",
+    entityId: target.id,
+    details: { email: target.email, full_name: target.full_name },
+  });
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(input.targetUserId);
+
+  if (error) {
+    return { ok: false, error: `Failed to delete user: ${error.message}` };
   }
 
   revalidatePath("/admin/users");

@@ -24,6 +24,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -46,7 +56,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { inviteUserAction, updateUserAction } from "./actions";
+import {
+  inviteUserAction,
+  updateUserAction,
+  hardDeleteUserAction,
+} from "./actions";
 
 export type UserRow = {
   id: string;
@@ -267,6 +281,42 @@ function EditSheet(props: {
 
 function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const isSelf = user.id === actorId;
+
+  function onToggleActive() {
+    startTransition(async () => {
+      const result = await updateUserAction({
+        targetUserId: user.id,
+        active: !user.active,
+      });
+      if (result.ok) {
+        toast.success(user.active ? "User deactivated" : "User reactivated");
+        setDeactivateOpen(false);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function onHardDelete() {
+    startTransition(async () => {
+      const result = await hardDeleteUserAction({
+        targetUserId: user.id,
+        confirmEmail,
+      });
+      if (result.ok) {
+        toast.success("User deleted permanently");
+        setDeleteOpen(false);
+        setConfirmEmail("");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
 
   return (
     <>
@@ -280,15 +330,94 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
           <DropdownMenuItem onSelect={() => setEditOpen(true)}>
             Edit
           </DropdownMenuItem>
-          {/* Deactivate + Delete added in Task 11 */}
+          {!isSelf ? (
+            <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}>
+              {user.active ? "Deactivate" : "Reactivate"}
+            </DropdownMenuItem>
+          ) : null}
+          {!isSelf ? (
+            <DropdownMenuItem
+              onSelect={() => setDeleteOpen(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              Delete permanently
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+
       <EditSheet
         user={user}
         actorId={actorId}
         open={editOpen}
         onOpenChange={setEditOpen}
       />
+
+      <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {user.active ? "Deactivate" : "Reactivate"} {user.full_name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {user.active
+                ? "They won't be able to sign in until reactivated."
+                : "They'll be able to sign in again immediately."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onToggleActive} disabled={pending}>
+              {pending
+                ? "Working…"
+                : user.active
+                  ? "Deactivate"
+                  : "Reactivate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteOpen}
+        onOpenChange={(o) => {
+          setDeleteOpen(o);
+          if (!o) setConfirmEmail("");
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {user.full_name} permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This wipes the user from Supabase Auth and the profile. Audit
+              rows they authored will keep the action but lose the actor
+              identity. Type their email to confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={confirmEmail}
+            onChange={(e) => setConfirmEmail(e.target.value)}
+            placeholder={user.email}
+            autoComplete="off"
+            className="mt-2"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onHardDelete}
+              disabled={
+                pending ||
+                confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {pending ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
