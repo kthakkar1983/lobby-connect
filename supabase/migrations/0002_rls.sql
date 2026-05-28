@@ -185,3 +185,29 @@ create policy "operator_settings_admin_write" on operator_settings
   for all to authenticated
   using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
   with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
+
+-- =============================================================================
+-- 10. STORAGE POLICIES (storage.objects)
+--     logos / audio: bucket public=true handles unauthenticated reads.
+--                    Authenticated writes restricted to admins.
+--     playbooks:     fully private. Admin all-access; agents access via
+--                    signed URLs minted by portal API (service role).
+-- =============================================================================
+
+drop policy if exists "storage_admin_write_logos" on storage.objects;
+create policy "storage_admin_write_logos" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'logos' and current_user_role() = 'ADMIN')
+  with check (bucket_id = 'logos' and current_user_role() = 'ADMIN');
+
+drop policy if exists "storage_admin_write_audio" on storage.objects;
+create policy "storage_admin_write_audio" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'audio' and current_user_role() = 'ADMIN')
+  with check (bucket_id = 'audio' and current_user_role() = 'ADMIN');
+
+drop policy if exists "storage_admin_all_playbooks" on storage.objects;
+create policy "storage_admin_all_playbooks" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'playbooks' and current_user_role() = 'ADMIN')
+  with check (bucket_id = 'playbooks' and current_user_role() = 'ADMIN');
