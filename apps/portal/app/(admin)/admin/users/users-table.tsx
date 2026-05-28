@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { UserRound, UserPlus } from "lucide-react";
+import { UserRound, UserPlus, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import {
   Table,
   TableBody,
   TableCell,
@@ -31,7 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { inviteUserAction } from "./actions";
+import { inviteUserAction, updateUserAction } from "./actions";
 
 export type UserRow = {
   id: string;
@@ -149,7 +164,136 @@ function InviteDialog() {
   );
 }
 
-export function UsersTable({ users, actorId: _actorId }: Props) {
+function EditSheet(props: {
+  user: UserRow;
+  actorId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const isSelf = props.user.id === props.actorId;
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [fullName, setFullName] = useState(props.user.full_name);
+  const [role, setRole] = useState<UserRow["role"]>(props.user.role);
+  const [active, setActive] = useState(props.user.active);
+
+  function onSave() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateUserAction({
+        targetUserId: props.user.id,
+        full_name: fullName,
+        role: isSelf ? undefined : role,
+        active: isSelf ? undefined : active,
+      });
+
+      if (result.ok) {
+        toast.success("User updated");
+        props.onOpenChange(false);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Sheet open={props.open} onOpenChange={props.onOpenChange}>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Edit {props.user.full_name}</SheetTitle>
+          <SheetDescription>
+            {isSelf
+              ? "You can edit your name. Role and active status are locked for your own account."
+              : "Update the user's name, role, or active status."}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-4 px-4 py-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-name">Full name</Label>
+            <Input
+              id="edit-name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-role">Role</Label>
+            <Select
+              value={role}
+              onValueChange={(v) => setRole(v as UserRow["role"])}
+              disabled={isSelf}
+            >
+              <SelectTrigger id="edit-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ADMIN">Admin</SelectItem>
+                <SelectItem value="AGENT">Agent</SelectItem>
+                <SelectItem value="OWNER">Owner</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="edit-active" className="flex flex-col gap-0.5">
+              <span>Active</span>
+              <span className="text-xs text-text-muted">
+                Inactive users can&apos;t sign in.
+              </span>
+            </Label>
+            <Switch
+              id="edit-active"
+              checked={active}
+              onCheckedChange={setActive}
+              disabled={isSelf}
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <SheetFooter>
+          <Button onClick={onSave} disabled={pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
+  const [editOpen, setEditOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="Actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+            Edit
+          </DropdownMenuItem>
+          {/* Deactivate + Delete added in Task 11 */}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EditSheet
+        user={user}
+        actorId={actorId}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+    </>
+  );
+}
+
+export function UsersTable({ users, actorId }: Props) {
   const [query, setQuery] = useState("");
 
   const filtered = users.filter((u) => {
@@ -223,8 +367,8 @@ export function UsersTable({ users, actorId: _actorId }: Props) {
                   <TableCell className="text-text-muted">
                     {relative(u.created_at)}
                   </TableCell>
-                  <TableCell className="text-right text-text-muted">
-                    {/* Per-row actions added in Task 10 */}—
+                  <TableCell className="text-right">
+                    <RowActions user={u} actorId={actorId} />
                   </TableCell>
                 </TableRow>
               ))}
