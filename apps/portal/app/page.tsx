@@ -22,14 +22,8 @@ export default async function HomePage() {
     redirect("/sign-in");
   }
 
-  switch (profile.role) {
-    case "AGENT":
-      redirect("/agent");
-    case "ADMIN":
-      redirect("/admin");
-    case "OWNER":
-      redirect("/owner");
-    default:
-      redirect("/sign-in");
-  }
+  if (profile.role === "AGENT") redirect("/agent");
+  if (profile.role === "ADMIN") redirect("/admin");
+  if (profile.role === "OWNER") redirect("/owner");
+  redirect("/sign-in");
 }
