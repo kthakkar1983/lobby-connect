@@ -58,6 +58,7 @@ export type Database = {
           slug?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -102,6 +103,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       properties: {
         Row: {
@@ -164,6 +166,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       property_assignments: {
         Row: {
@@ -196,6 +199,7 @@ export type Database = {
           effective_until?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       admin_call_availability: {
         Row: {
@@ -219,6 +223,7 @@ export type Database = {
           accepting_calls?: boolean;
           updated_at?: string;
         };
+        Relationships: [];
       };
       calls: {
         Row: {
@@ -284,6 +289,7 @@ export type Database = {
           notes?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       audit_logs: {
         Row: {
@@ -319,6 +325,7 @@ export type Database = {
           details?: Json | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       operator_settings: {
         Row: {
@@ -339,6 +346,7 @@ export type Database = {
           value?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
