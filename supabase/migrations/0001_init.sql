@@ -26,29 +26,6 @@ begin
 end;
 $$;
 
--- RLS helper: operator_id of the currently-authenticated user.
--- security definer + pinned search_path avoids recursing into RLS on profiles.
-create or replace function current_user_operator_id()
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select operator_id from profiles where id = auth.uid()
-$$;
-
--- RLS helper: role of the currently-authenticated user.
-create or replace function current_user_role()
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select role from profiles where id = auth.uid()
-$$;
-
 -- =============================================================================
 -- 3. TABLES
 -- =============================================================================
@@ -82,6 +59,31 @@ create index if not exists profiles_operator on profiles(operator_id);
 create index if not exists profiles_role on profiles(operator_id, role);
 create unique index if not exists profiles_twilio on profiles(twilio_identity)
   where twilio_identity is not null;
+
+-- RLS helpers — defined after profiles so PostgreSQL can validate the SQL body.
+
+-- Returns the operator_id of the currently-authenticated user.
+-- security definer + pinned search_path avoids recursing into RLS on profiles.
+create or replace function current_user_operator_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select operator_id from profiles where id = auth.uid()
+$$;
+
+-- Returns the role of the currently-authenticated user.
+create or replace function current_user_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from profiles where id = auth.uid()
+$$;
 
 -- 3.3 properties --------------------------------------------------------------
 create table if not exists properties (
