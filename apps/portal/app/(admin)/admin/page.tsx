@@ -1,20 +1,38 @@
-export default function AdminDashboardPage() {
+import Link from "next/link";
+import { ArrowRight, Users } from "lucide-react";
+
+export default function AdminOverviewPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-8">
-        <h1 className="text-xl font-semibold text-foreground">Admin dashboard</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          Placeholder — properties + agents + assignments land in Plan 4.
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">
+          Admin overview
+        </h1>
+        <p className="mt-1 text-sm text-text-muted">
+          Manage users, properties, and assignments for your operator.
         </p>
-        <form action="/auth/signout" method="post" className="mt-6">
-          <button
-            type="submit"
-            className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground"
-          >
-            Sign out
-          </button>
-        </form>
-      </div>
-    </main>
+      </header>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <Link
+          href={"/admin/users" as never}
+          className="group flex items-start justify-between rounded-lg border border-border bg-card p-5 transition hover:border-primary"
+        >
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">
+                Users
+              </span>
+            </div>
+            <p className="text-xs text-text-muted">
+              Invite admins, agents, and owners. Edit roles. Deactivate or
+              remove access.
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-text-muted transition group-hover:text-primary" />
+        </Link>
+      </section>
+    </div>
   );
 }

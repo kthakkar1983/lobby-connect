@@ -1,0 +1,31 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
+
+type Props = {
+  readonly href: string;
+  readonly label: string;
+  readonly icon: LucideIcon;
+};
+
+export function NavItem({ href, label, icon: Icon }: Props) {
+  const pathname = usePathname();
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+        <Link href={href as never}>
+          <Icon />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
