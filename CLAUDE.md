@@ -58,8 +58,33 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - Portal: `lobby-connect-portal.vercel.app`
 - Kiosk: `lobby-connect-kiosk.vercel.app`
 
+## Build status
+
+| Plan | What it built | Tag |
+|---|---|---|
+| 1 — Foundation | Shell, monorepo, lint, typecheck, Vitest | `plan-01-foundation-complete` |
+| 2 — Database & RLS | `0001_init.sql`, `0002_rls.sql`, `seed.sql`, TS types | `plan-02-database-rls-complete` |
+| 3 — Auth & role routing | SSR clients, middleware, sign-in/out/forgot/update-password, role layouts | `plan-03-auth-routing-complete` |
+| 4a — Admin layout + Users CRUD + Invite/Onboarding | Admin shell (sidebar + user menu), `/admin/users` full CRUD (invite/edit/deactivate/hard-delete), `/onboarding`, migration 0003 | `plan-04a-admin-users-complete` |
+| **4b** | **Properties CRUD** | next up |
+| 4c | Assignments + `admin_call_availability` | — |
+| 5 | Voice path + agent dashboard | — |
+| 6 | Owner portal | — |
+| 7 | Kiosk | — |
+| 8 | Observability | — |
+
+**Key patterns established so far:**
+
+- **Server Actions** live in `app/(admin)/admin/<section>/actions.ts` — thin wrappers around tested `lib/` helpers. Import `requireRole` first, validate, call helper, audit, `revalidatePath`.
+- **`lib/users/` TDD pattern**: pure helpers (`validate.ts`, `guards.ts`, `invite.ts`) unit-tested with Vitest mocks before wiring into Server Actions.
+- **Admin pages**: Server Component `page.tsx` fetches data (via user-scoped client), passes to a `"use client"` `*-table.tsx` that owns all dialogs/sheets.
+- **Typed routes**: `typedRoutes: true` in `next.config.ts`. Use `href={href as never}` for routes not yet created (forward-references in nav items).
+- **Self-edit guards**: `lib/users/guards.ts` — `assertNotSelfDemote`, `assertNotSelfDeactivate`, `assertNotSelfDelete`. Always call server-side in actions; mirror in UI (disable controls, hide menu items).
+- **Hard delete**: always requires typed email confirm in the AlertDialog. Audit row written BEFORE the delete call.
+- **Migrations**: `supabase/migrations/0003_audit_actor_set_null.sql` sets `audit_logs.actor_user_id` FK to ON DELETE SET NULL so hard-deletes don't fail on prior audit rows.
+
 ## Reading order at session start
 
 1. This file (CLAUDE.md)
-2. `MEMORY.md` if working on something memory-sensitive
-3. The latest spec in `docs/specs/` relevant to your task
+2. `MEMORY.md` → `project-status.md` for current plan and next steps
+3. The relevant plan in `docs/plans/` for the task at hand
