@@ -225,3 +225,15 @@ drop trigger if exists operator_settings_set_updated_at on operator_settings;
 create trigger operator_settings_set_updated_at
   before update on operator_settings
   for each row execute function set_updated_at();
+
+-- =============================================================================
+-- 5. STORAGE BUCKETS
+-- =============================================================================
+-- Bucket policies (read/write rules) live in 0002_rls.sql.
+
+insert into storage.buckets (id, name, public)
+values
+  ('playbooks', 'playbooks', false),
+  ('logos',     'logos',     true),
+  ('audio',     'audio',     true)
+on conflict (id) do nothing;
