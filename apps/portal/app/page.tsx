@@ -1,16 +1,35 @@
-import { SHARED_PACKAGE_VERSION } from "@lc/shared";
-import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
+import { createServerClient } from "@/lib/supabase/server";
 
-export default function HomePage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <h1 className="text-2xl font-semibold">Lobby Connect Portal</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          Foundation OK · shared v{SHARED_PACKAGE_VERSION}
-        </p>
-        <Button className="mt-6">shadcn primitive renders</Button>
-      </div>
-    </main>
-  );
+export default async function HomePage() {
+  const supabase = await createServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/sign-in");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, active")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile || !profile.active) {
+    redirect("/sign-in");
+  }
+
+  switch (profile.role) {
+    case "AGENT":
+      redirect("/agent");
+    case "ADMIN":
+      redirect("/admin");
+    case "OWNER":
+      redirect("/owner");
+    default:
+      redirect("/sign-in");
+  }
 }
