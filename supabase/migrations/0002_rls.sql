@@ -115,3 +115,73 @@ create policy "assignments_admin_write" on property_assignments
   for all to authenticated
   using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
   with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
+
+-- =============================================================================
+-- 6. admin_call_availability
+--    SELECT/WRITE: admin can read/write only their own rows.
+--    Routing webhook (service role) reads everyone's rows — no auth policy needed.
+-- =============================================================================
+
+drop policy if exists "aca_admin_select_own" on admin_call_availability;
+create policy "aca_admin_select_own" on admin_call_availability
+  for select to authenticated
+  using (profile_id = auth.uid() and current_user_role() = 'ADMIN');
+
+drop policy if exists "aca_admin_write_own" on admin_call_availability;
+create policy "aca_admin_write_own" on admin_call_availability
+  for all to authenticated
+  using (profile_id = auth.uid() and current_user_role() = 'ADMIN')
+  with check (profile_id = auth.uid() and current_user_role() = 'ADMIN');
+
+-- =============================================================================
+-- 7. calls
+--    SELECT: admin (all in op) OR agent (own handled) OR owner (own properties)
+--    INSERT/UPDATE/DELETE: service role only (Twilio webhooks)
+-- =============================================================================
+
+drop policy if exists "calls_select" on calls;
+create policy "calls_select" on calls
+  for select to authenticated
+  using (
+    operator_id = current_user_operator_id()
+    and (
+      current_user_role() = 'ADMIN'
+      or handled_by_user_id = auth.uid()
+      or exists (
+        select 1 from properties p
+        where p.id = calls.property_id
+          and p.owner_user_id = auth.uid()
+      )
+    )
+  );
+
+-- =============================================================================
+-- 8. audit_logs
+--    SELECT: admin only
+--    INSERT/UPDATE/DELETE: service role only
+-- =============================================================================
+
+drop policy if exists "audit_admin_select" on audit_logs;
+create policy "audit_admin_select" on audit_logs
+  for select to authenticated
+  using (
+    operator_id = current_user_operator_id()
+    and current_user_role() = 'ADMIN'
+  );
+
+-- =============================================================================
+-- 9. operator_settings
+--    SELECT: any authenticated user in op
+--    INSERT/UPDATE/DELETE: admin only
+-- =============================================================================
+
+drop policy if exists "operator_settings_select" on operator_settings;
+create policy "operator_settings_select" on operator_settings
+  for select to authenticated
+  using (operator_id = current_user_operator_id());
+
+drop policy if exists "operator_settings_admin_write" on operator_settings;
+create policy "operator_settings_admin_write" on operator_settings
+  for all to authenticated
+  using (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN')
+  with check (operator_id = current_user_operator_id() and current_user_role() = 'ADMIN');
