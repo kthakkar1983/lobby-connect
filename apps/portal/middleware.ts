@@ -32,7 +32,9 @@ export const config = {
     //   - favicon.ico
     //   - api/* (API routes do their own auth)
     //   - sign-in (the sign-in page itself)
+    //   - forgot-password (must be reachable for unauthed users — Plan 3 bug)
+    //   - onboarding (invitee landing; always has a session, but kept explicit)
     //   - auth/* (sign-out POST + password-reset/callback routes)
-    "/((?!_next/static|_next/image|favicon.ico|api/|sign-in|auth/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|sign-in|forgot-password|onboarding|auth/).*)",
   ],
 };
