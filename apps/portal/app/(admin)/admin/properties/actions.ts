@@ -38,7 +38,7 @@ type PropertyInsert = Database["public"]["Tables"]["properties"]["Insert"];
 type PropertyUpdate = Database["public"]["Tables"]["properties"]["Update"];
 type AssignmentInsert =
   Database["public"]["Tables"]["property_assignments"]["Insert"];
-type _AvailabilityInsert =
+type AvailabilityInsert =
   Database["public"]["Tables"]["admin_call_availability"]["Insert"];
 
 const ASSIGNABLE_ROLES = ["AGENT", "ADMIN"] as const;
@@ -434,5 +434,37 @@ export async function unassignPrimaryAgentAction(
   });
 
   revalidatePath(`/admin/properties/${propertyId}`);
+  return { ok: true };
+}
+
+// Per-property, per-admin call-acceptance toggle. Upserted (a missing row is
+// treated as accepting_calls=false). NOT audited — high-frequency, low-value
+// per spec §6. RLS restricts each admin to their own (profile_id) rows.
+export async function setCallAvailabilityAction(
+  propertyId: string,
+  accepting: boolean,
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  const supabase = await createServerClient();
+
+  const row: AvailabilityInsert = {
+    profile_id: actor.id,
+    property_id: propertyId,
+    operator_id: actor.operator_id,
+    accepting_calls: accepting,
+  };
+
+  const { error } = await supabase
+    .from("admin_call_availability")
+    .upsert(row, { onConflict: "profile_id,property_id" });
+
+  if (error) {
+    return {
+      ok: false,
+      error: `Failed to update availability: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/admin");
   return { ok: true };
 }
