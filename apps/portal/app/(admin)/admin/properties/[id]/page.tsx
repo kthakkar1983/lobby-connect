@@ -48,6 +48,7 @@ export default async function PropertyDetailPage({
   const { data: assignment } = await supabase
     .from("property_assignments")
     .select("primary_agent_id")
+    .eq("operator_id", actor.operator_id)
     .eq("property_id", id)
     .is("effective_until", null)
     .maybeSingle();

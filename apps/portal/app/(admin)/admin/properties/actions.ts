@@ -406,6 +406,13 @@ export async function unassignPrimaryAgentAction(
   const actor = await requireRole("ADMIN");
   const supabase = await createServerClient();
 
+  const propertyError = await assertValidProperty(
+    supabase,
+    actor.operator_id,
+    propertyId,
+  );
+  if (propertyError) return { ok: false, error: propertyError };
+
   const current = await getCurrentAssignment(
     supabase,
     actor.operator_id,
