@@ -18,13 +18,14 @@ export function AvailabilityCards({ rows }: { rows: AvailabilityRow[] }) {
   const [, startTransition] = useTransition();
 
   function onToggle(propertyId: string, next: boolean) {
-    const prev = state[propertyId] ?? false;
-    // Optimistic: flip immediately, roll back on failure (spec §9.4).
+    // Optimistic: flip immediately, roll back on failure (spec §9.4). Roll back
+    // to `!next` (not a closed-over prev) so a rapid double-toggle can't restore
+    // a stale optimistic value.
     setState((s) => ({ ...s, [propertyId]: next }));
     startTransition(async () => {
       const result = await setCallAvailabilityAction(propertyId, next);
       if (!result.ok) {
-        setState((s) => ({ ...s, [propertyId]: prev }));
+        setState((s) => ({ ...s, [propertyId]: !next }));
         toast.error(result.error);
       }
     });
