@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { PropertyForm } from "../property-form";
+import { AssignmentCard, type AgentOption } from "./assignment-card";
 
 export default async function PropertyDetailPage({
   params,
@@ -34,8 +35,39 @@ export default async function PropertyDetailPage({
     .eq("active", true)
     .order("full_name");
 
+  // Assignable primary agents: active AGENTs and ADMINs in this operator.
+  const { data: agents } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("operator_id", actor.operator_id)
+    .in("role", ["AGENT", "ADMIN"])
+    .eq("active", true)
+    .order("full_name");
+
+  // Current active assignment (effective_until IS NULL).
+  const { data: assignment } = await supabase
+    .from("property_assignments")
+    .select("primary_agent_id")
+    .eq("property_id", id)
+    .is("effective_until", null)
+    .maybeSingle();
+
+  const currentAgentId = assignment?.primary_agent_id ?? null;
+
+  // Separate name lookup (2-query pattern): robust even if the assigned agent
+  // was later deactivated and so is absent from the assignable list above.
+  let currentAgentName: string | null = null;
+  if (currentAgentId) {
+    const { data: agent } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", currentAgentId)
+      .maybeSingle();
+    currentAgentName = agent?.full_name ?? null;
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <div>
         <Link
           href={"/admin/properties" as never}
@@ -50,6 +82,13 @@ export default async function PropertyDetailPage({
       </div>
 
       <PropertyForm mode="edit" owners={owners ?? []} property={property} />
+
+      <AssignmentCard
+        propertyId={property.id}
+        currentAgentId={currentAgentId}
+        currentAgentName={currentAgentName}
+        agents={(agents ?? []) as AgentOption[]}
+      />
     </div>
   );
 }
