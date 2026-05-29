@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Building2, Settings, Users, UsersRound } from "lucide-react";
 import {
