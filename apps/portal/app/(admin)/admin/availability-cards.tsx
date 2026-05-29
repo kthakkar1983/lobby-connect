@@ -18,13 +18,13 @@ export function AvailabilityCards({ rows }: { rows: AvailabilityRow[] }) {
   const [, startTransition] = useTransition();
 
   function onToggle(propertyId: string, next: boolean) {
-    const prev = state[propertyId];
+    const prev = state[propertyId] ?? false;
     // Optimistic: flip immediately, roll back on failure (spec §9.4).
     setState((s) => ({ ...s, [propertyId]: next }));
     startTransition(async () => {
       const result = await setCallAvailabilityAction(propertyId, next);
       if (!result.ok) {
-        setState((s) => ({ ...s, [propertyId]: prev }) as Record<string, boolean>);
+        setState((s) => ({ ...s, [propertyId]: prev }));
         toast.error(result.error);
       }
     });
