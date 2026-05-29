@@ -1,0 +1,254 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { Database, Json } from "@lc/shared";
+import { createServerClient } from "@/lib/supabase/server";
+import { logAuditEvent } from "@/lib/auth/audit";
+import { requireRole } from "@/lib/auth/require-role";
+import {
+  validatePropertyName,
+  validateTimezone,
+  validatePhone,
+  validateKioskMessage,
+} from "@/lib/properties/validate";
+
+export type PropertyInput = {
+  name: string;
+  timezone: string;
+  owner_user_id: string | null;
+  routing_did: string;
+  property_phone_number: string;
+  after_hours_support_phone: string;
+  kiosk_welcome_message: string;
+  kiosk_apology_message: string;
+};
+
+export type ActionResult = { ok: true } | { ok: false; error: string };
+export type CreateResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
+type PropertyInsert = Database["public"]["Tables"]["properties"]["Insert"];
+type PropertyUpdate = Database["public"]["Tables"]["properties"]["Update"];
+
+function validatePropertyInput(input: PropertyInput): string | null {
+  return (
+    validatePropertyName(input.name) ??
+    validateTimezone(input.timezone) ??
+    validatePhone(input.routing_did) ??
+    validatePhone(input.property_phone_number) ??
+    validatePhone(input.after_hours_support_phone) ??
+    validateKioskMessage(input.kiosk_welcome_message) ??
+    validateKioskMessage(input.kiosk_apology_message)
+  );
+}
+
+function emptyToNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+// Defense-in-depth beyond the RLS-scoped dropdown: a non-null owner must be an
+// existing same-operator profile with role OWNER.
+async function assertValidOwner(
+  supabase: ServerClient,
+  operatorId: string,
+  ownerId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, operator_id, role")
+    .eq("id", ownerId)
+    .maybeSingle();
+
+  if (!data || data.operator_id !== operatorId || data.role !== "OWNER") {
+    return "Selected owner is not a valid owner in your operator.";
+  }
+  return null;
+}
+
+export async function createPropertyAction(
+  input: PropertyInput,
+): Promise<CreateResult> {
+  const actor = await requireRole("ADMIN");
+
+  const validationError = validatePropertyInput(input);
+  if (validationError) return { ok: false, error: validationError };
+
+  const supabase = await createServerClient();
+
+  if (input.owner_user_id) {
+    const ownerError = await assertValidOwner(
+      supabase,
+      actor.operator_id,
+      input.owner_user_id,
+    );
+    if (ownerError) return { ok: false, error: ownerError };
+  }
+
+  const insert: PropertyInsert = {
+    operator_id: actor.operator_id,
+    name: input.name.trim(),
+    timezone: input.timezone,
+    owner_user_id: input.owner_user_id,
+    active: true,
+  };
+
+  // Optional text columns: omit when blank so nullable columns stay null and
+  // the kiosk-message columns fall back to their DB defaults.
+  const routingDid = emptyToNull(input.routing_did);
+  if (routingDid) insert.routing_did = routingDid;
+  const propertyPhone = emptyToNull(input.property_phone_number);
+  if (propertyPhone) insert.property_phone_number = propertyPhone;
+  const afterHours = emptyToNull(input.after_hours_support_phone);
+  if (afterHours) insert.after_hours_support_phone = afterHours;
+  const welcome = emptyToNull(input.kiosk_welcome_message);
+  if (welcome) insert.kiosk_welcome_message = welcome;
+  const apology = emptyToNull(input.kiosk_apology_message);
+  if (apology) insert.kiosk_apology_message = apology;
+
+  const { data, error } = await supabase
+    .from("properties")
+    .insert(insert)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    if (error?.code === "23505") {
+      return {
+        ok: false,
+        error: "That routing number is already assigned to another property.",
+      };
+    }
+    return {
+      ok: false,
+      error: `Failed to create property: ${error?.message ?? "unknown error"}`,
+    };
+  }
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: "property.created",
+    entityType: "property",
+    entityId: data.id,
+    details: {
+      name: insert.name,
+      timezone: insert.timezone,
+      owner_user_id: input.owner_user_id,
+    },
+  });
+
+  revalidatePath("/admin/properties");
+  return { ok: true, id: data.id };
+}
+
+export async function updatePropertyAction(
+  input: PropertyInput & { propertyId: string; active: boolean },
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const validationError = validatePropertyInput(input);
+  if (validationError) return { ok: false, error: validationError };
+
+  const supabase = await createServerClient();
+
+  if (input.owner_user_id) {
+    const ownerError = await assertValidOwner(
+      supabase,
+      actor.operator_id,
+      input.owner_user_id,
+    );
+    if (ownerError) return { ok: false, error: ownerError };
+  }
+
+  // RLS scopes this read to the actor's operator; a foreign / unknown id
+  // returns no row.
+  const { data: current } = await supabase
+    .from("properties")
+    .select(
+      "id, operator_id, name, timezone, owner_user_id, routing_did, property_phone_number, after_hours_support_phone, kiosk_welcome_message, kiosk_apology_message, active",
+    )
+    .eq("id", input.propertyId)
+    .maybeSingle();
+
+  if (!current) {
+    return { ok: false, error: "Property not found in your operator." };
+  }
+
+  const next = {
+    name: input.name.trim(),
+    timezone: input.timezone,
+    owner_user_id: input.owner_user_id,
+    routing_did: emptyToNull(input.routing_did),
+    property_phone_number: emptyToNull(input.property_phone_number),
+    after_hours_support_phone: emptyToNull(input.after_hours_support_phone),
+    kiosk_welcome_message: emptyToNull(input.kiosk_welcome_message),
+    kiosk_apology_message: emptyToNull(input.kiosk_apology_message),
+  };
+
+  const updates: PropertyUpdate = {};
+  const auditEvents: Array<{ action: string; details: unknown }> = [];
+
+  const TEXT_FIELDS = [
+    "name",
+    "timezone",
+    "owner_user_id",
+    "routing_did",
+    "property_phone_number",
+    "after_hours_support_phone",
+    "kiosk_welcome_message",
+    "kiosk_apology_message",
+  ] as const;
+
+  for (const field of TEXT_FIELDS) {
+    if (next[field] !== current[field]) {
+      (updates as Record<string, unknown>)[field] = next[field];
+      auditEvents.push({
+        action: "property.edited",
+        details: { field, from: current[field], to: next[field] },
+      });
+    }
+  }
+
+  if (input.active !== current.active) {
+    updates.active = input.active;
+    auditEvents.push({
+      action: "property.active_toggled",
+      details: { from: current.active, to: input.active },
+    });
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { ok: true };
+  }
+
+  const { error } = await supabase
+    .from("properties")
+    .update(updates)
+    .eq("id", input.propertyId);
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "That routing number is already assigned to another property.",
+      };
+    }
+    return { ok: false, error: `Failed to update property: ${error.message}` };
+  }
+
+  for (const evt of auditEvents) {
+    await logAuditEvent({
+      actorUserId: actor.id,
+      action: evt.action,
+      entityType: "property",
+      entityId: input.propertyId,
+      details: evt.details as Json,
+    });
+  }
+
+  revalidatePath("/admin/properties");
+  revalidatePath(`/admin/properties/${input.propertyId}`);
+  return { ok: true };
+}
