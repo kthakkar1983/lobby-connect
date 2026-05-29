@@ -67,8 +67,8 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 | 3 — Auth & role routing | SSR clients, middleware, sign-in/out/forgot/update-password, role layouts | `plan-03-auth-routing-complete` |
 | 4a — Admin layout + Users CRUD + Invite/Onboarding | Admin shell (sidebar + user menu), `/admin/users` full CRUD (invite/edit/deactivate/hard-delete), `/onboarding`, migration 0003 | `plan-04a-admin-users-complete` |
 | 4b — Properties CRUD | `/admin/properties` list/create/detail+edit, shared `PropertyForm`, per-field audit, soft-delete via Active toggle, curated US timezones, migration 0004 (RLS recursion fix) | `plan-04b-properties-crud-complete` |
-| **4c** | **Assignments + `admin_call_availability`** | next up |
-| 5 | Voice path + agent dashboard | — |
+| 4c — Assignments + call availability | Primary-agent assignment card on property detail (assign/reassign/unassign, close-then-insert, audited), per-property `accepting_calls` toggle on `/admin` overview (optimistic, not audited), `lib/assignments/` (`planAssignmentChange`, `validateAgentId`), migration 0005 (one-active partial unique index), seed gains OWNER + 2 AGENTs | `plan-04c-assignments-availability-complete` |
+| **5** | **Voice path + agent dashboard** | next up |
 | 6 | Owner portal | — |
 | 7 | Kiosk | — |
 | 8 | Observability | — |
@@ -83,6 +83,8 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - **Hard delete**: always requires typed email confirm in the AlertDialog. Audit row written BEFORE the delete call.
 - **Migrations**: `supabase/migrations/0003_audit_actor_set_null.sql` sets `audit_logs.actor_user_id` FK to ON DELETE SET NULL so hard-deletes don't fail on prior audit rows.
 - **RLS cross-table checks**: a policy on table A that must check table B (and vice-versa) causes "infinite recursion detected in policy." Put the existence check in a `SECURITY DEFINER` SQL function with `set search_path = public` (like `current_user_operator_id()`) — it runs as the owner and does not re-enter B's RLS. See `0004_fix_rls_recursion.sql` (`user_owns_property`, `user_is_assigned_to_property`).
+- **Temporal-row invariant (assignments)**: "active" = the row with `effective_until IS NULL`. The one-active-per-property rule is guarded by a partial unique index (`0005`, `property_assignments_one_active`), and the Server Action mutates with **close-then-insert** (stamp the prior row's `effective_until`, then insert the new one) so a mid-failure leaves the property unassigned (safe), never double-assigned. A concurrent double-assign hits the index → caught as `23505` → friendly retry message. Pure decision logic lives in `lib/assignments/plan.ts` (`planAssignmentChange`).
+- **Optimistic boolean toggle**: roll back to `!next` (not a closed-over `prev`) so a rapid double-toggle can't restore a stale value. See `availability-cards.tsx`.
 - **RSC client boundary (Next 15.5)**: passing a non-serializable prop — a function, or a lucide icon *component* — from a Server Component to a Client Component is now a fatal 500 ("Functions cannot be passed directly to Client Components"). It was silently tolerated in 15.1.x. A component that hands icon components to a client child must itself be `"use client"`, or pass an already-rendered `<Icon />` element instead of the component.
 
 ## Reading order at session start
