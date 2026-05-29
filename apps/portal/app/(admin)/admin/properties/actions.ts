@@ -290,15 +290,36 @@ export async function updatePropertyAction(
 
 async function getCurrentAssignment(
   supabase: ServerClient,
+  operatorId: string,
   propertyId: string,
 ): Promise<CurrentAssignment> {
   const { data } = await supabase
     .from("property_assignments")
     .select("id, primary_agent_id")
+    .eq("operator_id", operatorId)
     .eq("property_id", propertyId)
     .is("effective_until", null)
     .maybeSingle();
   return data ?? null;
+}
+
+// Defense-in-depth beyond RLS: the target property must exist in the actor's
+// operator. Gives a clear error instead of an opaque RLS insert failure on a
+// tampered/foreign property id.
+async function assertValidProperty(
+  supabase: ServerClient,
+  operatorId: string,
+  propertyId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("operator_id", operatorId)
+    .maybeSingle();
+
+  if (!data) return "Property not found in your operator.";
+  return null;
 }
 
 export async function setPrimaryAgentAction(
@@ -315,7 +336,14 @@ export async function setPrimaryAgentAction(
   const agentError = await assertValidAgent(supabase, actor.operator_id, agentId);
   if (agentError) return { ok: false, error: agentError };
 
-  const current = await getCurrentAssignment(supabase, propertyId);
+  const propertyError = await assertValidProperty(
+    supabase,
+    actor.operator_id,
+    propertyId,
+  );
+  if (propertyError) return { ok: false, error: propertyError };
+
+  const current = await getCurrentAssignment(supabase, actor.operator_id, propertyId);
   const plan = planAssignmentChange(current, agentId);
 
   if (plan.action === "noop") return { ok: true };
@@ -378,7 +406,11 @@ export async function unassignPrimaryAgentAction(
   const actor = await requireRole("ADMIN");
   const supabase = await createServerClient();
 
-  const current = await getCurrentAssignment(supabase, propertyId);
+  const current = await getCurrentAssignment(
+    supabase,
+    actor.operator_id,
+    propertyId,
+  );
   if (!current) return { ok: true };
 
   const { error } = await supabase
