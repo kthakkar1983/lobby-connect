@@ -11,6 +11,11 @@ import {
   validatePhone,
   validateKioskMessage,
 } from "@/lib/properties/validate";
+import { validateAgentId } from "@/lib/assignments/validate";
+import {
+  planAssignmentChange,
+  type CurrentAssignment,
+} from "@/lib/assignments/plan";
 
 export type PropertyInput = {
   name: string;
@@ -31,6 +36,12 @@ export type CreateResult =
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
 type PropertyInsert = Database["public"]["Tables"]["properties"]["Insert"];
 type PropertyUpdate = Database["public"]["Tables"]["properties"]["Update"];
+type AssignmentInsert =
+  Database["public"]["Tables"]["property_assignments"]["Insert"];
+type _AvailabilityInsert =
+  Database["public"]["Tables"]["admin_call_availability"]["Insert"];
+
+const ASSIGNABLE_ROLES = ["AGENT", "ADMIN"] as const;
 
 function validatePropertyInput(input: PropertyInput): string | null {
   return (
@@ -64,6 +75,30 @@ async function assertValidOwner(
 
   if (!data || data.operator_id !== operatorId || data.role !== "OWNER") {
     return "Selected owner is not a valid owner in your operator.";
+  }
+  return null;
+}
+
+// Defense-in-depth beyond the RLS-scoped dropdown: the selected primary agent
+// must be an active same-operator profile with role AGENT or ADMIN.
+async function assertValidAgent(
+  supabase: ServerClient,
+  operatorId: string,
+  agentId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, operator_id, role, active")
+    .eq("id", agentId)
+    .maybeSingle();
+
+  if (
+    !data ||
+    data.operator_id !== operatorId ||
+    !data.active ||
+    !ASSIGNABLE_ROLES.includes(data.role as (typeof ASSIGNABLE_ROLES)[number])
+  ) {
+    return "Selected agent is not a valid, active agent in your operator.";
   }
   return null;
 }
@@ -250,5 +285,122 @@ export async function updatePropertyAction(
 
   revalidatePath("/admin/properties");
   revalidatePath(`/admin/properties/${input.propertyId}`);
+  return { ok: true };
+}
+
+async function getCurrentAssignment(
+  supabase: ServerClient,
+  propertyId: string,
+): Promise<CurrentAssignment> {
+  const { data } = await supabase
+    .from("property_assignments")
+    .select("id, primary_agent_id")
+    .eq("property_id", propertyId)
+    .is("effective_until", null)
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function setPrimaryAgentAction(
+  propertyId: string,
+  agentId: string,
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const validationError = validateAgentId(agentId);
+  if (validationError) return { ok: false, error: validationError };
+
+  const supabase = await createServerClient();
+
+  const agentError = await assertValidAgent(supabase, actor.operator_id, agentId);
+  if (agentError) return { ok: false, error: agentError };
+
+  const current = await getCurrentAssignment(supabase, propertyId);
+  const plan = planAssignmentChange(current, agentId);
+
+  if (plan.action === "noop") return { ok: true };
+
+  // Close-then-insert: end the prior active row before opening the new one so a
+  // mid-failure leaves the property unassigned (safe), never double-assigned.
+  if (plan.action === "reassign") {
+    const { error: closeError } = await supabase
+      .from("property_assignments")
+      .update({ effective_until: new Date().toISOString() })
+      .eq("id", plan.closeId);
+    if (closeError) {
+      return {
+        ok: false,
+        error: `Failed to update assignment: ${closeError.message}`,
+      };
+    }
+  }
+
+  const insert: AssignmentInsert = {
+    operator_id: actor.operator_id,
+    property_id: propertyId,
+    primary_agent_id: agentId,
+  };
+  const { error: insertError } = await supabase
+    .from("property_assignments")
+    .insert(insert);
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return {
+        ok: false,
+        error: "This assignment just changed — please refresh and try again.",
+      };
+    }
+    return { ok: false, error: `Failed to assign agent: ${insertError.message}` };
+  }
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action:
+      plan.action === "reassign" ? "assignment.changed" : "assignment.created",
+    entityType: "property_assignment",
+    entityId: propertyId,
+    details: {
+      property_id: propertyId,
+      primary_agent_id: agentId,
+      previous_agent_id:
+        plan.action === "reassign" ? (current?.primary_agent_id ?? null) : null,
+    } as Json,
+  });
+
+  revalidatePath(`/admin/properties/${propertyId}`);
+  return { ok: true };
+}
+
+export async function unassignPrimaryAgentAction(
+  propertyId: string,
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  const supabase = await createServerClient();
+
+  const current = await getCurrentAssignment(supabase, propertyId);
+  if (!current) return { ok: true };
+
+  const { error } = await supabase
+    .from("property_assignments")
+    .update({ effective_until: new Date().toISOString() })
+    .eq("id", current.id);
+
+  if (error) {
+    return { ok: false, error: `Failed to unassign agent: ${error.message}` };
+  }
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: "assignment.removed",
+    entityType: "property_assignment",
+    entityId: propertyId,
+    details: {
+      property_id: propertyId,
+      previous_agent_id: current.primary_agent_id,
+    } as Json,
+  });
+
+  revalidatePath(`/admin/properties/${propertyId}`);
   return { ok: true };
 }
