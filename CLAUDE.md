@@ -66,8 +66,8 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 | 2 — Database & RLS | `0001_init.sql`, `0002_rls.sql`, `seed.sql`, TS types | `plan-02-database-rls-complete` |
 | 3 — Auth & role routing | SSR clients, middleware, sign-in/out/forgot/update-password, role layouts | `plan-03-auth-routing-complete` |
 | 4a — Admin layout + Users CRUD + Invite/Onboarding | Admin shell (sidebar + user menu), `/admin/users` full CRUD (invite/edit/deactivate/hard-delete), `/onboarding`, migration 0003 | `plan-04a-admin-users-complete` |
-| **4b** | **Properties CRUD** | next up |
-| 4c | Assignments + `admin_call_availability` | — |
+| 4b — Properties CRUD | `/admin/properties` list/create/detail+edit, shared `PropertyForm`, per-field audit, soft-delete via Active toggle, curated US timezones, migration 0004 (RLS recursion fix) | `plan-04b-properties-crud-complete` |
+| **4c** | **Assignments + `admin_call_availability`** | next up |
 | 5 | Voice path + agent dashboard | — |
 | 6 | Owner portal | — |
 | 7 | Kiosk | — |
@@ -82,6 +82,8 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - **Self-edit guards**: `lib/users/guards.ts` — `assertNotSelfDemote`, `assertNotSelfDeactivate`, `assertNotSelfDelete`. Always call server-side in actions; mirror in UI (disable controls, hide menu items).
 - **Hard delete**: always requires typed email confirm in the AlertDialog. Audit row written BEFORE the delete call.
 - **Migrations**: `supabase/migrations/0003_audit_actor_set_null.sql` sets `audit_logs.actor_user_id` FK to ON DELETE SET NULL so hard-deletes don't fail on prior audit rows.
+- **RLS cross-table checks**: a policy on table A that must check table B (and vice-versa) causes "infinite recursion detected in policy." Put the existence check in a `SECURITY DEFINER` SQL function with `set search_path = public` (like `current_user_operator_id()`) — it runs as the owner and does not re-enter B's RLS. See `0004_fix_rls_recursion.sql` (`user_owns_property`, `user_is_assigned_to_property`).
+- **RSC client boundary (Next 15.5)**: passing a non-serializable prop — a function, or a lucide icon *component* — from a Server Component to a Client Component is now a fatal 500 ("Functions cannot be passed directly to Client Components"). It was silently tolerated in 15.1.x. A component that hands icon components to a client child must itself be `"use client"`, or pass an already-rendered `<Icon />` element instead of the component.
 
 ## Reading order at session start
 
