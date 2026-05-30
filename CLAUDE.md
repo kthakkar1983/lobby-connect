@@ -68,7 +68,9 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 | 4a — Admin layout + Users CRUD + Invite/Onboarding | Admin shell (sidebar + user menu), `/admin/users` full CRUD (invite/edit/deactivate/hard-delete), `/onboarding`, migration 0003 | `plan-04a-admin-users-complete` |
 | 4b — Properties CRUD | `/admin/properties` list/create/detail+edit, shared `PropertyForm`, per-field audit, soft-delete via Active toggle, curated US timezones, migration 0004 (RLS recursion fix) | `plan-04b-properties-crud-complete` |
 | 4c — Assignments + call availability | Primary-agent assignment card on property detail (assign/reassign/unassign, close-then-insert, audited), per-property `accepting_calls` toggle on `/admin` overview (optimistic, not audited), `lib/assignments/` (`planAssignmentChange`, `validateAgentId`), migration 0005 (one-active partial unique index), seed gains OWNER + 2 AGENTs | `plan-04c-assignments-availability-complete` |
-| **5** | **Voice path + agent dashboard** | next up |
+| 5 | Voice path + agent dashboard — **split into 5a (backend voice) + 5b (dashboard softphone)** during 2026-05-30 brainstorm | — |
+| **5a** | **Backend voice path** — Twilio webhooks (`incoming`/`dial-result`/`status`), `lib/voice/` (routing + dedup + TwiML), `lib/twilio/` (HMAC verify), `twilio_identity` consolidation onto `lc_<uuid>`. **Spec + 14-task plan written; NOT yet built.** Plan: `docs/plans/2026-05-30-05a-voice-backend.md` · Twilio setup: `docs/setup/2026-05-30-twilio-voice-setup.md` | next up (plan ready) |
+| 5b | Agent dashboard softphone + `/api/twilio/token` + presence (last_seen/OFFLINE cron) | — |
 | 6 | Owner portal | — |
 | 7 | Kiosk | — |
 | 8 | Observability | — |
