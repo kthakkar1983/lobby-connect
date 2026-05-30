@@ -54,9 +54,10 @@ Related: `docs/specs/2026-05-30-05a-voice-backend-design.md`.
 Twilio must reach your local dev server over the public internet. We use a tunnel.
 
 1. I'll run `next dev` (against your local Supabase) on its usual port.
-2. Start a tunnel to that port. Either:
-   - **Twilio CLI:** `twilio phone-numbers:update <your-number> --voice-url=...` after `ngrok`, or
-   - **ngrok:** `ngrok http <port>` → copy the `https://….ngrok-free.app` URL.
+2. Start a tunnel to that port using **`cloudflared`** (chosen for simplicity — anonymous quick tunnels, no account/authtoken):
+   - One-time install: `brew install cloudflared`.
+   - Each session: `cloudflared tunnel --url http://localhost:<port>` → copy the printed `https://….trycloudflare.com` URL.
+   - (Alternatives if ever needed: `ngrok` requires a free authtoken; the Twilio CLI is a third option. We default to cloudflared.)
 3. In **Phone Numbers → Manage → Active numbers → (your number) → Voice configuration**:
    - **"A call comes in"**: Webhook, **HTTP POST**, URL = `https://<tunnel>/api/twilio/voice/incoming`
    - **"Call status changes"** (status callback): **HTTP POST**, URL = `https://<tunnel>/api/twilio/voice/status`
