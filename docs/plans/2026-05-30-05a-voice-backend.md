@@ -855,16 +855,15 @@ to:
 
 - [ ] **Step 7: Update the existing invite test to the new format**
 
-In `apps/portal/tests/lib/users/invite.test.ts`, change:
+The happy-path test in `apps/portal/tests/lib/users/invite.test.ts` stubs the new user's id as `"user-new"` (not a UUID) and currently asserts the old truncated format. Change (inside the `insert` `objectContaining` for the "happy path" test):
 ```ts
-    expect(profileInsert?.payload.twilio_identity).toBe("user-22222222");
+        twilio_identity: "user-user-new".slice(0, 13),
 ```
 to:
 ```ts
-    expect(profileInsert?.payload.twilio_identity).toBe(
-      "lc_22222222222222222222222222222222",
-    );
+        twilio_identity: "lc_usernew",
 ```
+Rationale: `toTwilioIdentity("user-new")` = `"lc_"` + `"user-new"` with dashes removed = `"lc_usernew"`. The OWNER test's `twilio_identity: null` assertion stays unchanged.
 
 - [ ] **Step 8: Verify nothing broke**
 
