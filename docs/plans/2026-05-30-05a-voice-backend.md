@@ -736,12 +736,20 @@ git commit -m "feat(voice): twilio HMAC verify + public-URL helper"
 
 ---
 
-## Task 7: Set `twilio_identity` on invite (AGENT/ADMIN only)
+## Task 7: Consolidate `twilio_identity` onto the spec format (`lc_<uuid>`)
+
+**Context (important — this is a consolidation, not a greenfield add):** `twilio_identity` is *already* assigned today, but via a duplicated, collision-prone format `user-<first8hex>` in **two** places:
+- `apps/portal/lib/users/invite.ts` — a local `twilioIdentityFor(role, userId)` (lines ~22–25), used in the profile insert (line ~71).
+- `apps/portal/app/(admin)/admin/users/actions.ts` — `updateUserAction`'s role-change branch sets `updates.twilio_identity = \`user-${target.id.slice(0, 8)}\`` (line ~156).
+
+This task replaces both with one shared helper in the spec's collision-free `lc_<uuid-without-dashes>` format and updates the existing invite test that asserts the old value.
 
 **Files:**
 - Create: `apps/portal/lib/users/twilio-identity.ts`
 - Test: `apps/portal/tests/lib/users/twilio-identity.test.ts`
-- Modify: `apps/portal/app/(admin)/admin/users/actions.ts` (the `profiles.insert` call, ~line 52)
+- Modify: `apps/portal/lib/users/invite.ts` (remove local `twilioIdentityFor`, use the shared helper)
+- Modify: `apps/portal/app/(admin)/admin/users/actions.ts` (`updateUserAction` role-change branch)
+- Modify: `apps/portal/tests/lib/users/invite.test.ts` (expected identity → new format)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -779,9 +787,9 @@ Expected: FAIL — cannot resolve `@/lib/users/twilio-identity`.
 
 Create `apps/portal/lib/users/twilio-identity.ts`:
 ```ts
-import { toTwilioIdentity } from "@/lib/voice/identity";
+import type { Role } from "@lc/shared";
 
-type Role = "AGENT" | "ADMIN" | "OWNER";
+import { toTwilioIdentity } from "@/lib/voice/identity";
 
 /**
  * Call-takers (AGENT, ADMIN) get a deterministic Twilio identity at creation.
@@ -798,47 +806,76 @@ export function identityForRole(role: Role, userId: string): string | null {
 Run: `pnpm test tests/lib/users/twilio-identity.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Wire it into the invite action**
+- [ ] **Step 5: Refactor `invite.ts` to use the shared helper**
 
-In `apps/portal/app/(admin)/admin/users/actions.ts`:
+In `apps/portal/lib/users/invite.ts`:
 
-Add the import near the other `@/lib/users` imports (top of file):
+Add the import (below the existing `@lc/shared` import):
 ```ts
 import { identityForRole } from "@/lib/users/twilio-identity";
 ```
 
-Replace the existing profile insert block (currently):
+Delete the local helper (lines ~22–25):
 ```ts
-  const { error: profileErr } = await admin.from("profiles").insert({
-    id: userId,
-    full_name,
-    role: newRole,
-    operator_id: role.operatorId,
-    active: true,
-  });
-```
-with:
-```ts
-  const { error: profileErr } = await admin.from("profiles").insert({
-    id: userId,
-    full_name,
-    role: newRole,
-    operator_id: role.operatorId,
-    active: true,
-    twilio_identity: identityForRole(newRole, userId),
-  });
+function twilioIdentityFor(role: Role, userId: string): string | null {
+  if (role === "OWNER") return null;
+  return `user-${userId.slice(0, 8)}`;
+}
 ```
 
-- [ ] **Step 6: Verify nothing broke**
+In the profile insert, change:
+```ts
+    twilio_identity: twilioIdentityFor(args.input.role, newUserId),
+```
+to:
+```ts
+    twilio_identity: identityForRole(args.input.role, newUserId),
+```
+
+(`Role` is still imported and used by `InviteInput`, so leave that import.)
+
+- [ ] **Step 6: Refactor `updateUserAction` to use the shared helper**
+
+In `apps/portal/app/(admin)/admin/users/actions.ts`:
+
+Add the import near the other `@/lib/users` imports:
+```ts
+import { identityForRole } from "@/lib/users/twilio-identity";
+```
+
+In the role-change branch, change:
+```ts
+      updates.twilio_identity = `user-${target.id.slice(0, 8)}`;
+```
+to:
+```ts
+      updates.twilio_identity = identityForRole(patch.role, target.id);
+```
+(`ProfileUpdates.twilio_identity` is already typed `string | null`, so the union return type fits. Keep the surrounding `target.twilio_identity === null && (patch.role === "AGENT" || patch.role === "ADMIN")` guard unchanged.)
+
+- [ ] **Step 7: Update the existing invite test to the new format**
+
+In `apps/portal/tests/lib/users/invite.test.ts`, change:
+```ts
+    expect(profileInsert?.payload.twilio_identity).toBe("user-22222222");
+```
+to:
+```ts
+    expect(profileInsert?.payload.twilio_identity).toBe(
+      "lc_22222222222222222222222222222222",
+    );
+```
+
+- [ ] **Step 8: Verify nothing broke**
 
 Run: `pnpm test && pnpm lint && pnpm typecheck`
-Expected: all PASS. (No new test for the action itself — it's a thin wrapper; `identityForRole` carries the logic and is unit-tested.)
+Expected: all PASS — including the updated `invite.test.ts` and the new `twilio-identity.test.ts`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add apps/portal/lib/users/twilio-identity.ts apps/portal/tests/lib/users/twilio-identity.test.ts "apps/portal/app/(admin)/admin/users/actions.ts"
-git commit -m "feat(voice): assign twilio_identity to AGENT/ADMIN on invite"
+git add apps/portal/lib/users/twilio-identity.ts apps/portal/tests/lib/users/twilio-identity.test.ts apps/portal/lib/users/invite.ts "apps/portal/app/(admin)/admin/users/actions.ts" apps/portal/tests/lib/users/invite.test.ts
+git commit -m "refactor(voice): single twilio_identity helper in lc_<uuid> format"
 ```
 
 ---
@@ -1622,7 +1659,8 @@ Note for the session wrap-up: update `project-status.md` to record 5a complete, 
 
 ## Self-Review Notes (author)
 
-- **Spec coverage:** identity (T2), dial dedup (T3), TwiML incl. empty→apology + not-in-service seam (T4), lifecycle finalize/idempotency (T9–T11), `twilio_identity` on invite + seed + OWNER-null guard (T7–T8), HMAC verify (T6), env/config + provisioning + tunnel + smoke (T1, T13), Node runtime + service-role in every route (T9–T11), no recording / token-route-deferred (out of scope, not built). All spec sections map to a task.
+- **Spec coverage:** identity (T2), dial dedup (T3), TwiML incl. empty→apology + not-in-service seam (T4), lifecycle finalize/idempotency (T9–T11), `twilio_identity` consolidation onto `lc_<uuid>` + seed + OWNER-null guard (T7–T8), HMAC verify (T6), env/config + provisioning + tunnel + smoke (T1, T13), Node runtime + service-role in every route (T9–T11), no recording / token-route-deferred (out of scope, not built). All spec sections map to a task.
+- **Pre-existing code discovered during planning:** `twilio_identity` was already set in `invite.ts` and `updateUserAction` using a collision-prone `user-<first8>` format. T7 consolidates both onto the spec's `lc_<uuid-without-dashes>` format via one shared helper and updates the existing `invite.test.ts`. The `profiles` table also still carries the legacy global `accepting_calls` column (superseded by `admin_call_availability` in 4c) — 5a does not read or touch it.
 - **No new migration** (spec §10) — confirmed; only `seed.sql` data changes.
 - **Type consistency:** `DialCandidate`/`DialTarget`/`DialInput` (T3) reused in T4/T9; `CallState` (T5) reused in T11; `identityForRole` (T7) wraps `toTwilioIdentity` (T2). Names consistent across tasks.
 - **Mock caveat:** the route tests stub the Supabase chain by shape; if a route's query chain changes, its test mock must change with it (noted in T9).
