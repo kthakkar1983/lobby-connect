@@ -1,5 +1,3 @@
 # Memory Index — Lobby Connect
 
-(Detail memories will be added to `memory/` as they're created across sessions.)
-
-- _(empty — first session of the new project)_
+- [Project status](memory/project-status.md) — Plan 5b T1–T9 complete; T10–T14 remain. Next plan: 6 (kiosk + video).
