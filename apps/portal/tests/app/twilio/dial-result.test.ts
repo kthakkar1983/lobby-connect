@@ -1,21 +1,26 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const validateTwilioSignature = vi.fn();
-const publicUrlFromRequest = vi.fn(
+const validateTwilioSignature = vi.fn<() => boolean>();
+const publicUrlFromRequest = vi.fn<() => string>(
   () => "https://abc.trycloudflare.com/api/twilio/voice/dial-result",
 );
 vi.mock("@/lib/twilio/client", () => ({
-  validateTwilioSignature: (...a: unknown[]) => validateTwilioSignature(...a),
-  publicUrlFromRequest: (...a: unknown[]) => publicUrlFromRequest(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  validateTwilioSignature: (...a: any[]) => (validateTwilioSignature as any)(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  publicUrlFromRequest: (...a: any[]) => (publicUrlFromRequest as any)(...a),
 }));
 
-const updateSpy = vi.fn(() => Promise.resolve({ error: null }));
+const updateSpy = vi.fn<() => Promise<{ error: null }>>(
+  () => Promise.resolve({ error: null }),
+);
 function makeAdminClient() {
   return {
     from() {
       const builder: Record<string, unknown> = {};
       builder.update = (vals: unknown) => {
-        updateSpy(vals);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (updateSpy as any)(vals);
         return builder;
       };
       builder.eq = () => builder;

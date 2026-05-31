@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // --- mocks -----------------------------------------------------------------
-const validateTwilioSignature = vi.fn();
-const publicUrlFromRequest = vi.fn(
+const validateTwilioSignature = vi.fn<() => boolean>();
+const publicUrlFromRequest = vi.fn<() => string>(
   () => "https://abc.trycloudflare.com/api/twilio/voice/incoming",
 );
 vi.mock("@/lib/twilio/client", () => ({
-  validateTwilioSignature: (...a: unknown[]) => validateTwilioSignature(...a),
-  publicUrlFromRequest: (...a: unknown[]) => publicUrlFromRequest(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  validateTwilioSignature: (...a: any[]) => (validateTwilioSignature as any)(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  publicUrlFromRequest: (...a: any[]) => (publicUrlFromRequest as any)(...a),
 }));
 
 // Per-table canned responses, settable per test.
@@ -20,7 +22,9 @@ type Canned = {
   admins?: unknown[];
 };
 let canned: Canned = {};
-const insertSpy = vi.fn(() => Promise.resolve({ error: null }));
+const insertSpy = vi.fn<() => Promise<{ error: null }>>(
+  () => Promise.resolve({ error: null }),
+);
 
 function makeAdminClient() {
   return {
@@ -31,7 +35,9 @@ function makeAdminClient() {
       builder.eq = chain;
       builder.in = chain;
       builder.is = chain;
-      builder.insert = (row: unknown) => insertSpy(table, row);
+      builder.insert = (row: unknown) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (insertSpy as any)(table, row);
       builder.maybeSingle = () => {
         if (table === "properties") return Promise.resolve({ data: canned.property ?? null });
         if (table === "calls") return Promise.resolve({ data: canned.existingCall ?? null });
@@ -99,7 +105,7 @@ describe("POST /api/twilio/voice/incoming", () => {
     expect(xml).toContain("<Client>lc_a1</Client>");
     expect(xml).toContain('action="https://abc.trycloudflare.com/api/twilio/voice/dial-result"');
     expect(insertSpy).toHaveBeenCalledTimes(1);
-    const [, row] = insertSpy.mock.calls[0] as [string, Record<string, unknown>];
+    const [, row] = insertSpy.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(row).toMatchObject({
       property_id: "p1",
       operator_id: "op1",
@@ -118,7 +124,7 @@ describe("POST /api/twilio/voice/incoming", () => {
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
     expect(xml).not.toContain("<Dial");
-    const [, row] = insertSpy.mock.calls[0] as [string, Record<string, unknown>];
+    const [, row] = insertSpy.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(row).toMatchObject({ state: "NO_ANSWER" });
   });
 

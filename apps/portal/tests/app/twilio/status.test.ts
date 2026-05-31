@@ -1,16 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const validateTwilioSignature = vi.fn();
-const publicUrlFromRequest = vi.fn(
+const validateTwilioSignature = vi.fn<() => boolean>();
+const publicUrlFromRequest = vi.fn<() => string>(
   () => "https://abc.trycloudflare.com/api/twilio/voice/status",
 );
 vi.mock("@/lib/twilio/client", () => ({
-  validateTwilioSignature: (...a: unknown[]) => validateTwilioSignature(...a),
-  publicUrlFromRequest: (...a: unknown[]) => publicUrlFromRequest(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  validateTwilioSignature: (...a: any[]) => (validateTwilioSignature as any)(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  publicUrlFromRequest: (...a: any[]) => (publicUrlFromRequest as any)(...a),
 }));
 
 let currentState: string | null = "RINGING";
-const updateSpy = vi.fn(() => Promise.resolve({ error: null }));
+const updateSpy = vi.fn<() => Promise<{ error: null }>>(
+  () => Promise.resolve({ error: null }),
+);
 function makeAdminClient() {
   return {
     from() {
@@ -20,7 +24,8 @@ function makeAdminClient() {
       builder.maybeSingle = () =>
         Promise.resolve({ data: currentState ? { state: currentState } : null });
       builder.update = (vals: unknown) => {
-        updateSpy(vals);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (updateSpy as any)(vals);
         return builder;
       };
       return builder;
@@ -75,7 +80,7 @@ describe("POST /api/twilio/voice/status", () => {
     await POST(
       makeRequest({ CallSid: "CA1", CallStatus: "completed", CallDuration: "5" }),
     );
-    const vals = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
     expect(vals).not.toHaveProperty("state");
     expect(vals).toMatchObject({ duration_seconds: 5 });
   });
