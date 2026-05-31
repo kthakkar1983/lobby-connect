@@ -3,5 +3,8 @@
   "framework": "nextjs",
   "buildCommand": "cd ../.. && pnpm --filter @lc/portal build",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    { "path": "/api/cron/mark-stale-offline", "schedule": "* * * * *" }
+  ]
 }
