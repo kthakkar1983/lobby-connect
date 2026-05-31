@@ -39,3 +39,24 @@ export function getTwilioConfig(): TwilioConfig {
 
   return { accountSid: accountSid!, authToken: authToken!, phoneNumber: phoneNumber! };
 }
+
+export interface TwilioApiCredentials {
+  accountSid: string;
+  apiKeySid: string;
+  apiKeySecret: string;
+}
+
+export function getTwilioApiCredentials(): TwilioApiCredentials {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const apiKeySid = process.env.TWILIO_API_KEY_SID;
+  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
+
+  if (!accountSid) {
+    throw new Error("Missing TWILIO_ACCOUNT_SID env var");
+  }
+  if (!apiKeySid || !apiKeySecret) {
+    throw new Error("Missing TWILIO_API_KEY_SID or TWILIO_API_KEY_SECRET env var");
+  }
+
+  return { accountSid, apiKeySid, apiKeySecret };
+}
