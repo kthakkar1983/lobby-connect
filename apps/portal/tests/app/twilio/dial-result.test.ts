@@ -14,6 +14,7 @@ vi.mock("@/lib/twilio/client", () => ({
 const updateSpy = vi.fn<() => Promise<{ error: null }>>(
   () => Promise.resolve({ error: null }),
 );
+let dialResultCurrentState: string | null = "RINGING";
 function makeAdminClient() {
   return {
     from() {
@@ -23,7 +24,10 @@ function makeAdminClient() {
         (updateSpy as any)(vals);
         return builder;
       };
+      builder.select = () => builder;
       builder.eq = () => builder;
+      builder.maybeSingle = () =>
+        Promise.resolve({ data: dialResultCurrentState ? { state: dialResultCurrentState } : null });
       builder.then = (resolve: (v: unknown) => void) => resolve({ error: null });
       return builder;
     },
@@ -48,6 +52,7 @@ function makeRequest(params: Record<string, string>) {
 
 beforeEach(() => {
   updateSpy.mockClear();
+  dialResultCurrentState = "RINGING";
   validateTwilioSignature.mockReturnValue(true);
 });
 
@@ -81,5 +86,12 @@ describe("POST /api/twilio/voice/dial-result", () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ state: "NO_ANSWER" }),
     );
+  });
+
+  it("does not overwrite an already-terminal state", async () => {
+    dialResultCurrentState = "COMPLETED";
+    await POST(makeRequest({ CallSid: "CA1", DialCallStatus: "no-answer" }));
+    const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
+    expect(vals).not.toHaveProperty("state");
   });
 });

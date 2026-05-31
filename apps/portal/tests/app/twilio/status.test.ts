@@ -69,9 +69,9 @@ describe("POST /api/twilio/voice/status", () => {
     const res = await POST(
       makeRequest({ CallSid: "CA1", CallStatus: "completed", CallDuration: "30" }),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ state: "COMPLETED", duration_seconds: 30 }),
+      expect.objectContaining({ state: "COMPLETED", duration_seconds: 30, answered_at: expect.any(String) }),
     );
   });
 

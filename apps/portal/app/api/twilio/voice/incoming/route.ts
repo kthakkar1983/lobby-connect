@@ -6,7 +6,11 @@ import {
   publicUrlFromRequest,
 } from "@/lib/twilio/client";
 import { planDial, type DialCandidate } from "@/lib/voice/plan-dial";
-import { buildIncomingTwiml, buildNotInServiceTwiml } from "@/lib/voice/twiml";
+import {
+  buildApologyTwiml,
+  buildIncomingTwiml,
+  buildNotInServiceTwiml,
+} from "@/lib/voice/twiml";
 
 export const runtime = "nodejs";
 
@@ -23,111 +27,116 @@ function twimlResponse(xml: string, status = 200): NextResponse {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const form = await request.formData();
-  const params: Record<string, string> = {};
-  for (const [k, v] of form.entries()) params[k] = String(v);
+  try {
+    const form = await request.formData();
+    const params: Record<string, string> = {};
+    for (const [k, v] of form.entries()) params[k] = String(v);
 
-  const signature = request.headers.get("x-twilio-signature");
-  const url = publicUrlFromRequest(request);
-  if (!validateTwilioSignature(signature, url, params)) {
-    return new NextResponse("Invalid signature", { status: 403 });
-  }
-
-  const to = params.To ?? "";
-  const from = params.From ?? "";
-  const callSid = params.CallSid ?? "";
-
-  const admin = createAdminClient();
-
-  // 1. Property by routing_did (active only).
-  const { data: property } = await admin
-    .from("properties")
-    .select("id, operator_id, active")
-    .eq("routing_did", to)
-    .maybeSingle();
-
-  if (!property || !property.active) {
-    return twimlResponse(buildNotInServiceTwiml(APOLOGY));
-  }
-
-  // 2. Idempotency: has this CallSid already been recorded?
-  const { data: existing } = await admin
-    .from("calls")
-    .select("id")
-    .eq("twilio_call_sid", callSid)
-    .maybeSingle();
-
-  // 3. Active primary agent (effective_until is null).
-  const { data: assignment } = await admin
-    .from("property_assignments")
-    .select("primary_agent_id")
-    .eq("property_id", property.id)
-    .is("effective_until", null)
-    .maybeSingle();
-
-  let primaryAgent: DialCandidate | null = null;
-  if (assignment?.primary_agent_id) {
-    const { data: agent } = await admin
-      .from("profiles")
-      .select("id, twilio_identity, active")
-      .eq("id", assignment.primary_agent_id)
-      .maybeSingle();
-    if (agent?.active && agent.twilio_identity) {
-      primaryAgent = { id: agent.id, twilioIdentity: agent.twilio_identity };
+    const signature = request.headers.get("x-twilio-signature");
+    const url = publicUrlFromRequest(request);
+    if (!validateTwilioSignature(signature, url, params)) {
+      return new NextResponse("Invalid signature", { status: 403 });
     }
-  }
 
-  // 4. Admins accepting calls for this property.
-  const { data: availRows } = await admin
-    .from("admin_call_availability")
-    .select("profile_id")
-    .eq("property_id", property.id)
-    .eq("accepting_calls", true);
+    const to = params.To ?? "";
+    const from = params.From ?? "";
+    const callSid = params.CallSid ?? "";
 
-  const availableAdmins: DialCandidate[] = [];
-  const availIds = (availRows ?? []).map(
-    (r: { profile_id: string }) => r.profile_id,
-  );
-  if (availIds.length > 0) {
-    const { data: admins } = await admin
-      .from("profiles")
-      .select("id, twilio_identity, active, role, operator_id")
-      .in("id", availIds)
-      .eq("active", true)
-      .eq("role", "ADMIN")
-      .eq("operator_id", property.operator_id);
-    for (const a of (admins ?? []) as Array<{
-      id: string;
-      twilio_identity: string | null;
-    }>) {
-      if (a.twilio_identity) {
-        availableAdmins.push({ id: a.id, twilioIdentity: a.twilio_identity });
+    const admin = createAdminClient();
+
+    // 1. Property by routing_did (active only).
+    const { data: property } = await admin
+      .from("properties")
+      .select("id, operator_id, active")
+      .eq("routing_did", to)
+      .maybeSingle();
+
+    if (!property || !property.active) {
+      return twimlResponse(buildNotInServiceTwiml(APOLOGY));
+    }
+
+    // 2. Idempotency: has this CallSid already been recorded?
+    const { data: existing } = await admin
+      .from("calls")
+      .select("id")
+      .eq("twilio_call_sid", callSid)
+      .maybeSingle();
+
+    // 3. Active primary agent (effective_until is null).
+    const { data: assignment } = await admin
+      .from("property_assignments")
+      .select("primary_agent_id")
+      .eq("property_id", property.id)
+      .is("effective_until", null)
+      .maybeSingle();
+
+    let primaryAgent: DialCandidate | null = null;
+    if (assignment?.primary_agent_id) {
+      const { data: agent } = await admin
+        .from("profiles")
+        .select("id, twilio_identity, active")
+        .eq("id", assignment.primary_agent_id)
+        .maybeSingle();
+      if (agent?.active && agent.twilio_identity) {
+        primaryAgent = { id: agent.id, twilioIdentity: agent.twilio_identity };
       }
     }
+
+    // 4. Admins accepting calls for this property.
+    const { data: availRows } = await admin
+      .from("admin_call_availability")
+      .select("profile_id")
+      .eq("property_id", property.id)
+      .eq("accepting_calls", true);
+
+    const availableAdmins: DialCandidate[] = [];
+    const availIds = (availRows ?? []).map(
+      (r: { profile_id: string }) => r.profile_id,
+    );
+    if (availIds.length > 0) {
+      const { data: admins } = await admin
+        .from("profiles")
+        .select("id, twilio_identity, active, role, operator_id")
+        .in("id", availIds)
+        .eq("active", true)
+        .eq("role", "ADMIN")
+        .eq("operator_id", property.operator_id);
+      for (const a of (admins ?? []) as Array<{
+        id: string;
+        twilio_identity: string | null;
+      }>) {
+        if (a.twilio_identity) {
+          availableAdmins.push({ id: a.id, twilioIdentity: a.twilio_identity });
+        }
+      }
+    }
+
+    const targets = planDial({ primaryAgent, availableAdmins });
+
+    // 5. Record the call (idempotent on CallSid).
+    if (!existing) {
+      await admin.from("calls").insert({
+        operator_id: property.operator_id,
+        property_id: property.id,
+        channel: "AUDIO",
+        state: targets.length === 0 ? "NO_ANSWER" : "RINGING",
+        twilio_call_sid: callSid,
+        caller_number: from,
+      });
+    }
+
+    // 6. Return TwiML (apology if nobody reachable, else parallel dial).
+    const actionUrl = `${new URL(url).origin}/api/twilio/voice/dial-result`;
+    return twimlResponse(
+      buildIncomingTwiml(targets, {
+        greeting: GREETING,
+        timeoutSeconds: RING_TIMEOUT_SECONDS,
+        actionUrl,
+        apologyMessage: APOLOGY,
+      }),
+    );
+  } catch (err) {
+    console.error("[voice/incoming] unhandled error:", err);
+    return twimlResponse(buildApologyTwiml(APOLOGY));
   }
-
-  const targets = planDial({ primaryAgent, availableAdmins });
-
-  // 5. Record the call (idempotent on CallSid).
-  if (!existing) {
-    await admin.from("calls").insert({
-      operator_id: property.operator_id,
-      property_id: property.id,
-      channel: "AUDIO",
-      state: targets.length === 0 ? "NO_ANSWER" : "RINGING",
-      twilio_call_sid: callSid,
-      caller_number: from,
-    });
-  }
-
-  // 6. Return TwiML (apology if nobody reachable, else parallel dial).
-  const actionUrl = `${new URL(url).origin}/api/twilio/voice/dial-result`;
-  return twimlResponse(
-    buildIncomingTwiml(targets, {
-      greeting: GREETING,
-      timeoutSeconds: RING_TIMEOUT_SECONDS,
-      actionUrl,
-      apologyMessage: APOLOGY,
-    }),
-  );
 }

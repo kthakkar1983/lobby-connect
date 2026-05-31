@@ -136,4 +136,16 @@ describe("POST /api/twilio/voice/incoming", () => {
     await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     expect(insertSpy).not.toHaveBeenCalled();
   });
+
+  it("dials both the assigned agent and an accepting admin", async () => {
+    canned.property = { id: "p1", operator_id: "op1", active: true };
+    canned.assignment = { primary_agent_id: "a1" };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    canned.availRows = [{ profile_id: "x1" }];
+    canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1" }];
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Client>lc_a1</Client>");
+    expect(xml).toContain("<Client>lc_x1</Client>");
+  });
 });
