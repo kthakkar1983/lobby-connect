@@ -121,7 +121,23 @@ values (
   'The Sample Hotel',
   '00000000-0000-0000-0000-0000000000b2',
   'America/New_York',
-  '+15555550100'
+  '+14058750410'
+)
+on conflict (id) do nothing;
+
+-- 4b. Primary-agent assignment ------------------------------------------------
+-- Alex Agent is the active primary agent for The Sample Hotel (effective_until
+-- IS NULL = active). Without a dial target the parallel-dial list is empty and
+-- an inbound caller hears the apology immediately, so this fixture is required
+-- for the voice smoke test.
+insert into property_assignments (
+  id, operator_id, property_id, primary_agent_id
+)
+values (
+  '00000000-0000-0000-0000-0000000000d1',
+  '00000000-0000-0000-0000-0000000000a0',
+  '00000000-0000-0000-0000-0000000000c1',
+  '00000000-0000-0000-0000-0000000000b3'
 )
 on conflict (id) do nothing;
 
