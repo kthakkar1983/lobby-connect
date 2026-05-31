@@ -103,6 +103,14 @@ values
    'bailey.agent@lobbyconnect.local', 'OFFLINE', true)
 on conflict (id) do nothing;
 
+-- ── Twilio identities ───────────────────────────────────────────────────────
+-- Call-takers (AGENT/ADMIN) get a deterministic identity so a local call can
+-- dial them. OWNER stays null. Mirrors lib/voice/identity.ts (lc_<uuid-no-dashes>).
+update profiles
+   set twilio_identity = 'lc_' || replace(id::text, '-', '')
+ where role in ('ADMIN', 'AGENT')
+   and twilio_identity is null;
+
 -- 4. Sample property ----------------------------------------------------------
 insert into properties (
   id, operator_id, name, owner_user_id, timezone, routing_did
