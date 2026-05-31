@@ -73,7 +73,7 @@ describe("POST /api/twilio/voice/answered", () => {
         handled_by_user_id: "u1",
       }),
     );
-    expect(callUpdateSpy.mock.calls[0][0]).toHaveProperty("answered_at");
+    expect(callUpdateSpy.mock.calls[0]?.[0]).toHaveProperty("answered_at");
     expect(profileUpdateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ status: "ON_CALL" }),
     );

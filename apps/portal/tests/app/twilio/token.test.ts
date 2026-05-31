@@ -12,7 +12,7 @@ vi.mock("@/lib/supabase/server", () => ({
     }),
 }));
 
-const buildVoiceAccessToken = vi.fn(() => "jwt-token");
+const buildVoiceAccessToken = vi.fn((..._a: unknown[]) => "jwt-token");
 vi.mock("@/lib/twilio/token", () => ({
   buildVoiceAccessToken: (...a: unknown[]) => buildVoiceAccessToken(...a),
 }));

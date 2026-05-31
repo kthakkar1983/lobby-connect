@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const ltSpy = vi.fn(() => ({ neq: () => Promise.resolve({ error: null, count: 2 }) }));
-const updateSpy = vi.fn(() => ({ lt: ltSpy }));
+const updateSpy = vi.fn((_v: unknown) => ({ lt: ltSpy }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ from: () => ({ update: (v: unknown) => updateSpy(v) }) }),
 }));

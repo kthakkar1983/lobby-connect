@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/server", () => ({
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
-const updateSpy = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
+const updateSpy = vi.fn((_v: unknown) => ({ eq: () => Promise.resolve({ error: null }) }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ from: () => ({ update: (v: unknown) => updateSpy(v) }) }),
 }));
@@ -45,7 +45,7 @@ describe("POST /api/presence", () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ status: "AWAY" }),
     );
-    const vals = updateSpy.mock.calls[0][0] as Record<string, unknown>;
+    const vals = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(vals).toHaveProperty("last_seen_at");
   });
 });

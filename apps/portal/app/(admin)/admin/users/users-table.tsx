@@ -67,7 +67,7 @@ export type UserRow = {
   full_name: string;
   email: string;
   role: "ADMIN" | "AGENT" | "OWNER";
-  status: "AVAILABLE" | "ON_CALL" | "OFFLINE";
+  status: "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
   active: boolean;
   last_seen_at: string | null;
   created_at: string;

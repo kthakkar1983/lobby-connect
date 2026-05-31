@@ -10,7 +10,7 @@
 // =============================================================================
 
 export type Role = "AGENT" | "ADMIN" | "OWNER";
-export type ProfileStatus = "AVAILABLE" | "ON_CALL" | "OFFLINE";
+export type ProfileStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
 export type CallChannel = "AUDIO" | "VIDEO";
 export type CallState =
   | "RINGING"
