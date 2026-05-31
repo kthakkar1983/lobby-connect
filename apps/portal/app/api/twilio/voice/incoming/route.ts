@@ -113,16 +113,22 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const targets = planDial({ primaryAgent, availableAdmins });
 
-    // 5. Record the call (idempotent on CallSid).
+    // 5. Record the call (idempotent on CallSid); capture its id for the TwiML callId.
+    let callId = existing?.id ?? "";
     if (!existing) {
-      await admin.from("calls").insert({
-        operator_id: property.operator_id,
-        property_id: property.id,
-        channel: "AUDIO",
-        state: targets.length === 0 ? "NO_ANSWER" : "RINGING",
-        twilio_call_sid: callSid,
-        caller_number: from,
-      });
+      const { data: inserted } = await admin
+        .from("calls")
+        .insert({
+          operator_id: property.operator_id,
+          property_id: property.id,
+          channel: "AUDIO",
+          state: targets.length === 0 ? "NO_ANSWER" : "RINGING",
+          twilio_call_sid: callSid,
+          caller_number: from,
+        })
+        .select("id")
+        .single();
+      callId = inserted?.id ?? "";
     }
 
     // 6. Return TwiML (apology if nobody reachable, else parallel dial).
@@ -133,6 +139,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         timeoutSeconds: RING_TIMEOUT_SECONDS,
         actionUrl,
         apologyMessage: APOLOGY,
+        callId,
       }),
     );
   } catch (err) {

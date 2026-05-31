@@ -12,6 +12,7 @@ const opts = {
   timeoutSeconds: 120,
   actionUrl: "https://x.test/api/twilio/voice/dial-result",
   apologyMessage: "Sorry, no one is available.",
+  callId: "call-1",
 };
 
 describe("twiml builders", () => {
@@ -22,7 +23,7 @@ describe("twiml builders", () => {
         "<Response>" +
         "<Say>Connecting you to the front desk, one moment.</Say>" +
         '<Dial timeout="120" action="https://x.test/api/twilio/voice/dial-result" method="POST">' +
-        "<Client>lc_a1</Client>" +
+        '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>' +
         "</Dial>" +
         "</Response>",
     );
@@ -33,7 +34,10 @@ describe("twiml builders", () => {
       [{ identity: "lc_a1" }, { identity: "lc_x1" }],
       opts,
     );
-    expect(xml).toContain("<Client>lc_a1</Client><Client>lc_x1</Client>");
+    expect(xml).toContain(
+      '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>' +
+        '<Client><Identity>lc_x1</Identity><Parameter name="callId" value="call-1"/></Client>',
+    );
   });
 
   it("falls back to apology when there are no targets", () => {

@@ -16,6 +16,7 @@ export interface IncomingTwimlOpts {
   timeoutSeconds: number;
   actionUrl: string;
   apologyMessage: string;
+  callId: string;
 }
 
 export function buildApologyTwiml(message: string): string {
@@ -39,7 +40,11 @@ export function buildIncomingTwiml(
   if (targets.length === 0) return buildApologyTwiml(opts.apologyMessage);
 
   const clients = targets
-    .map((t) => `<Client>${escapeXml(t.identity)}</Client>`)
+    .map(
+      (t) =>
+        `<Client><Identity>${escapeXml(t.identity)}</Identity>` +
+        `<Parameter name="callId" value="${escapeXml(opts.callId)}"/></Client>`,
+    )
     .join("");
 
   return (

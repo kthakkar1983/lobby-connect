@@ -35,9 +35,15 @@ function makeAdminClient() {
       builder.eq = chain;
       builder.in = chain;
       builder.is = chain;
-      builder.insert = (row: unknown) =>
+      builder.insert = (row: unknown) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (insertSpy as any)(table, row);
+        return {
+          select: () => ({
+            single: () => Promise.resolve({ data: { id: "call-1" }, error: null }),
+          }),
+        };
+      };
       builder.maybeSingle = () => {
         if (table === "properties") return Promise.resolve({ data: canned.property ?? null });
         if (table === "calls") return Promise.resolve({ data: canned.existingCall ?? null });
@@ -102,7 +108,9 @@ describe("POST /api/twilio/voice/incoming", () => {
     canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
-    expect(xml).toContain("<Client>lc_a1</Client>");
+    expect(xml).toContain(
+      '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>',
+    );
     expect(xml).toContain('action="https://abc.trycloudflare.com/api/twilio/voice/dial-result"');
     expect(insertSpy).toHaveBeenCalledTimes(1);
     const [, row] = insertSpy.mock.calls[0] as unknown as [string, Record<string, unknown>];
@@ -145,7 +153,7 @@ describe("POST /api/twilio/voice/incoming", () => {
     canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1" }];
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
-    expect(xml).toContain("<Client>lc_a1</Client>");
-    expect(xml).toContain("<Client>lc_x1</Client>");
+    expect(xml).toContain("<Identity>lc_a1</Identity>");
+    expect(xml).toContain("<Identity>lc_x1</Identity>");
   });
 });
