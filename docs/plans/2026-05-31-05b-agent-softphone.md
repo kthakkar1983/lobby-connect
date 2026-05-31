@@ -6,17 +6,17 @@
 
 **Architecture:** Pure, unit-tested helpers in `apps/portal/lib/voice/` (presence + call-state) and `apps/portal/lib/twilio/` (access-token builder), thin Node-runtime API routes (`token`, `presence`, `voice/answered`, `calls/notes`, `cron/mark-stale-offline`) that verify the session and write via the right Supabase client, one additive extension to 5a's TwiML (pass `callId` to the browser), and one shared `"use client"` softphone component mounted in both portal shells. Presence lives in `profiles.status` (extended with `AWAY`) refreshed by a heartbeat + a once-a-minute Vercel Cron sweep.
 
-**Tech Stack:** Next.js 15 App Router (route handlers `runtime='nodejs'`, Server Components), `twilio` Node SDK (`jwt.AccessToken` + `VoiceGrant`), `@twilio/voice-sdk` (browser Device — new dep), Supabase user-scoped + service-role clients, Vitest (+ jsdom for the one component).
+**Tech Stack:** Next.js 15 App Router (route handlers `runtime='nodejs'`, Server Components), `twilio` Node SDK v6 (`jwt.AccessToken` + `VoiceGrant`), `@twilio/voice-sdk` (browser Device — new dep), Supabase user-scoped (`createServerClient`) + service-role (`createAdminClient`) clients, Vitest (Node env).
 
 **Spec:** `docs/specs/2026-05-31-05b-agent-softphone-design.md`
 **Builds on:** tag `plan-05a-voice-backend-complete` (smoke-confirmed `t13-smoke-confirmed`)
 
 **Conventions reused (verified in repo):**
 - Path alias `@/` → `apps/portal/`. DB types: `@lc/shared/database.types`; `Role` from `@lc/shared`.
-- User-scoped client: `import { createClient } from "@/lib/supabase/server"` (async; `await createClient()`). Service-role: `import { createAdminClient } from "@/lib/supabase/admin"`.
-- Session in a route: `const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser();`.
+- User-scoped client: `import { createServerClient } from "@/lib/supabase/server"` (async; `await createServerClient()`). Service-role: `import { createAdminClient } from "@/lib/supabase/admin"`.
+- Session in a route: `const supabase = await createServerClient(); const { data: { user } } = await supabase.auth.getUser();`.
 - Twilio glue from 5a: `lib/twilio/config.ts` (`getTwilioConfig`), `lib/twilio/client.ts`, `lib/voice/identity.ts` (`toTwilioIdentity`), `lib/voice/twiml.ts`.
-- Tests live in `apps/portal/tests/...`; run from `apps/portal/` with `pnpm test` (alias `vitest run`). Vitest style: `import { describe, it, expect, vi } from "vitest"`. jsdom available via `vitest-environment-jsdom`.
+- Tests live in `apps/portal/tests/...`; run from `apps/portal/` with `pnpm test` (alias `vitest run`). Vitest style: `import { describe, it, expect, vi } from "vitest"`. Node test env only (no jsdom configured) — every test in this plan is a pure-function or route test; the one React component (Task 11) is intentionally not unit-tested.
 - Routes return TwiML/JSON via `NextResponse`; webhooks/cron set `export const runtime = "nodejs"`.
 - All commands run from `apps/portal/` unless noted. Lint scope is `app components lib`.
 
@@ -531,7 +531,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const getUser = vi.fn();
 const maybeSingle = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () =>
+  createServerClient: () =>
     Promise.resolve({
       auth: { getUser: () => getUser() },
       from: () => ({
@@ -603,7 +603,7 @@ Create `apps/portal/app/api/twilio/token/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { getTwilioApiCredentials } from "@/lib/twilio/config";
 import { buildVoiceAccessToken } from "@/lib/twilio/token";
 
@@ -612,7 +612,7 @@ export const runtime = "nodejs";
 const TOKEN_TTL_SECONDS = 3600;
 
 export async function GET(): Promise<NextResponse> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -672,7 +672,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () =>
+  createServerClient: () =>
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
@@ -732,14 +732,14 @@ Create `apps/portal/app/api/presence/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isLiveStatus } from "@/lib/voice/presence";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -790,7 +790,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () =>
+  createServerClient: () =>
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
@@ -894,14 +894,14 @@ Create `apps/portal/app/api/twilio/voice/answered/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAnswer } from "@/lib/voice/call-state";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -982,7 +982,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () => Promise.resolve({ auth: { getUser: () => getUser() } }),
+  createServerClient: () => Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
 const updateSpy = vi.fn();
@@ -1043,13 +1043,13 @@ Create `apps/portal/app/api/calls/notes/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -1508,7 +1508,7 @@ git commit -m "feat(5b): shared softphone client component"
 **Files:**
 - Modify: `apps/portal/app/(agent)/layout.tsx`
 - Modify: `apps/portal/app/(agent)/agent/page.tsx`
-- Modify: `apps/portal/app/(admin)/admin/layout.tsx`
+- Modify: `apps/portal/app/(admin)/layout.tsx`
 
 - [ ] **Step 1: Agent layout — header shell + mount the softphone**
 
@@ -1522,7 +1522,7 @@ export default async function AgentLayout({
 }: {
   readonly children: React.ReactNode;
 }) {
-  const { profile } = await requireRole("AGENT");
+  await requireRole("AGENT"); // returns RequiredProfile {id, role, operator_id, active} — guards only
 
   return (
     <div className="min-h-screen bg-background">
@@ -1533,7 +1533,7 @@ export default async function AgentLayout({
             type="submit"
             className="text-sm text-text-muted hover:text-foreground"
           >
-            Sign out — {profile.full_name}
+            Sign out
           </button>
         </form>
       </header>
@@ -1584,15 +1584,15 @@ export default function AgentDashboardPage() {
 
 - [ ] **Step 3: Mount the softphone in the admin shell**
 
-Open `apps/portal/app/(admin)/admin/layout.tsx`. Add the import at the top:
+Open `apps/portal/app/(admin)/layout.tsx` (the admin shell — it renders the sidebar via `@/components/app-sidebar` + `@/components/user-menu` around `{children}`). Add the import at the top:
 ```tsx
 import { Softphone } from "@/components/softphone/softphone";
 ```
-Then render `<Softphone role="ADMIN" />` inside the persistent shell chrome (so it stays mounted across admin pages — place it in the sidebar/footer region of the existing layout, **not** inside `{children}`). For example, immediately before the closing tag of the sidebar/aside element:
+Then render `<Softphone role="ADMIN" />` inside the persistent shell chrome so it stays mounted across admin page navigations — place it in the layout's own markup (e.g., in the sidebar footer or the header region), **not** inside `{children}` (which remounts per page and would drop an active call). Example placement near the header/sidebar:
 ```tsx
         <Softphone role="ADMIN" />
 ```
-Verify placement keeps the existing layout grid intact (the widget is self-contained and ~320px-friendly).
+Read the current layout first to choose a spot that keeps the existing grid/sidebar intact; the widget is self-contained and ~320px-friendly.
 
 - [ ] **Step 4: Typecheck, lint, build**
 
@@ -1602,7 +1602,7 @@ Expected: PASS. (`build` confirms the dynamic `@twilio/voice-sdk` import doesn't
 - [ ] **Step 5: Commit**
 
 ```bash
-git add "apps/portal/app/(agent)/layout.tsx" "apps/portal/app/(agent)/agent/page.tsx" "apps/portal/app/(admin)/admin/layout.tsx"
+git add "apps/portal/app/(agent)/layout.tsx" "apps/portal/app/(agent)/agent/page.tsx" "apps/portal/app/(admin)/layout.tsx"
 git commit -m "feat(5b): agent shell + dashboard + softphone mounted in both portals"
 ```
 
