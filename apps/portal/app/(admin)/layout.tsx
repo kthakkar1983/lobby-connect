@@ -7,6 +7,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { createServerClient } from "@/lib/supabase/server";
+import { Softphone } from "@/components/softphone/softphone";
 
 export default async function AdminLayout({
   children,
@@ -37,6 +38,9 @@ export default async function AdminLayout({
             role={profile.role as "ADMIN"}
           />
         </header>
+        <div className="border-b border-border px-4 pb-4 pt-3">
+          <Softphone role="ADMIN" />
+        </div>
         <div className="p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
