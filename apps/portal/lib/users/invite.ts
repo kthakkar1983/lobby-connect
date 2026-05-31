@@ -2,6 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Role } from "@lc/shared";
 
+import { identityForRole } from "@/lib/users/twilio-identity";
+
 export type InviteInput = {
   email: string;
   full_name: string;
@@ -18,11 +20,6 @@ type Args = {
   input: InviteInput;
   redirectTo: string;
 };
-
-function twilioIdentityFor(role: Role, userId: string): string | null {
-  if (role === "OWNER") return null;
-  return `user-${userId.slice(0, 8)}`;
-}
 
 export async function inviteUser(args: Args): Promise<InviteResult> {
   const email = args.input.email.trim().toLowerCase();
@@ -68,7 +65,7 @@ export async function inviteUser(args: Args): Promise<InviteResult> {
     role: args.input.role,
     full_name: args.input.full_name,
     email,
-    twilio_identity: twilioIdentityFor(args.input.role, newUserId),
+    twilio_identity: identityForRole(args.input.role, newUserId),
     status: "OFFLINE",
     active: true,
   });

@@ -98,7 +98,7 @@ describe("inviteUser", () => {
         role: "AGENT",
         full_name: "Ada Lovelace",
         email: "ada@example.com",
-        twilio_identity: "user-user-new".slice(0, 13),
+        twilio_identity: "lc_usernew",
         active: true,
       }),
     );

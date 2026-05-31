@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { inviteUser } from "@/lib/users/invite";
+import { identityForRole } from "@/lib/users/twilio-identity";
 import {
   validateEmail,
   validateFullName,
@@ -153,7 +154,7 @@ export async function updateUserAction(
       target.twilio_identity === null &&
       (patch.role === "AGENT" || patch.role === "ADMIN")
     ) {
-      updates.twilio_identity = `user-${target.id.slice(0, 8)}`;
+      updates.twilio_identity = identityForRole(patch.role, target.id);
     }
     auditEvents.push({
       action: "user.role_changed",
