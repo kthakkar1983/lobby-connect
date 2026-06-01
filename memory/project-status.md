@@ -80,15 +80,38 @@ docs/plans/2026-06-01-06a-kiosk-video.md
 
 ---
 
-## Current: Plan 6b — Playbook (PDF viewer)
+## Last completed plan: 6b — Playbook (PDF viewer)
 
-**Why:** Kiosk + video path is live. 6b adds the playbook panel: PDF upload (owner portal, Plan 7 provides the UI — 6b wires the backend + display).
+**Tag:** `plan-06b-playbook-complete`
+
+**What was built:**
+- `GET /api/calls/[id]/playbook` — session-auth, operator-scoped route that creates a 1-hour Supabase Storage signed URL for the property's playbook PDF. Returns `{ hasPlaybook: false }` when none set.
+- `PlaybookPanel` component — replaces the 6a empty-state in the 60% right panel of the agent video-call overlay. Fetches the signed URL on mount, renders an `<iframe>` with `sandbox="allow-same-origin"`, stale-fetch guard, and "Open in new tab" fallback link.
+- 6 tests (route TDD), monorepo typecheck clean.
+
+**Files created/modified in 6b:**
+```
+apps/portal/
+  app/api/calls/[id]/playbook/route.ts    ← signed URL route
+  tests/app/calls/playbook.test.ts        ← 6 Vitest tests
+  components/video-call/
+    playbook-panel.tsx                    ← PDF viewer component
+    video-call.tsx                        ← swapped empty-state for <PlaybookPanel>
+docs/specs/2026-06-01-06b-playbook-design.md
+docs/plans/2026-06-01-06b-playbook.md
+```
+
+**To smoke-test 6b:** Upload a PDF to the `playbooks/` bucket in Supabase Storage, then `UPDATE properties SET playbook_pdf_url = '<path>', playbook_version = 1 WHERE id = '<id>';`. Start a video call from the kiosk, answer in the portal — the 60% panel should load and render the PDF.
+
+---
+
+## Current: Plan 6c — Emergency call
 
 | Sub-phase | Scope | Status |
 |---|---|---|
 | **6a** | Kiosk app, video call path, agent overlay, migration 0007 | **complete** `plan-06a-kiosk-video-complete` |
-| **6b** | Playbook — signed-URL route + PDF viewer in the 60% panel | not started |
+| **6b** | Playbook — signed-URL route + PDF viewer in the 60% panel | **complete** `plan-06b-playbook-complete` |
 | **6c** | Emergency call — conference + alert on-call manager + incident log | not started |
 
-**Next:** Plan 6b — spec + plan, then implement. All 6a bugs resolved.
+**Next:** Plan 6c — spec + plan, then implement.
 **After 6:** Plan 7 — Owner portal (mobile-responsive), incl. kiosk info field editing + playbook upload.
