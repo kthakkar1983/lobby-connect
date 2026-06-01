@@ -120,6 +120,12 @@ export type Database = {
           logo_url: string | null;
           kiosk_welcome_message: string | null;
           kiosk_apology_message: string | null;
+          kiosk_welcome_heading: string | null;
+          kiosk_checkin_time: string | null;
+          kiosk_checkout_time: string | null;
+          kiosk_wifi_network: string | null;
+          kiosk_wifi_password: string | null;
+          kiosk_breakfast_hours: string | null;
           geocoded_lat: number | null;
           geocoded_long: number | null;
           active: boolean;
@@ -140,6 +146,12 @@ export type Database = {
           logo_url?: string | null;
           kiosk_welcome_message?: string | null;
           kiosk_apology_message?: string | null;
+          kiosk_welcome_heading?: string | null;
+          kiosk_checkin_time?: string | null;
+          kiosk_checkout_time?: string | null;
+          kiosk_wifi_network?: string | null;
+          kiosk_wifi_password?: string | null;
+          kiosk_breakfast_hours?: string | null;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;
@@ -160,6 +172,12 @@ export type Database = {
           logo_url?: string | null;
           kiosk_welcome_message?: string | null;
           kiosk_apology_message?: string | null;
+          kiosk_welcome_heading?: string | null;
+          kiosk_checkin_time?: string | null;
+          kiosk_checkout_time?: string | null;
+          kiosk_wifi_network?: string | null;
+          kiosk_wifi_password?: string | null;
+          kiosk_breakfast_hours?: string | null;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;
