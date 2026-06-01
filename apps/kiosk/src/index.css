@@ -8,6 +8,14 @@
   --color-border: oklch(90% 0.01 240);
 }
 
+:root {
+  --kiosk-navy: #0f1f3d;
+  --kiosk-cream: #f4ecd8;
+  --kiosk-ink: #0f1f3d;
+  --kiosk-muted: #7a6e5a;
+  --kiosk-surface: #ffffff;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;

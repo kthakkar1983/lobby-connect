@@ -1,14 +1,119 @@
-import { SHARED_PACKAGE_VERSION } from "@lc/shared";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
+
+import { reduce, initialState } from "./state/call-machine";
+import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
+import { joinChannel, type KioskAgoraSession } from "./lib/agora";
+import type { KioskConfig } from "./types";
+import { Home } from "./screens/Home";
+import { RecordingNotice } from "./screens/RecordingNotice";
+import { Ringing } from "./screens/Ringing";
+import { Connected } from "./screens/Connected";
+import { Apology } from "./screens/Apology";
+
+const RING_TIMEOUT_MS = 120_000;
+const HEARTBEAT_MS = 30_000;
 
 export function App() {
-  return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="rounded-lg border border-border bg-background p-12 text-center">
-        <h1 className="text-3xl font-semibold">Lobby Connect Kiosk</h1>
-        <p className="mt-3 text-sm opacity-70">
-          Foundation OK · shared v{SHARED_PACKAGE_VERSION}
-        </p>
-      </div>
-    </div>
-  );
+  const [state, dispatch] = useReducer(reduce, undefined, initialState);
+  const [config, setConfig] = useState<KioskConfig | null>(null);
+  const [remoteVideo, setRemoteVideo] = useState<IRemoteVideoTrack | null>(null);
+  const [localVideo, setLocalVideo] = useState<ICameraVideoTrack | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [cameraOff, setCameraOff] = useState(false);
+
+  const sessionRef = useRef<KioskAgoraSession | null>(null);
+  const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
+  const callIdRef = useRef<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load config + start heartbeat interval.
+  useEffect(() => {
+    fetchKioskConfig().then(setConfig).catch(() => {});
+    const id = setInterval(() => void sendHeartbeat(), HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const teardown = useCallback(async () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    await sessionRef.current?.leave();
+    sessionRef.current = null;
+    localAudioRef.current = null;
+    setRemoteVideo(null);
+    setLocalVideo(null);
+    setMuted(false);
+    setCameraOff(false);
+  }, []);
+
+  const onAccept = useCallback(async () => {
+    try {
+      const { callId, channelName } = await startCall();
+      callIdRef.current = callId;
+      const uid = Math.floor(Math.random() * 1_000_000) + 1;
+      const tok = await fetchAgoraToken(channelName, uid);
+      const session = await joinChannel({
+        appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid,
+        onRemoteVideo: (t) => setRemoteVideo(t ?? null),
+        onAgentJoined: () => dispatch({ type: "AGENT_JOINED" }),
+        onAgentLeft: () => {
+          void teardown();
+          void endCall(callIdRef.current!, "completed");
+          dispatch({ type: "END_CALL" });
+        },
+      });
+      sessionRef.current = session;
+      localAudioRef.current = session.localAudio;
+      setLocalVideo(session.localVideo);
+      dispatch({ type: "ACCEPT_DISCLOSURE", callId, channelName });
+      timeoutRef.current = setTimeout(() => {
+        if (callIdRef.current) void endCall(callIdRef.current, "no-answer");
+        void teardown();
+        dispatch({ type: "RING_TIMEOUT" });
+      }, RING_TIMEOUT_MS);
+    } catch {
+      await teardown();
+      dispatch({ type: "ERROR" });
+    }
+  }, [teardown]);
+
+  const onEnd = useCallback(async () => {
+    if (callIdRef.current) await endCall(callIdRef.current, "completed");
+    await teardown();
+    dispatch({ type: "END_CALL" });
+  }, [teardown]);
+
+  const onCancel = useCallback(async () => {
+    if (callIdRef.current) await endCall(callIdRef.current, "cancelled");
+    await teardown();
+    dispatch({ type: "CANCEL" });
+  }, [teardown]);
+
+  const toggleMute = useCallback(() => {
+    const next = !muted;
+    void localAudioRef.current?.setMuted(next);
+    setMuted(next);
+  }, [muted]);
+
+  const toggleCamera = useCallback(() => {
+    const next = !cameraOff;
+    void localVideo?.setMuted(next);
+    setCameraOff(next);
+  }, [cameraOff, localVideo]);
+
+  if (!config) {
+    return <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>Loading…</div>;
+  }
+
+  switch (state.screen) {
+    case "home":
+      return <Home config={config} onCall={() => dispatch({ type: "TAP_CALL" })} />;
+    case "disclosure":
+      return <RecordingNotice onOk={onAccept} />;
+    case "ringing":
+      return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
+    case "connected":
+      return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd} />;
+    case "apology":
+      return <Apology message={config.apologyMessage} phone={config.phoneNumber} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
+  }
 }
