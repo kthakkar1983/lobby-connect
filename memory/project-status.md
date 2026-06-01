@@ -10,9 +10,10 @@ metadata:
 **Tag:** `plan-06a-kiosk-video-complete`
 **Smoke confirmed:** kiosk K-01→K-04 flow, agent 40/60 overlay, two-way video, Room#/notes saved, calls row RINGING→IN_PROGRESS→COMPLETED with answered_at/ended_at/duration_seconds. CORS fix applied (next.config.ts).
 
-**Known follow-up bugs (not blocking 6b):**
-- Agent-side Mute/Camera controls don't toggle correctly
-- Guest camera-off button affects agent video instead of guest's own camera
+**Follow-up bugs (both fixed, commit `4967f9a`):**
+- ~~Agent-side Mute/Camera controls don't toggle correctly~~ — fixed
+- ~~Guest camera-off button affects agent video instead of guest's own camera~~ — fixed
+- Root cause: `setMuted()` triggers Agora `user-unpublished` → WebRTC renegotiation drops all streams. Fixed by using `MediaStreamTrack.enabled` directly (no signaling side effects).
 
 ### All tasks complete
 
@@ -89,5 +90,5 @@ docs/plans/2026-06-01-06a-kiosk-video.md
 | **6b** | Playbook — signed-URL route + PDF viewer in the 60% panel | not started |
 | **6c** | Emergency call — conference + alert on-call manager + incident log | not started |
 
-**Next:** Plan 6b spec + plan, then implement.
+**Next:** Plan 6b — spec + plan, then implement. All 6a bugs resolved.
 **After 6:** Plan 7 — Owner portal (mobile-responsive), incl. kiosk info field editing + playbook upload.
