@@ -12,20 +12,29 @@ export function PlaybookPanel({ callId }: { callId: string }) {
   const [state, setState] = useState<PlaybookState>({ status: "loading" });
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/calls/${callId}/playbook`)
       .then(async (res) => {
+        if (cancelled) return;
         if (!res.ok) {
           setState({ status: "error" });
           return;
         }
         const body = (await res.json()) as { hasPlaybook: boolean; signedUrl?: string };
-        setState(
-          body.hasPlaybook && body.signedUrl
-            ? { status: "ready", signedUrl: body.signedUrl }
-            : { status: "no-playbook" },
-        );
+        if (!cancelled) {
+          setState(
+            body.hasPlaybook && body.signedUrl
+              ? { status: "ready", signedUrl: body.signedUrl }
+              : { status: "no-playbook" },
+          );
+        }
       })
-      .catch(() => setState({ status: "error" }));
+      .catch(() => {
+        if (!cancelled) setState({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [callId]);
 
   if (state.status === "loading") {
@@ -70,6 +79,7 @@ export function PlaybookPanel({ callId }: { callId: string }) {
         src={state.signedUrl}
         className="min-h-0 flex-1 border-0"
         title="Property playbook"
+        sandbox="allow-same-origin"
       />
     </div>
   );
