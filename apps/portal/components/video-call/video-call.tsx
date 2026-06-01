@@ -74,7 +74,7 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
     }
   }
 
-  function toggleMute() { const n = !muted; const t = audioRef.current?.getMediaStreamTrack(); if (t) t.enabled = !n; setMuted(n); }
+  function toggleMute() { const n = !muted; void audioRef.current?.setMuted(n); setMuted(n); }
   function toggleCamera() { const n = !cameraOff; const t = videoRef.current?.getMediaStreamTrack(); if (t) t.enabled = !n; setCameraOff(n); }
 
   return (
