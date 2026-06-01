@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertTriangle } from "lucide-react";
 import type { IAgoraRTCClient, IAgoraRTCRemoteUser, ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
+import { PlaybookPanel } from "./playbook-panel";
 
 export function VideoCall({ callId, onClose }: { callId: string; onClose: () => void }) {
   const [muted, setMuted] = useState(false);
@@ -84,10 +85,7 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
           <div ref={remoteRef} className="absolute inset-0" />
           <div ref={localRef} className="absolute bottom-4 right-4 h-28 w-40 overflow-hidden rounded-md border border-white/40" />
         </div>
-        {/* 60% playbook (right) — empty-state in 6a */}
-        <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-text-muted">
-          No playbook uploaded yet.
-        </div>
+        <PlaybookPanel callId={callId} />
       </div>
 
       {/* control bar */}

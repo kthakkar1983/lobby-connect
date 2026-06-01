@@ -1,0 +1,76 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
+
+interface PlaybookState {
+  status: "loading" | "no-playbook" | "ready" | "error";
+  signedUrl?: string;
+}
+
+export function PlaybookPanel({ callId }: { callId: string }) {
+  const [state, setState] = useState<PlaybookState>({ status: "loading" });
+
+  useEffect(() => {
+    fetch(`/api/calls/${callId}/playbook`)
+      .then(async (res) => {
+        if (!res.ok) {
+          setState({ status: "error" });
+          return;
+        }
+        const body = (await res.json()) as { hasPlaybook: boolean; signedUrl?: string };
+        setState(
+          body.hasPlaybook && body.signedUrl
+            ? { status: "ready", signedUrl: body.signedUrl }
+            : { status: "no-playbook" },
+        );
+      })
+      .catch(() => setState({ status: "error" }));
+  }, [callId]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
+        Loading playbook…
+      </div>
+    );
+  }
+
+  if (state.status === "no-playbook") {
+    return (
+      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
+        No playbook uploaded yet.
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
+        Playbook unavailable.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex basis-3/5 flex-col border-l border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <span className="text-sm font-medium text-foreground">Playbook</span>
+        <a
+          href={state.signedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-foreground"
+        >
+          <ExternalLink size={12} />
+          Open in new tab
+        </a>
+      </div>
+      <iframe
+        src={state.signedUrl}
+        className="min-h-0 flex-1 border-0"
+        title="Property playbook"
+      />
+    </div>
+  );
+}
