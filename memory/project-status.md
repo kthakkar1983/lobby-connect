@@ -5,13 +5,12 @@ metadata:
   type: project
 ---
 
-## Current plan: 5b — Agent/Admin Softphone + Presence
+## Last completed plan: 5b — Agent/Admin Softphone + Presence
 
-**Spec:** `docs/specs/2026-05-31-05b-agent-softphone-design.md`
-**Plan:** `docs/plans/2026-05-31-05b-agent-softphone.md`
-**Builds on tag:** `plan-05a-voice-backend-complete` (smoke-confirmed `t13-smoke-confirmed`)
+**Tag:** `plan-05b-agent-softphone-complete`
+**Smoke confirmed:** real call answered in browser, IN_PROGRESS → COMPLETED, room#/notes saved, presence sweep to OFFLINE working.
 
-### Tasks completed (committed to local main, NOT pushed)
+### All tasks complete
 
 | Task | Commit subject | Status |
 |---|---|---|
@@ -24,16 +23,13 @@ metadata:
 | T7 | feat(5b): /api/presence — heartbeat + Ready/Away writes | done |
 | T8 | feat(5b): /api/twilio/voice/answered — answer transition + ON_CALL | done |
 | T9 | feat(5b): /api/calls/notes — save room# + notes | done |
+| T10 | feat(5b): OFFLINE sweep cron + every-minute Vercel schedule | done |
+| T11 | feat(5b): shared softphone client component | done |
+| T12 | feat(5b): agent shell + dashboard + softphone mounted in both portals | done |
+| T13 | Full suite (121 tests, 26 files) + live two-browser smoke | done |
+| T14 | git tag plan-05b-agent-softphone-complete + memory update | done |
 
-### Tasks remaining
-
-- **T10** — `/api/cron/mark-stale-offline` + Vercel cron schedule (`vercel.json` + `.env.example`)
-- **T11** — Softphone client component (`components/softphone/softphone.tsx`); typecheck + lint only, no unit test
-- **T12** — Mount softphone in agent layout + agent dashboard page + admin layout; typecheck + lint + `pnpm build`
-- **T13** — Full suite (`pnpm test && pnpm lint && pnpm typecheck && pnpm build`) + live two-browser smoke (real call, Twilio webhook, CRON_SECRET check). Note: confirm `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` are set in `apps/portal/.env.local` before this task.
-- **T14** — `git tag plan-05b-agent-softphone-complete` + update this memory file
-
-### New files created so far (5b)
+### Files created/modified in 5b
 
 ```
 apps/portal/lib/twilio/config.ts          — extended: getTwilioApiCredentials()
@@ -46,20 +42,28 @@ apps/portal/app/api/twilio/voice/incoming/route.ts  — extended: .select("id").
 apps/portal/app/api/twilio/voice/answered/route.ts
 apps/portal/app/api/presence/route.ts
 apps/portal/app/api/calls/notes/route.ts
+apps/portal/app/api/cron/mark-stale-offline/route.ts
+apps/portal/components/softphone/softphone.tsx
+apps/portal/app/(agent)/layout.tsx        — header shell + softphone sidebar
+apps/portal/app/(agent)/agent/page.tsx    — two-region layout (video slot reserved)
+apps/portal/app/(admin)/layout.tsx        — softphone panel added
+apps/portal/vercel.json                   — crons: mark-stale-offline every minute
+packages/shared/src/supabase-types.ts     — ProfileStatus: added AWAY
 supabase/migrations/0006_status_away.sql
 ```
 
-### Key implementation notes
+---
 
-- `@twilio/voice-sdk` added to `apps/portal/package.json` (browser-side, dynamic import only inside `useEffect` to avoid SSR crash)
-- `getTwilioApiCredentials()` validates `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` separately from `getTwilioConfig()` (which only covers 5a webhooks)
-- TwiML now uses `<Client><Identity>lc_x</Identity><Parameter name="callId" value="…"/></Client>` form; browser reads via `call.customParameters.get("callId")`
-- Presence heartbeat: browser POSTs to `/api/presence` every 20s with `{ status }`. Cron sweeps stale rows to OFFLINE (STALE_AFTER_MS = 90_000ms)
-- Answer race guard: `/api/twilio/voice/answered` checks `canAnswer(call.state)` then does a conditional `.eq("state","RINGING")` update — second answerer gets 409
+## Next plan: 6 — Kiosk + Agent Video Split-Screen + Playbook
 
-### Next plan after 5b
+**Prereq:** Agora account + creds (`AGORA_APP_ID`, `AGORA_APP_CERTIFICATE`). Confirm at start of session.
 
-**Plan 6 — Kiosk + agent video split-screen + playbook**
-Prereq: Agora account + creds (`AGORA_APP_ID`, `AGORA_APP_CERTIFICATE`). Flag at start of that session.
+**Why before owner portal (7):** call views show audio+video from day one (roadmap reordered 2026-05-31).
 
-**Why:** Roadmap reordered 2026-05-31 — kiosk (6) before owner portal (7) so call views show audio+video from day one.
+**Scope:**
+- `apps/kiosk/` — Vite SPA, tablet-locked, Agora client, no auth
+- Agent dashboard right panel — Agora video feed during a call
+- Playbook — upload (admin) + display (agent) during calls
+- `/api/agora/token` — Agora RTC token minting
+
+**After 6:** Plan 7 — Owner portal (mobile-responsive).
