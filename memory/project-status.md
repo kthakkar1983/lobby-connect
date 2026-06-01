@@ -54,16 +54,18 @@ supabase/migrations/0006_status_away.sql
 
 ---
 
-## Next plan: 6 — Kiosk + Agent Video Split-Screen + Playbook
-
-**Prereq:** Agora account + creds (`AGORA_APP_ID`, `AGORA_APP_CERTIFICATE`). Confirm at start of session.
+## Current: Plan 6 — decomposed into 6a / 6b / 6c (brainstorm complete 2026-06-01)
 
 **Why before owner portal (7):** call views show audio+video from day one (roadmap reordered 2026-05-31).
 
-**Scope:**
-- `apps/kiosk/` — Vite SPA, tablet-locked, Agora client, no auth
-- Agent dashboard right panel — Agora video feed during a call
-- Playbook — upload (admin) + display (agent) during calls
-- `/api/agora/token` — Agora RTC token minting
+**Prereq:** Agora account + creds (`AGORA_APP_ID`, `AGORA_APP_CERTIFICATE`). User has an Agora account; needs the setup guide (`docs/setup/2026-06-01-agora-video-setup.md`, a 6a deliverable) — create a **new dedicated "Lobby Connect" project in secured mode** (App ID + App Certificate / token auth).
 
-**After 6:** Plan 7 — Owner portal (mobile-responsive).
+| Sub-phase | Scope | Status |
+|---|---|---|
+| **6a** | Kiosk app (Vite, Agora client, info-card home + call flow K-01→K-08), kiosk config-token identity, `/api/agora/token` + `/api/kiosk/{call-started,call-ended,heartbeat}`, agent incoming-video (poll + first-wins) + 40/60 split-screen (Mute/Cam/End; Hold/Swap disabled placeholders; Emergency stub), migration 0007 (6 kiosk info cols). **Playbook panel = empty-state.** | **Spec written + awaiting user review:** `docs/specs/2026-06-01-06a-kiosk-video-design.md`. Plan not yet written. |
+| **6b** | Playbook — display (PDF viewer in the 60% panel) + signed-URL route + Storage wiring. (Owner *upload UI* is Plan 7.) | not started |
+| **6c** | Emergency call — confirm dialog → conference emergency services (agent stays on) + alert on-call manager (SMS+call) + log incident. **Two parked caveats:** remote-agent 911 geography → per-property local emergency number; Agora guest has no PSTN leg. | not started |
+
+**Decisions recovered this session (were agreed verbally in old sessions, never written — now in the 6a spec §0/§3/§9):** kiosk owner info-card (8 fixed fields, blank=hidden, auto-sizing button), no on-screen timer, K-02 recording disclosure, 40/60 video-left/playbook-right split, full control set incl. Hold/Swap (deferred) + Emergency (6c, must-have), config is **owner-owned** (owner portal, Plan 7) — 6a seeds via SQL, no recording in v1 (disclosure only).
+
+**After 6:** Plan 7 — Owner portal (mobile-responsive) — incl. owner editing of kiosk info fields + playbook upload.
