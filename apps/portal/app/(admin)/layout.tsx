@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { createServerClient } from "@/lib/supabase/server";
 import { Softphone } from "@/components/softphone/softphone";
+import { VideoCallHost } from "@/components/video-call/video-call-host";
 
 export default async function AdminLayout({
   children,
@@ -40,6 +41,7 @@ export default async function AdminLayout({
         </header>
         <div className="border-b border-border px-4 pb-4 pt-3">
           <Softphone role="ADMIN" />
+          <VideoCallHost />
         </div>
         <div className="p-6">{children}</div>
       </SidebarInset>

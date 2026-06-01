@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/require-role";
 import { Softphone } from "@/components/softphone/softphone";
+import { VideoCallHost } from "@/components/video-call/video-call-host";
 
 export default async function AgentLayout({
   children,
@@ -25,6 +26,7 @@ export default async function AgentLayout({
         <main>{children}</main>
         <aside>
           <Softphone role="AGENT" />
+          <VideoCallHost />
         </aside>
       </div>
     </div>
