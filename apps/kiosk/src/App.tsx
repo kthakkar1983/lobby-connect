@@ -90,13 +90,15 @@ export function App() {
 
   const toggleMute = useCallback(() => {
     const next = !muted;
-    void localAudioRef.current?.setMuted(next);
+    const t = localAudioRef.current?.getMediaStreamTrack();
+    if (t) t.enabled = !next;
     setMuted(next);
   }, [muted]);
 
   const toggleCamera = useCallback(() => {
     const next = !cameraOff;
-    void localVideo?.setMuted(next);
+    const t = localVideo?.getMediaStreamTrack();
+    if (t) t.enabled = !next;
     setCameraOff(next);
   }, [cameraOff, localVideo]);
 

@@ -73,8 +73,8 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
     }
   }
 
-  function toggleMute() { const n = !muted; void audioRef.current?.setMuted(n); setMuted(n); }
-  function toggleCamera() { const n = !cameraOff; void videoRef.current?.setMuted(n); setCameraOff(n); }
+  function toggleMute() { const n = !muted; const t = audioRef.current?.getMediaStreamTrack(); if (t) t.enabled = !n; setMuted(n); }
+  function toggleCamera() { const n = !cameraOff; const t = videoRef.current?.getMediaStreamTrack(); if (t) t.enabled = !n; setCameraOff(n); }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
