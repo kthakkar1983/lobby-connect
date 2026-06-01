@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(_request?: Request): Promise<NextResponse> {
   const supabase = await createServerClient();
   const {
     data: { user },
