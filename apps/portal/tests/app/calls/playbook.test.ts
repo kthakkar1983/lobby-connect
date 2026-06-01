@@ -97,4 +97,9 @@ describe("GET /api/calls/[id]/playbook", () => {
     });
     expect((await call("call-1")).status).toBe(500);
   });
+
+  it("401 when user has no profile row", async () => {
+    profileRow = null;
+    expect((await call("call-1")).status).toBe(401);
+  });
 });
