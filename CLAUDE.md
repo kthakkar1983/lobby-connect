@@ -74,7 +74,9 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 | 6a | Kiosk app + agent video split-screen (Agora), migration 0007 | `plan-06a-kiosk-video-complete` |
 | 6b | Playbook — signed-URL route + PDF viewer in the agent overlay | `plan-06b-playbook-complete` |
 | **6c** | **Emergency call** — real 911 via a Twilio Conference (guest + agent + 911) merged through the existing `<Dial action>` seam; PSAP routing via the number's registered E911 address; `incidents` table; agent in-call mute/leave driven server-side via the Conference Participant API (a redirected Client leg is SDK-uncontrollable); verified end-to-end with the **933** test number. Migrations 0008–0009. Spec: `docs/specs/2026-06-02-06c-emergency-call-design.md`, plan: `docs/plans/2026-06-02-06c-emergency-call.md` | `plan-06c-emergency-complete` |
-| 7 | Owner portal *(reordered after kiosk — call views show AUDIO+VIDEO from day one)* | — |
+| 7 | Owner portal *(reordered after kiosk — call views show AUDIO+VIDEO from day one)* — **split into 7a (read views) + 7b (self-service writes)** during 2026-06-02 brainstorm | — |
+| **7a** | Owner portal read views — mobile-first shell (header + bottom tab bar) + Home glance cards + property/calls/incidents (read) + recording-ready call detail. `lib/owner/` helpers + `<AutoRefresh>` poller. **Zero migrations / new routes / service-role** (pure reads over existing owner RLS). **Spec + plan written, implementation not started — resume by executing the plan from Task 1.** Spec: `docs/specs/2026-06-02-07a-owner-portal-design.md` · Plan: `docs/plans/2026-06-02-07a-owner-portal.md` | — |
+| 7b | Owner self-service writes — kiosk-field editing + playbook upload + incident resolve (needs owner `UPDATE` RLS + storage) | — |
 | 8 | Observability | — |
 
 **Key patterns established so far:**
