@@ -71,7 +71,9 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 | 5 | Voice path + agent dashboard — **split into 5a (backend voice) + 5b (dashboard softphone)** during 2026-05-30 brainstorm | — |
 | **5a** | **Backend voice path** — Twilio webhooks (`incoming`/`dial-result`/`status`), `lib/voice/` (routing + dedup + TwiML), `lib/twilio/` (HMAC verify), `twilio_identity` consolidation onto `lc_<uuid>`. Plan: `docs/plans/2026-05-30-05a-voice-backend.md` · Twilio setup: `docs/setup/2026-05-30-twilio-voice-setup.md` | `plan-05a-voice-backend-complete` (smoke-confirmed `t13-smoke-confirmed`) |
 | 5b | Agent/admin softphone (shared widget, both portals) + `/api/twilio/token` + presence (heartbeat + `AWAY` status + OFFLINE cron) + answer route (`handled_by`/`answered_at`/`IN_PROGRESS`). Spec: `docs/specs/2026-05-31-05b-agent-softphone-design.md` | spec written, plan next |
-| 6 | **Kiosk + agent video split-screen + playbook** (upload + display). Prereq: Agora account/creds. *(reordered ahead of owner portal 2026-05-31)* | — |
+| 6a | Kiosk app + agent video split-screen (Agora), migration 0007 | `plan-06a-kiosk-video-complete` |
+| 6b | Playbook — signed-URL route + PDF viewer in the agent overlay | `plan-06b-playbook-complete` |
+| **6c** | **Emergency call** — real 911 via a Twilio Conference (guest + agent + 911) merged through the existing `<Dial action>` seam; PSAP routing via the number's registered E911 address; `incidents` table; agent in-call mute/leave driven server-side via the Conference Participant API (a redirected Client leg is SDK-uncontrollable); verified end-to-end with the **933** test number. Migrations 0008–0009. Spec: `docs/specs/2026-06-02-06c-emergency-call-design.md`, plan: `docs/plans/2026-06-02-06c-emergency-call.md` | `plan-06c-emergency-complete` |
 | 7 | Owner portal *(reordered after kiosk — call views show AUDIO+VIDEO from day one)* | — |
 | 8 | Observability | — |
 

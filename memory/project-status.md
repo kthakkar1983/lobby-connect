@@ -213,13 +213,28 @@ on the instrumented result above.
 
 ---
 
-## Current: Plan 6c — Emergency call
+## Plan 6c — Emergency call — COMPLETE (`plan-06c-emergency-complete`)
 
 | Sub-phase | Scope | Status |
 |---|---|---|
 | **6a** | Kiosk app, video call path, agent overlay, migration 0007 | **complete** `plan-06a-kiosk-video-complete` |
 | **6b** | Playbook — signed-URL route + PDF viewer in the 60% panel | **complete** `plan-06b-playbook-complete` |
-| **6c** | Emergency call — conference + alert on-call manager + incident log | not started |
+| **6c** | Emergency call — **911 Twilio conference (guest + agent + 911) + incident log** | **complete** `plan-06c-emergency-complete` |
 
-**Next:** Plan 6c — spec + plan, then implement.
-**After 6:** Plan 7 — Owner portal (mobile-responsive), incl. kiosk info field editing + playbook upload.
+**Re-scoped during the 2026-06-02 brainstorm** (vs the 6a §9.2 placeholder): emergency targets the **inbound phone call** (5a/5b), not the kiosk video. **No SMS, no on-call-manager alert** — 911 is the only escalation, plus a high-priority `incidents` row. Topology = 3-way relay (agent stays).
+
+**What shipped:**
+- `POST /api/calls/[id]/emergency` — stamps `calls.emergency_conference_name`, redirects the agent's live leg into a Twilio Conference, the guest follows via the existing `<Dial action>`→`dial-result` branch, then adds a 911 leg (`participants.create`) with the registered-address caller ID. Fallback redirects the guest parent directly if the agent leg can't be found.
+- `POST /api/calls/[id]/emergency/control` (`mute`/`unmute`/`leave`) — **the agent's in-call controls during an emergency go through the Conference Participant API**, because a leg redirected via REST is no longer controllable by the browser Voice SDK (the smoke-test bug — agent leg orphaned, mute/hangup were no-ops). `softphone.tsx` routes Mute/Hang-up to this endpoint only when `emergencyActive`; normal calls still use the SDK.
+- `incidents` table (migration 0008, RLS) + `calls.emergency_conference_name`/`emergency_agent_call_sid` (0008/0009). Audit row `trigger_emergency`.
+- `EMERGENCY_DIAL_NUMBER` env (default `911`; **set to `933` for all dev/test**).
+- Removed the out-of-scope Emergency button from the video overlay.
+
+**Verified end-to-end (2026-06-02, `EMERGENCY_DIAL_NUMBER=933`):** real inbound call → agent answered → Emergency → guest + agent + 933 conferenced, OKC address read back; `incidents` row written; **after the Fix**, agent Mute mutes the conference participant and Hang-up removes the agent leg cleanly (agent leg `completed`, conference ended, **no orphan** — confirmed via Twilio). 196 tests / typecheck / lint green. Full detail: spec §10, `docs/specs/2026-06-02-06c-emergency-call-design.md`.
+
+## ⚠️ Before pilot go-live — flip emergency dialing to real 911
+- Set `EMERGENCY_DIAL_NUMBER=911` in the **production** environment (Vercel env) only. Leave local/dev `.env.local` at `933`.
+- Re-confirm the Twilio number still shows **"Emergency Address is registered"** for the pilot property (OKC).
+- Never test by dialing real 911 — use 933 (address read-back, no PSAP, no dispatch).
+
+**Next:** Plan 7 — Owner portal (mobile-responsive), incl. kiosk info-field editing + playbook upload + **incident display/resolve** (the `incidents.status`/`resolved_at` seam from 6c).
