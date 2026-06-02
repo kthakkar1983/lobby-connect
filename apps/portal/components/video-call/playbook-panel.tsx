@@ -25,7 +25,7 @@ export function PlaybookPanel({ callId }: { callId: string }) {
           setState(
             body.hasPlaybook && body.signedUrl
               ? { status: "ready", signedUrl: body.signedUrl }
-              : { status: "no-playbook" },
+              : { status: "no-playbook" }
           );
         }
       })
@@ -75,12 +75,13 @@ export function PlaybookPanel({ callId }: { callId: string }) {
           Open in new tab
         </a>
       </div>
-      <iframe
-        src={state.signedUrl}
-        className="min-h-0 flex-1 border-0"
-        title="Property playbook"
-        sandbox="allow-same-origin"
-      />
+      {/* No `sandbox` attribute: Chrome's built-in PDF viewer is an out-of-process
+          iframe that refuses to load inside a sandboxed frame — it renders a
+          broken-document icon even with `allow-scripts allow-same-origin` (verified
+          2026-06-02). The PDF is a short-lived signed URL from our own (cross-origin)
+          Supabase Storage, so the same-origin policy already stops it from scripting
+          the portal. Do not re-add `sandbox` here without re-testing PDF rendering. */}
+      <iframe src={state.signedUrl} className="min-h-0 flex-1 border-0" title="Property playbook" />
     </div>
   );
 }
