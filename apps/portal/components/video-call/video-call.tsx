@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
 import type {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
@@ -16,8 +16,6 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
   const [cameraOff, setCameraOff] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
-  const [emergencyOpen, setEmergencyOpen] = useState(false);
-
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -186,13 +184,6 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
         </button>
         <button
           type="button"
-          onClick={() => setEmergencyOpen(true)}
-          className="flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          <AlertTriangle size={16} /> Emergency
-        </button>
-        <button
-          type="button"
           onClick={() => void handleEnd()}
           className="flex items-center gap-1 rounded-md bg-destructive px-3 py-2 text-sm text-destructive-foreground"
         >
@@ -200,24 +191,6 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
         </button>
       </div>
 
-      {emergencyOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
-          <div className="max-w-md rounded-lg bg-card p-6">
-            <h2 className="text-lg font-semibold text-red-700">Emergency response</h2>
-            <p className="mt-2 text-sm text-text-muted">
-              Emergency calling arrives in Plan 6c (conference to emergency services, alert the
-              on-call manager, log an incident).
-            </p>
-            <button
-              type="button"
-              onClick={() => setEmergencyOpen(false)}
-              className="mt-4 rounded-md border border-border px-3 py-2 text-sm"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
