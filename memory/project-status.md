@@ -105,6 +105,54 @@ docs/plans/2026-06-01-06b-playbook.md
 
 ---
 
+## Post-6b bugs (in progress — pick these up before moving to 6c)
+
+### Bug 1: Playbook "unavailable" — path mismatch in local Storage
+
+**Symptom:** Agent's 60% panel shows "Playbook unavailable." after answering a video call.
+
+**Root cause confirmed:** `createSignedUrl` returns `"Object not found"` — the path stored in `properties.playbook_pdf_url` does not match the actual file path in local Supabase Storage.
+
+**What's in the DB:**
+```sql
+playbook_pdf_url = '00000000-0000-0000-0000-0000000000a0/00000000-0000-0000-0000-0000000000c1/playbook.pdf'
+```
+
+**What's needed:** Check the real path by going to `http://127.0.0.1:54323/project/default/storage/buckets/playbooks` — the local Studio upload likely stored the file flat (e.g., just `playbook.pdf` at the bucket root, not inside subfolders). Then run:
+
+```sql
+UPDATE properties
+SET playbook_pdf_url = '<exact-path-shown-in-storage-browser>'
+WHERE id = '00000000-0000-0000-0000-0000000000c1';
+```
+
+**This is a data issue, not a code bug.** No code changes needed once the path is corrected.
+
+**Temporary debug code still in route:** `apps/portal/app/api/calls/[id]/playbook/route.ts` line 59 has `detail: error?.message` added to the 500 response for debugging. **Remove the `, detail: error?.message` part once the bug is confirmed fixed** and restore to just `{ error: "Could not generate playbook URL" }`.
+
+---
+
+### Bug 2: Agent-side audio mute broken
+
+**Symptom:** Clicking Mute on the agent side changes the button label (UI responds correctly) but the microphone indicator stays on — Agora continues capturing and sending audio.
+
+**Root cause confirmed:** `MediaStreamTrack.enabled = false` (the 6a fix) works for VIDEO (Agora sends black frames) but not for AUDIO. Agora's audio processing pipeline is independent of the underlying `MediaStreamTrack.enabled` state, so setting it to `false` silences the raw track but Agora's audio graph still captures and sends audio.
+
+**Fix already applied and committed (`aed8447`):**
+```ts
+// Before (broken for audio):
+function toggleMute() { const n = !muted; const t = audioRef.current?.getMediaStreamTrack(); if (t) t.enabled = !n; setMuted(n); }
+
+// After (correct — uses Agora's own mute API):
+function toggleMute() { const n = !muted; void audioRef.current?.setMuted(n); setMuted(n); }
+```
+
+`setMuted(n)` sends silence without releasing the mic or triggering `user-unpublished`. Camera toggle is unchanged (still uses `MediaStreamTrack.enabled` which works correctly for video).
+
+**Status:** Fix committed, NOT yet smoke-tested (session ended before testing could happen). Verify mute actually silences audio in the next session.
+
+---
+
 ## Current: Plan 6c — Emergency call
 
 | Sub-phase | Scope | Status |
