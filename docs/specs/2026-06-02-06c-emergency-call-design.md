@@ -157,3 +157,19 @@ The probe verified the genuinely uncertain part — Twilio **will** conference a
 | Multi-property emergency caller ID | Caller ID already keyed off `properties.routing_did`; each property registers its own number's address. |
 | More incident types / severities | `kind`/`severity` are CHECK-constrained text — widen the constraint, no destructive migration. |
 | Status page / observability (Plan 8) | `incidents` is operator-scoped and indexed by recency; surface counts/feed later. |
+
+## 10. Post-smoke fix — agent leg control after the redirect (the §8 risk, materialized)
+
+The 2026-06-02 933 smoke **passed for audio** (guest + agent + 933 conferenced, address read back) but surfaced a real defect: after the agent's Client leg is redirected into the conference, the browser Twilio Voice SDK **loses control of that leg**. Confirmed by evidence — after the agent pressed Hang up, the agent leg stayed `in-progress` in Twilio (sole conference participant), i.e. `Call.disconnect()` was a no-op; `Call.mute()` fails by the same mechanism. The UI reset optimistically, so it *looked* disconnected but the leg orphaned (mic potentially live).
+
+**Root cause:** redirecting an SDK-owned (`<Client>`) leg via the REST API (`calls(sid).update({twiml})`) re-bridges its audio but detaches it from the browser SDK's control channel. This is the §8 "live-leg redirect" risk partially materializing — audio works, control does not.
+
+**Fix (server-side control via the Conference Participant API):**
+- Persist the agent's conference leg SID at trigger time: migration `0009` adds `calls.emergency_agent_call_sid`; the `/emergency` route stores the redirected leg's SID.
+- New route `POST /api/calls/[id]/emergency/control` (session-auth, must be the handling agent, call must be in an emergency conference) with `action: 'mute' | 'unmute' | 'leave'`:
+  - `mute`/`unmute` → `conferences(name).participants(agentSid).update({ muted })`.
+  - `leave` → `conferences(name).participants(agentSid).remove()` (ends the agent leg cleanly — no orphan; guest + 911 continue, per `endConferenceOnExit=false`).
+  - If `emergency_agent_call_sid` is null (fallback path dropped the agent), the endpoint is a no-op (`{ ok: true, noAgentLeg: true }`).
+- `softphone.tsx`: when `emergencyActive`, route **Mute** and **Hang up** through `/emergency/control` (via an `emergencyActiveRef`); normal (non-emergency) calls keep using the SDK `Call.mute()`/`disconnect()` unchanged.
+
+Normal-call controls are unaffected (the SDK fully owns a non-redirected leg). Closing the agent's browser tab also ends the leg at the transport level (safety net).
