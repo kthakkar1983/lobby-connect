@@ -267,6 +267,7 @@ export type Database = {
           flagged_for_review: boolean;
           notes: string | null;
           emergency_conference_name: string | null;
+          emergency_agent_call_sid: string | null;
           created_at: string;
         };
         Insert: {
@@ -289,6 +290,7 @@ export type Database = {
           flagged_for_review?: boolean;
           notes?: string | null;
           emergency_conference_name?: string | null;
+          emergency_agent_call_sid?: string | null;
           created_at?: string;
         };
         Update: {
@@ -311,6 +313,7 @@ export type Database = {
           flagged_for_review?: boolean;
           notes?: string | null;
           emergency_conference_name?: string | null;
+          emergency_agent_call_sid?: string | null;
           created_at?: string;
         };
         Relationships: [];
