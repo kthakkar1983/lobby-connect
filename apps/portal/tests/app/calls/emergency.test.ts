@@ -147,6 +147,19 @@ describe("POST /api/calls/[id]/emergency", () => {
       twiml: expect.stringContaining("<Conference"),
     }));
     expect(participantsCreateMock).toHaveBeenCalled();
+    expect(callUpdateMock).not.toHaveBeenCalledWith("CAagent", expect.anything());
+  });
+
+  it("falls back to the guest parent when the agent-leg redirect throws", async () => {
+    listMock.mockResolvedValue([{ sid: "CAagent", status: "in-progress" }]);
+    // agent leg is found, but redirecting it throws (e.g. it ended mid-flight);
+    // the subsequent guest-parent redirect must still happen + 933 still added.
+    callUpdateMock.mockImplementationOnce(() => Promise.reject(new Error("leg gone")));
+    await call("call-1");
+    expect(callUpdateMock).toHaveBeenCalledWith("CAparent", expect.objectContaining({
+      twiml: expect.stringContaining("<Conference"),
+    }));
+    expect(participantsCreateMock).toHaveBeenCalled();
   });
 
   it("502 when adding the emergency leg fails", async () => {

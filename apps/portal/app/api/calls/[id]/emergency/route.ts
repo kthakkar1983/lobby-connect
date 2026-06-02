@@ -75,10 +75,18 @@ export async function POST(
 
   // 1. Stamp FIRST so /dial-result routes the guest into the conference once the
   //    agent leg leaves the <Dial><Client> bridge.
-  await admin
+  // Stamp is the precondition for the whole choreography — /dial-result relies on
+  // it to route the guest into the conference. If it fails, abort before dialing.
+  const { error: stampError } = await admin
     .from("calls")
     .update({ emergency_conference_name: confName })
     .eq("id", callRow.id);
+  if (stampError) {
+    return NextResponse.json(
+      { error: "Could not initiate emergency" },
+      { status: 503 },
+    );
+  }
 
   // 2. Registered caller ID for the emergency leg.
   const { data: property } = await admin
@@ -114,7 +122,7 @@ export async function POST(
     }
   } catch (err) {
     fallbackUsed = true;
-    degradedNote = `agent-leg redirect failed: ${err instanceof Error ? err.message : String(err)}`;
+    degradedNote = `agent-leg redirect failed; redirected guest parent directly: ${err instanceof Error ? err.message : String(err)}`;
     try {
       if (parentSid) {
         await client.calls(parentSid).update({ twiml: buildConferenceTwiml(confName) });
@@ -143,7 +151,7 @@ export async function POST(
     [degradedNote, dispatchError ? `dispatch error: ${dispatchError}` : null]
       .filter(Boolean)
       .join("; ") || null;
-  await admin.from("incidents").insert({
+  const { error: incidentError } = await admin.from("incidents").insert({
     operator_id: callRow.operator_id,
     property_id: callRow.property_id,
     call_id: callRow.id,
@@ -157,6 +165,9 @@ export async function POST(
     status: "OPEN",
     notes,
   });
+  if (incidentError) {
+    console.error("[emergency] failed to write incident row:", incidentError);
+  }
 
   await logAuditEvent({
     actorUserId: user.id,
@@ -164,6 +175,8 @@ export async function POST(
     entityType: "call",
     entityId: callRow.id,
     details: { conferenceName: confName, dispatchedTo: dialTo, fallbackUsed, dispatchError },
+  }).catch((err) => {
+    console.error("[emergency] audit log failed:", err);
   });
 
   if (dispatchError) {
