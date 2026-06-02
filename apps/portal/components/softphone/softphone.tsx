@@ -40,6 +40,10 @@ export function Softphone({ role }: SoftphoneProps) {
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [emergencyActive, setEmergencyActive] = useState(false);
+  // Mirror into a ref so the SDK-vs-conference branch in the callbacks below
+  // always reads the current value without re-creating the callbacks.
+  const emergencyActiveRef = useRef(emergencyActive);
+  emergencyActiveRef.current = emergencyActive;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deviceRef = useRef<any>(null);
@@ -143,6 +147,15 @@ export function Softphone({ role }: SoftphoneProps) {
 
   const endCall = useCallback(async () => {
     const id = callIdRef.current;
+    if (emergencyActiveRef.current && id) {
+      // SDK can't disconnect the redirected leg — remove the agent from the
+      // conference server-side. Guest + 911 continue (endConferenceOnExit=false).
+      await fetch(`/api/calls/${id}/emergency/control`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "leave" }),
+      }).catch(() => {});
+    }
     try {
       callRef.current?.disconnect();
     } catch {
@@ -166,7 +179,20 @@ export function Softphone({ role }: SoftphoneProps) {
 
   const toggleMute = useCallback(() => {
     const next = !muted;
-    callRef.current?.mute(next);
+    if (emergencyActiveRef.current) {
+      // The agent's leg was redirected into the conference; the browser SDK can no
+      // longer control it, so mute via the server-side Conference Participant API.
+      const id = callIdRef.current;
+      if (id) {
+        void fetch(`/api/calls/${id}/emergency/control`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: next ? "mute" : "unmute" }),
+        }).catch(() => {});
+      }
+    } else {
+      callRef.current?.mute(next);
+    }
     setMuted(next);
   }, [muted]);
 
