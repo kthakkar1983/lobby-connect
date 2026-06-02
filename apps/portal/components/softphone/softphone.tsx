@@ -1,7 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, AlertTriangle } from "lucide-react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 import type { PresenceStatus } from "@/lib/voice/presence";
 
@@ -27,6 +39,7 @@ export function Softphone({ role }: SoftphoneProps) {
   const [muted, setMuted] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [emergencyActive, setEmergencyActive] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deviceRef = useRef<any>(null);
@@ -146,6 +159,7 @@ export function Softphone({ role }: SoftphoneProps) {
     setRoomNumber("");
     setNotes("");
     setMuted(false);
+    setEmergencyActive(false);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
   }, [roomNumber, notes]);
@@ -155,6 +169,22 @@ export function Softphone({ role }: SoftphoneProps) {
     callRef.current?.mute(next);
     setMuted(next);
   }, [muted]);
+
+  const triggerEmergency = useCallback(async () => {
+    const id = callIdRef.current;
+    if (!id) return;
+    setEmergencyActive(true); // optimistic; the conference merge is server-side
+    try {
+      const res = await fetch(`/api/calls/${id}/emergency`, { method: "POST" });
+      if (!res.ok) {
+        // 502 = the 911 leg failed to add; the agent must fall back to verbal
+        // relay / instruct the guest to hang up and dial 911 directly.
+        console.error("[softphone] emergency trigger failed:", res.status);
+      }
+    } catch (err) {
+      console.error("[softphone] emergency trigger error:", err);
+    }
+  }, []);
 
   const toggleReady = useCallback(() => {
     const next = !ready;
@@ -212,6 +242,35 @@ export function Softphone({ role }: SoftphoneProps) {
               {muted ? <MicOff size={16} /> : <Mic size={16} />}
               {muted ? "Unmute" : "Mute"}
             </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  disabled={emergencyActive}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-700 disabled:opacity-50"
+                >
+                  <AlertTriangle size={16} /> {emergencyActive ? "911 active" : "Emergency"}
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Trigger 911 emergency response?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This conferences emergency services into the live call (guest + you + 911).
+                    Use only for a genuine emergency.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => void triggerEmergency()}
+                    className="bg-destructive text-destructive-foreground"
+                  >
+                    Yes — trigger 911
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <button
               type="button"
               onClick={() => void endCall()}
@@ -220,6 +279,12 @@ export function Softphone({ role }: SoftphoneProps) {
               <PhoneOff size={16} /> Hang up
             </button>
           </div>
+          {emergencyActive && (
+            <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-700">
+              Emergency active — 911 is being conferenced in. Stay on the line and relay the
+              property address and room number.
+            </p>
+          )}
           <input
             value={roomNumber}
             onChange={(e) => setRoomNumber(e.target.value)}
