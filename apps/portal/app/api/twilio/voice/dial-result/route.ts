@@ -11,6 +11,10 @@ import {
   isTerminalState,
   type CallState,
 } from "@/lib/voice/result";
+import {
+  shouldRouteToEmergencyConference,
+  buildConferenceTwiml,
+} from "@/lib/emergency/conference";
 
 export const runtime = "nodejs";
 
@@ -44,9 +48,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Terminal-state guard: don't overwrite a state that's already terminal.
     const { data: existing } = await admin
       .from("calls")
-      .select("state")
+      .select("state, emergency_conference_name")
       .eq("twilio_call_sid", callSid)
       .maybeSingle();
+
+    // Emergency: the agent leg was redirected into a conference, so this parent
+    // (guest) leg must join the same conference instead of hanging up.
+    if (existing && shouldRouteToEmergencyConference(existing)) {
+      return twimlResponse(buildConferenceTwiml(existing.emergency_conference_name as string));
+    }
 
     const currentTerminal = existing
       ? isTerminalState(existing.state as CallState)

@@ -15,6 +15,7 @@ const updateSpy = vi.fn<() => Promise<{ error: null }>>(
   () => Promise.resolve({ error: null }),
 );
 let dialResultCurrentState: string | null = "RINGING";
+let dialResultEmergencyConf: string | null = null;
 function makeAdminClient() {
   return {
     from() {
@@ -27,7 +28,11 @@ function makeAdminClient() {
       builder.select = () => builder;
       builder.eq = () => builder;
       builder.maybeSingle = () =>
-        Promise.resolve({ data: dialResultCurrentState ? { state: dialResultCurrentState } : null });
+        Promise.resolve({
+          data: dialResultCurrentState
+            ? { state: dialResultCurrentState, emergency_conference_name: dialResultEmergencyConf }
+            : null,
+        });
       builder.then = (resolve: (v: unknown) => void) => resolve({ error: null });
       return builder;
     },
@@ -53,6 +58,7 @@ function makeRequest(params: Record<string, string>) {
 beforeEach(() => {
   updateSpy.mockClear();
   dialResultCurrentState = "RINGING";
+  dialResultEmergencyConf = null;
   validateTwilioSignature.mockReturnValue(true);
 });
 
@@ -93,5 +99,15 @@ describe("POST /api/twilio/voice/dial-result", () => {
     await POST(makeRequest({ CallSid: "CA1", DialCallStatus: "no-answer" }));
     const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
     expect(vals).not.toHaveProperty("state");
+  });
+
+  it("routes the guest into the conference when the call is flagged emergency", async () => {
+    dialResultEmergencyConf = "emg-call-1";
+    const res = await POST(makeRequest({ CallSid: "CAparent", DialCallStatus: "completed" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Conference");
+    expect(xml).toContain("emg-call-1");
+    // must NOT terminalize the call
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });
