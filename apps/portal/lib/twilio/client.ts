@@ -31,3 +31,9 @@ export function publicUrlFromRequest(request: Request): string {
     request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
   return `${proto}://${host}${url.pathname}${url.search}`;
 }
+
+/** A Twilio REST client built from the 5a voice-path credentials. */
+export function getTwilioRestClient(): ReturnType<typeof twilio> {
+  const { accountSid, authToken } = getTwilioConfig();
+  return twilio(accountSid, authToken);
+}
