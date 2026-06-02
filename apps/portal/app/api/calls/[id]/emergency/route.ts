@@ -113,6 +113,12 @@ export async function POST(
     const agentLeg = await findAgentLeg(client, parentSid);
     if (agentLeg) {
       await client.calls(agentLeg).update({ twiml: buildConferenceTwiml(confName) });
+      // Persist the agent's conference leg SID so /emergency/control can mute/remove
+      // it server-side (the browser SDK can no longer control a redirected leg).
+      await admin
+        .from("calls")
+        .update({ emergency_agent_call_sid: agentLeg })
+        .eq("id", callRow.id);
     } else {
       fallbackUsed = true;
       degradedNote = "no live agent leg; redirected guest parent directly (agent dropped)";

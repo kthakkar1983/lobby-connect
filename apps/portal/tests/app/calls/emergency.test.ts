@@ -127,6 +127,9 @@ describe("POST /api/calls/[id]/emergency", () => {
     expect(callUpdateMock).toHaveBeenCalledWith("CAagent", expect.objectContaining({
       twiml: expect.stringContaining("<Conference"),
     }));
+    expect(updateCalls).toContainEqual(
+      expect.objectContaining({ emergency_agent_call_sid: "CAagent" }),
+    );
     expect(participantsCreateMock).toHaveBeenCalledWith("emg-call-1", { from: "+14058750410", to: "933" });
     expect(insertedIncidents[0]).toMatchObject({
       call_id: "call-1",
