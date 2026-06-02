@@ -19,6 +19,9 @@ export type CallState =
   | "NO_ANSWER"
   | "FAILED";
 export type ActorType = "USER" | "SYSTEM";
+export type IncidentSeverity = "HIGH";
+export type IncidentKind = "EMERGENCY_911";
+export type IncidentStatus = "OPEN" | "RESOLVED";
 
 // =============================================================================
 // Generic JSON helper (mirrors what gen types emits)
@@ -263,6 +266,7 @@ export type Database = {
           recording_sid: string | null;
           flagged_for_review: boolean;
           notes: string | null;
+          emergency_conference_name: string | null;
           created_at: string;
         };
         Insert: {
@@ -284,6 +288,7 @@ export type Database = {
           recording_sid?: string | null;
           flagged_for_review?: boolean;
           notes?: string | null;
+          emergency_conference_name?: string | null;
           created_at?: string;
         };
         Update: {
@@ -305,6 +310,7 @@ export type Database = {
           recording_sid?: string | null;
           flagged_for_review?: boolean;
           notes?: string | null;
+          emergency_conference_name?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -342,6 +348,60 @@ export type Database = {
           entity_id?: string | null;
           details?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      incidents: {
+        Row: {
+          id: string;
+          operator_id: string;
+          property_id: string;
+          call_id: string | null;
+          triggered_by: string | null;
+          severity: IncidentSeverity;
+          kind: IncidentKind;
+          dispatched_to: string;
+          conference_name: string | null;
+          conference_sid: string | null;
+          emergency_call_sid: string | null;
+          status: IncidentStatus;
+          notes: string | null;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          operator_id: string;
+          property_id: string;
+          call_id?: string | null;
+          triggered_by?: string | null;
+          severity?: IncidentSeverity;
+          kind?: IncidentKind;
+          dispatched_to: string;
+          conference_name?: string | null;
+          conference_sid?: string | null;
+          emergency_call_sid?: string | null;
+          status?: IncidentStatus;
+          notes?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          operator_id?: string;
+          property_id?: string;
+          call_id?: string | null;
+          triggered_by?: string | null;
+          severity?: IncidentSeverity;
+          kind?: IncidentKind;
+          dispatched_to?: string;
+          conference_name?: string | null;
+          conference_sid?: string | null;
+          emergency_call_sid?: string | null;
+          status?: IncidentStatus;
+          notes?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
         };
         Relationships: [];
       };
