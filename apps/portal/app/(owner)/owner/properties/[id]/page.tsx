@@ -10,6 +10,7 @@ import {
   formatCallTime,
 } from "@/lib/owner/format";
 import { KioskContentCard } from "./kiosk-content-card";
+import { PlaybookCard } from "./playbook-card";
 import { KIOSK_FIELDS, type KioskContentInput } from "@/lib/owner/kiosk";
 
 function Field({
@@ -75,13 +76,9 @@ export default async function OwnerPropertyDetailPage({
         <Field label="Guest phone" value={property.property_phone_number} />
         <Field label="After-hours support" value={property.after_hours_support_phone} />
         <Field label="Timezone" value={property.timezone} />
-        <Field
-          label="Playbook"
-          value={
-            property.playbook_version ? `v${property.playbook_version}` : "No playbook yet"
-          }
-        />
       </section>
+
+      <PlaybookCard propertyId={property.id} version={property.playbook_version} />
 
       <KioskContentCard propertyId={property.id} initial={kioskInitial} />
 
