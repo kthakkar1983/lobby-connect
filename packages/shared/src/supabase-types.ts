@@ -369,6 +369,7 @@ export type Database = {
           emergency_call_sid: string | null;
           status: IncidentStatus;
           notes: string | null;
+          resolution_note: string | null;
           created_at: string;
           resolved_at: string | null;
         };
@@ -386,6 +387,7 @@ export type Database = {
           emergency_call_sid?: string | null;
           status?: IncidentStatus;
           notes?: string | null;
+          resolution_note?: string | null;
           created_at?: string;
           resolved_at?: string | null;
         };
@@ -403,6 +405,7 @@ export type Database = {
           emergency_call_sid?: string | null;
           status?: IncidentStatus;
           notes?: string | null;
+          resolution_note?: string | null;
           created_at?: string;
           resolved_at?: string | null;
         };
