@@ -280,24 +280,29 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 
 **Smoke note:** sign in as `owner@lobbyconnect.local` / `localdev123` (Olivia) to test. She owns "The Sample Hotel" with Alex Agent assigned.
 
-## Plan 7b — Owner self-service writes — SPEC + PLAN WRITTEN, NOT YET BUILT
+## Plan 7b — Owner self-service writes — COMPLETE (`plan-07b-owner-writes-complete`)
 
-Brainstormed + spec'd + planned on **2026-06-03**. Implementation has **not** started.
+**Tag:** `plan-07b-owner-writes-complete`
 
-**Artifacts (committed):**
-- Spec: `docs/specs/2026-06-03-07b-owner-writes-design.md` (commit `aaaa50a`)
-- Plan: `docs/plans/2026-06-03-07b-owner-writes.md` (commit `aa764c8`) — 9 TDD-ordered tasks.
+**What shipped:**
+- `lib/owner/kiosk.ts` — `validateKioskFields` + `KIOSK_FIELDS` + `KioskContentInput` (TDD, 5 tests)
+- `lib/owner/playbook.ts` — `validatePlaybookFile` + `playbookStorageKey` + `MAX_PLAYBOOK_BYTES` (TDD, 5 tests)
+- `lib/owner/incidents.ts` — `validateResolutionNote` + `MAX_RESOLUTION_NOTE` (TDD, 3 tests)
+- `supabase/migrations/0010_owner_writes.sql` — `incidents.resolution_note` column + `properties_owner_update` + `incidents_owner_update` RLS policies + `enforce_owner_property_columns()` + `enforce_owner_incident_columns()` BEFORE UPDATE triggers (SECURITY DEFINER; `updated_at` excluded from property guard to avoid clash with the `properties_set_updated_at` auto-stamp trigger)
+- `packages/shared/src/supabase-types.ts` — added `resolution_note` to incidents Row/Insert/Update
+- `app/(owner)/owner/properties/[id]/actions.ts` — `updateKioskContentAction` (requireRole → validate → RLS-scoped diff → user-scoped UPDATE → per-field audit)
+- `app/(owner)/owner/properties/[id]/kiosk-content-card.tsx` — inline Edit/Save/Cancel client card (useTransition, sonner, router.refresh)
+- `app/(owner)/owner/properties/[id]/playbook-card.tsx` — View (signed URL → new tab) + Upload/Replace (file input, POST, router.refresh) client card
+- `app/api/owner/properties/[id]/playbook/route.ts` — service-role POST upload + GET signed URL (1h TTL); TDD'd (8 tests)
+- `app/(owner)/owner/incidents/[id]/actions.ts` — `resolveIncidentAction` (requireRole → validate → idempotent RLS-scoped update → audit → revalidate /owner)
+- `app/(owner)/owner/incidents/[id]/resolve-incident.tsx` — optional-note expand/confirm client control (returns null when not OPEN)
+- Property detail page.tsx: replaced static kiosk section with `<KioskContentCard>`, added `<PlaybookCard>` between basics and kiosk card, removed Playbook Field from basics grid
+- Incident detail page.tsx: added `resolution_note` to select, rendered `<ResolveIncident>` after heading, rendered resolution note section after notes
 
-**Scope:** the three writes 7a deferred — (1) inline kiosk-content editing on owner property detail, (2) playbook upload + owner view route, (3) incident resolve (optional note, **final/no re-open**).
+**Architecture:** kiosk + incident writes use the user-scoped client (RLS + column-guard triggers enforce scope); playbook is the lone service-role surface (private bucket binary upload). Column guards are forward-compatible — new columns are protected by default.
 
-**Locked decisions (from the brainstorm):**
-- **Approach A** for owner writes: new owner `UPDATE` RLS policies on `properties` + `incidents` (user-scoped client), with `BEFORE UPDATE` **column-guard triggers** doing the column-level scope (RLS is row-level only; PostgREST is directly reachable, so a naive owner UPDATE policy would let an owner flip `routing_did`/`active`). Triggers use a `to_jsonb(old) - <whitelist> IS DISTINCT FROM to_jsonb(new) - <whitelist>` diff → forward-compatible (new columns protected by default). Service-role writes have `auth.uid()` NULL → `current_user_role()` NULL → skip the guards.
-- **Playbook is the lone service-role surface** (binary upload to private bucket + canonical path) — new `POST`/`GET /api/owner/properties/[id]/playbook`. Rejected all-service-role (B) and column-level GRANT on the shared `authenticated` role (C).
-- **Domain seam:** owner owns guest-facing content (the 8 `kiosk_*` fields); admin owns ops (routing/phones/assignment/active). NB: 6 of the 8 kiosk fields had **no edit UI anywhere** before 7b — this is their first editor.
-- **Incident resolve** = owner-only (incidents surface only in the owner portal). Finality enforced server-side (trigger rejects any owner update once `status='RESOLVED'`).
-- **Separate `incidents.resolution_note` column** (migration 0010) so the owner note doesn't clobber the diagnostic `notes` the emergency route writes at creation.
-- **Resolve UX = optional note + final**; **kiosk edit UX = inline on the detail page** (Edit → inputs → Save/Cancel).
+**Test count:** 231 tests green (49 test files), typecheck + lint clean.
 
-**Migration:** `0010_owner_writes.sql` — adds `incidents.resolution_note`; `properties_owner_update` + `incidents_owner_update` policies; `enforce_owner_property_columns()` + `enforce_owner_incident_columns()` trigger functions. Apply locally via `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f …` (preserves Storage — `supabase db reset` would wipe the uploaded playbook PDF). `packages/shared/src/supabase-types.ts` is **hand-maintained** (no codegen) → add `resolution_note` manually.
+**Smoke note:** sign in as `owner@lobbyconnect.local` / `localdev123` (Olivia, owns "The Sample Hotel") to verify. Use `933` (not `911`) when creating emergency incidents in dev.
 
-**Resume point for the next chat:** plan is ready to execute. Offer the execution choice (subagent-driven per-task — recommended — vs inline with checkpoints), then start at **Task 1** (`lib/owner/kiosk.ts`). Seed UUIDs for smoke/verification: operator `…a0`, Olivia `…b2`, The Sample Hotel `…c1`, Alex `…b3`.
+**Next up:** Plan 8 — Observability.
