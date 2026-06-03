@@ -432,6 +432,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      health_signals: {
+        Row: {
+          operator_id: string;
+          signal: string;
+          last_ok_at: string | null;
+          details: Json | null;
+          updated_at: string;
+        };
+        Insert: {
+          operator_id: string;
+          signal: string;
+          last_ok_at?: string | null;
+          details?: Json | null;
+          updated_at?: string;
+        };
+        Update: {
+          operator_id?: string;
+          signal?: string;
+          last_ok_at?: string | null;
+          details?: Json | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
