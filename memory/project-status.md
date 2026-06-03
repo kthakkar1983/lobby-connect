@@ -305,4 +305,21 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 
 **Smoke confirmed (2026-06-03):** kiosk inline edit saves + persists after refresh; playbook upload bumps version + View opens signed URL in new tab; incident resolve flips status to RESOLVED with optional note, Resolve control disappears after resolve.
 
-**Next up:** Plan 8 — Observability.
+## Plan 8 — Observability — SPEC + PLAN WRITTEN, NOT YET BUILT (resume here)
+
+Brainstormed 2026-06-03. **Single plan** (no a/b split — Sentry account is ready, so the external-dependency gate that would have forced a split is gone). Build order: **Sentry → `/audit` → `/status`**.
+
+**Three buildable surfaces** (Vercel/Supabase logs are external dashboards — nothing to build):
+- **Sentry** in both apps (`@sentry/nextjs` portal + `@sentry/react` kiosk), with a `beforeSend` PII scrubber that drops `caller_number`/`recording_url` and redacts phone-shaped runs. Plus the `@vercel/analytics` one-liner.
+- **`/admin/audit`** — admin read viewer over the already-populated `audit_logs`. Filter-object data layer (UI exposes action filter + load-more now; date/actor/entity later for free). 2-query actor-name merge.
+- **`/admin/status`** — generic **`health_signals` heartbeat registry** (push signals: Twilio incoming webhook + cron self-report `last_ok_at`; any future job drops in with one `recordHeartbeat()` call) + two live pull-probes (Supabase `select 1`, Sentry 24h issue count with graceful link-only fallback). Forward-compat per [[feedback-forward-compat]] — chosen over deriving health from `calls`/`operator_settings` shortcuts.
+
+**One migration:** `0011_health_signals.sql` (table + admin-select RLS; service-role writes bypass RLS, no write policy).
+
+**Artifacts (committed):**
+- Spec: `docs/specs/2026-06-03-08-observability-design.md` (commit `bae0b26`)
+- Plan: `docs/plans/2026-06-03-08-observability.md` (commit `83284ad`) — **14 TDD-ordered tasks**: T1 migration+types → T2–T6 pure `lib/` helpers (`sentry/scrub`, `sentry/errors`, `health/heartbeat`, `status/signals`, `audit/query`) → T7 Sentry portal wiring **(⚠️ manual Sentry-setup checkpoint)** → T8 wire heartbeats → T9 promote `<AutoRefresh>` to `components/` → T10 `/admin/audit` → T11 `/admin/status` → T12 sidebar nav → T13 kiosk Sentry → T14 verify+smoke+tag `plan-08-observability-complete`.
+
+**⚠️ Kumar's manual step (Task 7) — blocks Sentry smoke only, not the build:** Sentry org `lobby-connect` exists but **no project yet**. At T7: create project `portal` (Next.js platform) [+ optional `kiosk` React project], copy the DSN, create an auth token with `project:read` + `project:releases` scopes, then set 5 env vars in `apps/portal/.env.local` + Vercel: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG=lobby-connect`, `SENTRY_PROJECT=portal` (kiosk: `VITE_SENTRY_DSN`). Exact click-path is written into Task 7. Build works with these blank (SDK no-ops; `/status` Sentry card shows "unavailable + link").
+
+**Next step on resume:** pick execution mode (subagent-driven recommended) and start at T1. Nothing manual needed until T7.
