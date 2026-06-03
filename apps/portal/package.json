@@ -14,9 +14,11 @@
   "dependencies": {
     "@lc/shared": "workspace:*",
     "@lc/ui": "workspace:*",
+    "@sentry/nextjs": "^10.56.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.45.0",
     "@twilio/voice-sdk": "^2.18.3",
+    "@vercel/analytics": "^2.0.1",
     "agora-rtc-sdk-ng": "^4.24.4",
     "agora-token": "^2.0.5",
     "class-variance-authority": "^0.7.1",
