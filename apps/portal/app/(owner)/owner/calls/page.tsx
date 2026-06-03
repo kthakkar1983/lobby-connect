@@ -10,7 +10,7 @@ import {
   formatCallTime,
   formatDuration,
 } from "@/lib/owner/format";
-import { AutoRefresh } from "@/components/owner/auto-refresh";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const DEFAULT_LIMIT = 50;
 

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { presenceLabel, presenceDotClass } from "@/lib/owner/format";
 import { countTodayCalls, countOpenIncidents } from "@/lib/owner/summary";
-import { AutoRefresh } from "@/components/owner/auto-refresh";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function OwnerHomePage() {
   const actor = await requireRole("OWNER");

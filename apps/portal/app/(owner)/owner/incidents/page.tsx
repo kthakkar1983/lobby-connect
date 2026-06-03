@@ -8,7 +8,7 @@ import {
   incidentStatusBadgeVariant,
   formatCallTime,
 } from "@/lib/owner/format";
-import { AutoRefresh } from "@/components/owner/auto-refresh";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function OwnerIncidentsPage() {
   const actor = await requireRole("OWNER");
