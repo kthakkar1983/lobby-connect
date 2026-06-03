@@ -303,6 +303,6 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 
 **Test count:** 231 tests green (49 test files), typecheck + lint clean.
 
-**Smoke note:** sign in as `owner@lobbyconnect.local` / `localdev123` (Olivia, owns "The Sample Hotel") to verify. Use `933` (not `911`) when creating emergency incidents in dev.
+**Smoke confirmed (2026-06-03):** kiosk inline edit saves + persists after refresh; playbook upload bumps version + View opens signed URL in new tab; incident resolve flips status to RESOLVED with optional note, Resolve control disappears after resolve.
 
 **Next up:** Plan 8 — Observability.
