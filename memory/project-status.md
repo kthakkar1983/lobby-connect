@@ -324,6 +324,4 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 - Migration 0011: `health_signals` table + admin-select RLS.
 - 252 tests passing (55 test files), portal + kiosk typecheck + lint clean.
 
-**⚠️ Manual step still needed:** Apply migration `0011_health_signals.sql` to the Supabase remote database via the dashboard SQL Editor. Also set `VITE_SENTRY_DSN` for the kiosk if a kiosk Sentry project was created.
-
 **Next up:** Vendors page → Reports page → User management → Activity log full view (see `PROJECT_BRIEF.md`).
