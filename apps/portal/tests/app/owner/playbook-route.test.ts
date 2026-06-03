@@ -41,13 +41,13 @@ import { GET, POST } from "@/app/api/owner/properties/[id]/playbook/route";
 
 const PROP = "00000000-0000-0000-0000-0000000000c1";
 
-function getReq() {
+function getReq(): Promise<Response> {
   return GET(new Request(`http://localhost/api/owner/properties/${PROP}/playbook`), {
     params: Promise.resolve({ id: PROP }),
-  });
+  }) as Promise<Response>;
 }
 
-function postReq(file: File | null) {
+function postReq(file: File | null): Promise<Response> {
   const fd = new FormData();
   if (file) fd.set("file", file);
   return POST(
@@ -56,7 +56,7 @@ function postReq(file: File | null) {
       body: fd,
     }),
     { params: Promise.resolve({ id: PROP }) },
-  );
+  ) as Promise<Response>;
 }
 
 function pdf(bytes = 1024) {
