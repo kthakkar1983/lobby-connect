@@ -7,22 +7,30 @@ import {
 } from "@/lib/audit/query";
 import { AuditTable } from "./audit-table";
 
-// Curated catalog of audit actions written across the app, for the filter
-// dropdown. (A distinct-on-action query is the v1.1 upgrade; this list avoids a
+// Catalog of audit actions actually written across the app, for the filter
+// dropdown — kept in sync with the `logAuditEvent({ action })` call sites. (A
+// distinct-on-action query is the v1.1 upgrade; this static list avoids a
 // second round-trip and keeps the order meaningful.)
 const KNOWN_ACTIONS = [
   "user.signed_in",
   "user.signed_out",
   "user.invited",
-  "user.updated",
-  "user.deactivated",
+  "user.onboarded",
+  "user.password_reset",
+  "user.profile_edited",
+  "user.role_changed",
+  "user.active_toggled",
   "user.deleted",
   "property.created",
-  "property.updated",
+  "property.edited",
+  "property.active_toggled",
   "property.kiosk_edited",
   "property.playbook_uploaded",
+  "assignment.created",
   "assignment.changed",
+  "assignment.removed",
   "incident.resolved",
+  "trigger_emergency",
 ];
 
 export default async function AdminAuditPage({

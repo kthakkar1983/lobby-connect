@@ -324,4 +324,4 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 - Migration 0011: `health_signals` table + admin-select RLS.
 - 252 tests passing (55 test files), portal + kiosk typecheck + lint clean.
 
-**Next up:** Vendors page → Reports page → User management → Activity log full view (see `PROJECT_BRIEF.md`).
+**Next up:** Plan 8 was the final v1 build plan — v1 is feature-complete. Remaining work is pilot launch: set production env (Sentry DSN + auth token, Twilio), deploy portal + kiosk to Vercel, and run end-to-end smoke with the pilot hotel. Cut-from-v1 features (voicemail, ops dashboard, MFA, etc.) remain schema-ready for later — see `CLAUDE.md` v1 scope.
