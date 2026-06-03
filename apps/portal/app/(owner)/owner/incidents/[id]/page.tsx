@@ -9,6 +9,7 @@ import {
   incidentStatusBadgeVariant,
   formatCallTime,
 } from "@/lib/owner/format";
+import { ResolveIncident } from "./resolve-incident";
 
 function Field({
   label,
@@ -39,7 +40,7 @@ export default async function OwnerIncidentDetailPage({
   const { data: incident } = await supabase
     .from("incidents")
     .select(
-      "id, property_id, status, dispatched_to, call_id, notes, created_at, resolved_at",
+      "id, property_id, status, dispatched_to, call_id, notes, resolution_note, created_at, resolved_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -71,6 +72,8 @@ export default async function OwnerIncidentDetailPage({
         </Badge>
       </div>
 
+      <ResolveIncident incidentId={incident.id} status={incident.status} />
+
       <section className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-5">
         <Field label="Property" value={property?.name ?? "—"} />
         <Field label="Dispatched to" value={incident.dispatched_to} />
@@ -100,6 +103,15 @@ export default async function OwnerIncidentDetailPage({
           <h2 className="text-lg font-medium text-foreground">Notes</h2>
           <p className="whitespace-pre-wrap text-sm text-foreground">
             {incident.notes}
+          </p>
+        </section>
+      )}
+
+      {incident.resolution_note && (
+        <section className="flex flex-col gap-2 rounded-lg border border-border bg-card p-5">
+          <h2 className="text-lg font-medium text-foreground">Resolution note</h2>
+          <p className="whitespace-pre-wrap text-sm text-foreground">
+            {incident.resolution_note}
           </p>
         </section>
       )}
