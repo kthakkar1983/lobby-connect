@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordHeartbeat } from "@/lib/health/heartbeat";
 import {
   validateTwilioSignature,
   publicUrlFromRequest,
@@ -54,6 +55,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!property || !property.active) {
       return twimlResponse(buildNotInServiceTwiml(APOLOGY));
     }
+
+    // Best-effort: record that Twilio reached us (off the critical path).
+    await recordHeartbeat(property.operator_id, "twilio_webhook");
 
     // 2. Idempotency: has this CallSid already been recorded?
     const { data: existing } = await admin

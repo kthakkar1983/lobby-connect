@@ -3,7 +3,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 const ltSpy = vi.fn(() => ({ neq: () => Promise.resolve({ error: null, count: 2 }) }));
 const updateSpy = vi.fn((_v: unknown) => ({ lt: ltSpy }));
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: () => ({ update: (v: unknown) => updateSpy(v) }) }),
+  createAdminClient: () => ({
+    from: (table: string) => {
+      if (table === "operators") {
+        return { select: () => Promise.resolve({ data: [], error: null }) };
+      }
+      if (table === "health_signals") {
+        return { upsert: () => Promise.resolve({ error: null }) };
+      }
+      return { update: (v: unknown) => updateSpy(v) };
+    },
+  }),
 }));
 
 import { GET } from "@/app/api/cron/mark-stale-offline/route";
