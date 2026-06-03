@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@lc/shared": "workspace:*",
+    "@sentry/react": "^10.56.0",
     "agora-rtc-sdk-ng": "^4.24.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
