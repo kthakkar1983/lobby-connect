@@ -44,6 +44,9 @@ create policy "incidents_owner_update" on incidents
 -- 4. properties column guard: an OWNER may change ONLY the 8 kiosk_* fields.
 --    Diff every OTHER column via jsonb subtraction, so any future column is
 --    protected by default until added to this whitelist.
+--    NOTE: updated_at is also excluded because properties_set_updated_at (a BEFORE
+--    UPDATE trigger that fires alphabetically before this one) stamps NEW.updated_at
+--    on every update — we must not treat that auto-stamp as a forbidden change.
 create or replace function enforce_owner_property_columns()
 returns trigger
 language plpgsql
@@ -56,14 +59,16 @@ begin
           'kiosk_welcome_heading','kiosk_welcome_message',
           'kiosk_checkin_time','kiosk_checkout_time',
           'kiosk_wifi_network','kiosk_wifi_password',
-          'kiosk_breakfast_hours','kiosk_apology_message'
+          'kiosk_breakfast_hours','kiosk_apology_message',
+          'updated_at'
         ]::text[])
        is distinct from
        (to_jsonb(new) - array[
           'kiosk_welcome_heading','kiosk_welcome_message',
           'kiosk_checkin_time','kiosk_checkout_time',
           'kiosk_wifi_network','kiosk_wifi_password',
-          'kiosk_breakfast_hours','kiosk_apology_message'
+          'kiosk_breakfast_hours','kiosk_apology_message',
+          'updated_at'
         ]::text[])
     then
       raise exception 'owners may only edit guest-facing kiosk fields';
