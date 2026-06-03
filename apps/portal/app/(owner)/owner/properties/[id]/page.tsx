@@ -9,6 +9,8 @@ import {
   callStateBadgeVariant,
   formatCallTime,
 } from "@/lib/owner/format";
+import { KioskContentCard } from "./kiosk-content-card";
+import { KIOSK_FIELDS, type KioskContentInput } from "@/lib/owner/kiosk";
 
 function Field({
   label,
@@ -48,6 +50,10 @@ export default async function OwnerPropertyDetailPage({
 
   if (!property) notFound();
 
+  const kioskInitial = Object.fromEntries(
+    KIOSK_FIELDS.map((f) => [f, (property[f] as string | null) ?? ""]),
+  ) as KioskContentInput;
+
   const { data: recent } = await supabase
     .from("calls")
     .select("id, channel, state, ring_started_at")
@@ -77,22 +83,7 @@ export default async function OwnerPropertyDetailPage({
         />
       </section>
 
-      <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-lg font-medium text-foreground">Guest-facing kiosk content</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Welcome heading" value={property.kiosk_welcome_heading} />
-          <Field label="Welcome message" value={property.kiosk_welcome_message} />
-          <Field label="Check-in" value={property.kiosk_checkin_time} />
-          <Field label="Check-out" value={property.kiosk_checkout_time} />
-          <Field label="Wi-Fi network" value={property.kiosk_wifi_network} />
-          <Field label="Wi-Fi password" value={property.kiosk_wifi_password} />
-          <Field label="Breakfast hours" value={property.kiosk_breakfast_hours} />
-          <Field label="Apology message" value={property.kiosk_apology_message} />
-        </div>
-        <p className="text-xs text-text-muted">
-          Editing these is coming in the owner self-service update (7b).
-        </p>
-      </section>
+      <KioskContentCard propertyId={property.id} initial={kioskInitial} />
 
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between">
