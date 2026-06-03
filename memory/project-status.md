@@ -254,4 +254,28 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 
 **Smoke note:** seed OWNER `owner@lobbyconnect.local` / `localdev123` (Olivia) already owns "The Sample Hotel" (`owner_user_id = …b2`) — no seed tweak needed.
 
-**RESUME HERE (next session):** execute `docs/plans/2026-06-02-07a-owner-portal.md` task-by-task. Recommended path: `superpowers:subagent-driven-development` (fresh subagent per task, review between). Nothing implemented yet — start at Task 1 (`lib/owner/format.ts`).
+**COMPLETE — tag: `plan-07a-owner-portal-complete`**
+
+## Plan 7a — Owner portal (read views) — COMPLETE
+
+**Tag:** `plan-07a-owner-portal-complete`
+
+**What shipped (all read-only, zero migrations, zero new API routes, zero service-role):**
+- `lib/owner/format.ts` — display mappers + tz-aware call-time formatter (TDD)
+- `lib/owner/summary.ts` — tz-aware today-call count + open-incident count (TDD)
+- `lib/owner/nav.ts` — activeOwnerTab resolver (TDD)
+- `components/owner/auto-refresh.tsx` — `<AutoRefresh>` island (router.refresh on 20s interval + window focus)
+- `components/owner/owner-nav.tsx` — `<OwnerTopNav>` (md+ header) + `<OwnerBottomNav>` (mobile fixed)
+- `app/(owner)/layout.tsx` — full owner shell (sticky header + logo + nav + UserMenu + bottom nav; no Softphone)
+- `app/(owner)/owner/page.tsx` + `loading.tsx` — Home overview (per-property glance cards: agent presence dot, today-count, open-incident badge)
+- `app/(owner)/owner/properties/[id]/page.tsx` — property detail read (basics + kiosk content display-only + recent calls; routing DID hidden)
+- `app/(owner)/owner/calls/page.tsx` + `loading.tsx` — call history (reverse-chron, ?property filter, ?limit load-more, AutoRefresh)
+- `app/(owner)/owner/calls/[id]/page.tsx` — call detail (all fields + incident link + dark recording seam)
+- `app/(owner)/owner/incidents/page.tsx` + `loading.tsx` — incident list (read, AutoRefresh)
+- `app/(owner)/owner/incidents/[id]/page.tsx` — incident detail (read; no resolve control — that's 7b)
+
+**Architecture:** pure RSC reads via user-scoped Supabase client; RLS does owner scoping; `<AutoRefresh>` satisfies locked-decision-4 (20s poll + refocus). 45 test files / 210 tests green, typecheck + lint clean.
+
+**Next up:** 7b — owner self-service writes (kiosk-field editing + playbook upload + incident resolve). Needs owner `UPDATE` RLS + storage route.
+
+**Smoke note:** sign in as `owner@lobbyconnect.local` / `localdev123` (Olivia) to test. She owns "The Sample Hotel" with Alex Agent assigned.
