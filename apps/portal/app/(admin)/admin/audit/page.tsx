@@ -25,6 +25,7 @@ const KNOWN_ACTIONS = [
   "property.edited",
   "property.active_toggled",
   "property.kiosk_edited",
+  "property.kiosk_link_generated",
   "property.playbook_uploaded",
   "assignment.created",
   "assignment.changed",

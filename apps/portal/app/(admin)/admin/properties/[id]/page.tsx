@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { PropertyForm } from "../property-form";
 import { AssignmentCard, type AgentOption } from "./assignment-card";
+import { KioskLinkCard } from "./kiosk-link-card";
 
 export default async function PropertyDetailPage({
   params,
@@ -90,6 +91,8 @@ export default async function PropertyDetailPage({
         currentAgentName={currentAgentName}
         agents={(agents ?? []) as AgentOption[]}
       />
+
+      <KioskLinkCard propertyId={property.id} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type { Database, Json } from "@lc/shared";
 import { createServerClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { signKioskToken } from "@/lib/kiosk/config-token";
 import {
   validatePropertyName,
   validateTimezone,
@@ -176,6 +177,50 @@ export async function createPropertyAction(
 
   revalidatePath("/admin/properties");
   return { ok: true, id: data.id };
+}
+
+export type KioskLinkResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+// Mint a signed kiosk pairing URL for this property. The token is long-lived
+// (no expiry) and carried in the kiosk URL as `?t=`; opening it once pairs the
+// tablet to this property. Admin-only; verifies operator ownership via RLS.
+export async function generateKioskLinkAction(
+  propertyId: string,
+): Promise<KioskLinkResult> {
+  const actor = await requireRole("ADMIN");
+
+  const secret = process.env.KIOSK_CONFIG_SECRET;
+  if (!secret) {
+    return { ok: false, error: "Kiosk signing secret is not configured." };
+  }
+  const base = (process.env.KIOSK_ORIGIN ?? "http://localhost:5173").replace(
+    /\/$/,
+    "",
+  );
+
+  const supabase = await createServerClient();
+  // RLS scopes this to the actor's operator; a foreign/unknown id returns null.
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!property) {
+    return { ok: false, error: "Property not found." };
+  }
+
+  const token = signKioskToken(propertyId, secret);
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: "property.kiosk_link_generated",
+    entityType: "property",
+    entityId: propertyId,
+  });
+
+  return { ok: true, url: `${base}/?t=${token}` };
 }
 
 export async function updatePropertyAction(
