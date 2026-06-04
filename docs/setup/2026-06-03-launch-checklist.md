@@ -29,8 +29,9 @@ pilot from local-only to a live deployment for one hotel.
    - paste each migration file into the dashboard SQL editor in numeric order.
 4. **DO NOT run `supabase/seed.sql` as-is.** It inserts fake users straight into `auth.users` and is
    explicitly *local-dev only*. Use the prod bootstrap in the Appendix instead.
-5. **Bootstrap the operator + first admin** — run the Appendix SQL after creating the admin via
-   Authentication → Add user. The admin then invites everyone else through the in-app flow.
+5. **Bootstrap the operator + first admin** — after creating the admin via Authentication → Add user,
+   run `supabase/bootstrap-prod.sql` (edit the three placeholders first). The admin then invites everyone
+   else through the in-app flow. (Full SQL also reproduced in the Appendix below.)
 6. **Auth URL config (easy to miss)** — Authentication → URL Configuration → set **Site URL** and the
    **redirect allow-list** to the prod portal URL. Otherwise invite / password-reset emails point at
    `localhost` and the links break.
@@ -138,26 +139,8 @@ KIOSK_CONFIG_SECRET=<generated — see chat / regenerate with: openssl rand -hex
 
 ## Appendix — prod bootstrap SQL
 
-Run **after** migrations `0001`–`0011`, and **after** creating the admin via
-Dashboard → Authentication → Add user (real email + password):
-
-```sql
--- 1. Operator (single tenant for v1).
-insert into operators (id, name, slug)
-values (gen_random_uuid(), 'Lobby Connect', 'lobby-connect')
-on conflict (slug) do nothing;
-
--- 2. Link the admin auth user to a profile.
---    Replace <AUTH_USER_ID> with the id shown in Authentication → Users,
---    and set the real name/email.
-insert into profiles (id, operator_id, role, full_name, email, status, active)
-values (
-  '<AUTH_USER_ID>',
-  (select id from operators where slug = 'lobby-connect'),
-  'ADMIN',
-  'Your Name',
-  'you@yourhotel.com',
-  'OFFLINE',
-  true
-);
-```
+The canonical, ready-to-run script is **`supabase/bootstrap-prod.sql`** (committed). Run it **after**
+migrations `0001`–`0011` and **after** creating the admin via Dashboard → Authentication → Add user. Edit
+the three placeholders (`<ADMIN_AUTH_USER_ID>`, `<ADMIN_FULL_NAME>`, `<ADMIN_EMAIL>`) first. It creates the
+operator, links the admin profile, sets the admin's `twilio_identity` (so they can take calls), and seeds
+the default operator setting — idempotent and safe to re-run.

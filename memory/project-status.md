@@ -325,3 +325,5 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 - 252 tests passing (55 test files), portal + kiosk typecheck + lint clean.
 
 **Next up:** Plan 8 was the final v1 build plan — v1 is feature-complete. Remaining work is pilot launch: set production env (Sentry DSN + auth token, Twilio), deploy portal + kiosk to Vercel, and run end-to-end smoke with the pilot hotel. Cut-from-v1 features (voicemail, ops dashboard, MFA, etc.) remain schema-ready for later — see `CLAUDE.md` v1 scope.
+
+**Launch runbook:** `docs/setup/2026-06-03-launch-checklist.md` (step-by-step: prod Supabase + migrations, Twilio repoint, Vercel deploy with the cross-reference URL loop, full env inventory, smoke checklist). Prod DB bootstrap (operator + first admin + twilio_identity) is `supabase/bootstrap-prod.sql`. As of this writing nothing is provisioned on remote Supabase/Vercel yet; portal Sentry env is set locally. The prod Supabase project is the critical-path blocker.
