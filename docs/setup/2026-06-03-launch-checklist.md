@@ -1,8 +1,12 @@
 # Lobby Connect — v1 Pilot Launch Checklist
 
-**Status at time of writing:** v1 is **feature-complete** (Plan 8 was the final build plan). Everything
-runs locally; **nothing has been provisioned on remote Supabase or Vercel yet.** This runbook takes the
-pilot from local-only to a live deployment for one hotel.
+**Status at time of writing:** v1 is **feature-complete** (Plan 8 was the final build plan). This runbook
+takes the pilot from local-only to a live deployment for one hotel.
+
+> **Progress (2026-06-04):** §1 Supabase, §2 Twilio, §4 Vercel deploy, and §5 env are **DONE** — both apps
+> are live with full prod env, admin sign-in confirmed. **Remaining: §7 end-to-end smoke**, which now has a
+> dedicated complete checklist at `docs/setup/2026-06-04-smoke-test-checklist.md`. See
+> `memory/project-status.md` → "PILOT LAUNCH — IN PROGRESS" for the authoritative resume pointer.
 
 **Legend:** 🧑 = you must do this manually (external dashboard/console — Claude has no access) ·
 🤖 = Claude can do in-repo · ✅ = already done.
@@ -124,19 +128,12 @@ KIOSK_CONFIG_SECRET=<generated — see chat / regenerate with: openssl rand -hex
 
 ---
 
-## 7. End-to-end smoke (after deploy) 🧑
+## 7. End-to-end smoke (after deploy) 🧑 — **← current step**
 
-- [ ] Sign in as the prod admin → `/admin/users`, `/admin/properties`, `/admin/assignments` load.
-- [ ] Create the pilot property, set its routing DID, assign a primary agent, toggle `accepting_calls`.
-- [ ] Place a real inbound call → agent softphone rings → answer → call row goes RINGING→IN_PROGRESS→COMPLETED.
-- [ ] Kiosk: open the kiosk URL on the tablet → start a video session → two-way audio/video + Room#/notes save.
-- [ ] Emergency: trigger the in-call 911 path against **933** first; switch to 911 only when confident.
-- [ ] Owner portal on a phone → home glance cards, call history, incident detail all render.
-- [ ] `/admin/status`: Supabase card green; Sentry card shows a count + "View in Sentry"; `twilio_webhook`
-      card flips to "just now" after the test call; presence-sweep card green.
-- [ ] `/admin/audit` lists the actions you just performed; the action filter narrows correctly.
-- [ ] Trigger a deliberate error → confirm it reaches Sentry **with no phone number / recording URL** in the payload.
-- [ ] Negative: an agent/owner hitting `/admin/status` or `/admin/audit` is redirected.
+The full, self-contained smoke checklist lives in **`docs/setup/2026-06-04-smoke-test-checklist.md`**.
+It covers: seeding the pilot property + assignment + kiosk link, auth/RBAC, the audio call path
+(answer + no-answer), the kiosk video path, the **933-only** emergency procedure, owner portal, and
+observability (`/status`, `/audit`, Sentry scrub check) — with expected results and the daily-cron caveat.
 
 ---
 

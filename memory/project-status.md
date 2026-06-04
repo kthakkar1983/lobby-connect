@@ -324,6 +324,25 @@ Brainstormed 2026-06-02. Plan 7 (mobile-first owner portal) is split on a single
 - Migration 0011: `health_signals` table + admin-select RLS.
 - 252 tests passing (55 test files), portal + kiosk typecheck + lint clean.
 
-**Next up:** Plan 8 was the final v1 build plan — v1 is feature-complete. Remaining work is pilot launch: set production env (Sentry DSN + auth token, Twilio), deploy portal + kiosk to Vercel, and run end-to-end smoke with the pilot hotel. Cut-from-v1 features (voicemail, ops dashboard, MFA, etc.) remain schema-ready for later — see `CLAUDE.md` v1 scope.
+Plan 8 was the final v1 build plan — **v1 is feature-complete.** Remaining work is the pilot launch (below). Cut-from-v1 features (voicemail, ops dashboard, MFA, etc.) remain schema-ready for later — see `CLAUDE.md` v1 scope.
 
-**Launch runbook:** `docs/setup/2026-06-03-launch-checklist.md` (step-by-step: prod Supabase + migrations, Twilio repoint, Vercel deploy with the cross-reference URL loop, full env inventory, smoke checklist). Prod DB bootstrap (operator + first admin + twilio_identity) is `supabase/bootstrap-prod.sql`. As of this writing nothing is provisioned on remote Supabase/Vercel yet; portal Sentry env is set locally. The prod Supabase project is the critical-path blocker.
+---
+
+## PILOT LAUNCH — IN PROGRESS (resume here)
+
+**Runbook:** `docs/setup/2026-06-03-launch-checklist.md`. **Prod DB bootstrap:** `supabase/bootstrap-prod.sql`.
+
+**Live URLs:** portal `https://lobby-connect-portal.vercel.app` · kiosk `https://lobby-connect-kiosk.vercel.app`.
+
+**Done (2026-06-04):**
+- Prod Supabase created; migrations `0001`–`0011` + bootstrap (operator + admin + `twilio_identity`) applied; Auth Site URL + redirect URLs set.
+- Both apps deployed green on Vercel; **all prod env vars set** (Supabase prod keys, Twilio, Agora, `CRON_SECRET`, `KIOSK_CONFIG_SECRET`, `EMERGENCY_DIAL_NUMBER=911`, Sentry, cross-ref URLs). `NEXT_PUBLIC_APP_URL`/`VITE_PORTAL_API_URL` = canonical portal URL; `KIOSK_ORIGIN` = kiosk URL.
+- Twilio voice webhook repointed to `…/api/twilio/voice/incoming`. Admin sign-in confirmed in prod.
+- Fixes shipped during launch: removed dangling `/admin/assignments` + `/admin/settings` nav links; **added "Generate kiosk link" button** on property detail (mints `?t=` token via `KIOSK_CONFIG_SECRET`, audited `property.kiosk_link_generated`); corrected `/audit` action catalog.
+
+**NEXT STEP: end-to-end smoke test** → `docs/setup/2026-06-04-smoke-test-checklist.md` (complete, self-contained). Nothing in it has been run yet; no pilot property exists in prod yet (step 1 of the smoke creates it).
+
+**Active caveats:**
+- **Cron is daily** (`0 8 * * *`) for the Hobby pilot — `/status` presence card may read amber (expected). **Before public launch:** Vercel Pro + restore `* * * * *` in `apps/portal/vercel.json` and `CRON_SWEEP_INTERVAL_MS=60_000` in `apps/portal/lib/status/signals.ts` (two-line flip).
+- **Emergency smoke uses 933 only** (prod is set to real `911`); flip env to 933 + redeploy to test, then restore 911. See smoke §5.
+- Kiosk pairing is via the generated `?t=` link (token is per-property, long-lived, reusable across devices; no per-device revocation yet — device-registry system is a post-pilot item).
