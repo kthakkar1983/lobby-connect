@@ -31,10 +31,12 @@ export const config = {
     //   - _next/image (image optimization)
     //   - favicon.ico
     //   - api/* (API routes do their own auth)
+    //   - _vercel/* (Vercel Analytics / Speed Insights scripts — must serve JS,
+    //     not get redirected to the /sign-in HTML and parsed as JS)
     //   - sign-in (the sign-in page itself)
     //   - forgot-password (must be reachable for unauthed users — Plan 3 bug)
     //   - onboarding (invitee landing; always has a session, but kept explicit)
     //   - auth/* (sign-out POST + password-reset/callback routes)
-    "/((?!_next/static|_next/image|favicon.ico|api/|sign-in|forgot-password|onboarding|auth/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|_vercel|sign-in|forgot-password|onboarding|auth/).*)",
   ],
 };
