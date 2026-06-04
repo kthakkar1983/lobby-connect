@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, Building2, ScrollText, Settings, Users, UsersRound } from "lucide-react";
+import { Activity, Building2, ScrollText, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,10 +16,8 @@ import { NavItem } from "@/components/nav-item";
 const NAV_ITEMS = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/properties", label: "Properties", icon: Building2 },
-  { href: "/admin/assignments", label: "Assignments", icon: UsersRound },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText },
   { href: "/admin/status", label: "Status", icon: Activity },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function AppSidebar() {
