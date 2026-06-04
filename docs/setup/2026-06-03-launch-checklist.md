@@ -37,8 +37,15 @@ takes the pilot from local-only to a live deployment for one hotel.
    run `supabase/bootstrap-prod.sql` (edit the three placeholders first). The admin then invites everyone
    else through the in-app flow. (Full SQL also reproduced in the Appendix below.)
 6. **Auth URL config (easy to miss)** — Authentication → URL Configuration → set **Site URL** and the
-   **redirect allow-list** to the prod portal URL. Otherwise invite / password-reset emails point at
-   `localhost` and the links break.
+   **redirect allow-list** to the prod portal URL (the **clean** alias `https://lobby-connect-portal.vercel.app`,
+   not a `-git-main-`/`-<hash>-` deployment URL — those are gated by Vercel Deployment Protection and break the link).
+   Otherwise invite / password-reset emails point at `localhost` and the links break.
+7. **Custom SMTP + email templates (REQUIRED — easy to miss).** The built-in Supabase email is rate-limited
+   ("testing only") and Supabase now **gates email-template editing behind custom SMTP**. Configure custom SMTP
+   (Brevo/SendGrid single-sender works with no domain; a real domain is needed for clean deliverability before
+   real launch), then edit the **Invite** + **Reset Password** templates to point at `/auth/confirm` with a
+   `token_hash` — without this, invited users never set a password and can never sign in. Full details +
+   exact template strings: `docs/setup/2026-06-04-auth-email-templates.md`.
 
 ---
 

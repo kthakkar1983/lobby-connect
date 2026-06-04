@@ -346,3 +346,27 @@ Plan 8 was the final v1 build plan — **v1 is feature-complete.** Remaining wor
 - **Cron is daily** (`0 8 * * *`) for the Hobby pilot — `/status` presence card may read amber (expected). **Before public launch:** Vercel Pro + restore `* * * * *` in `apps/portal/vercel.json` and `CRON_SWEEP_INTERVAL_MS=60_000` in `apps/portal/lib/status/signals.ts` (two-line flip).
 - **Emergency smoke uses 933 only** (prod is set to real `911`); flip env to 933 + redeploy to test, then restore 911. See smoke §5.
 - Kiosk pairing is via the generated `?t=` link (token is per-property, long-lived, reusable across devices; no per-device revocation yet — device-registry system is a post-pilot item).
+
+---
+
+### 2026-06-04 (session 2) — smoke blocked on auth; invite/sign-in bug FIXED in code, custom SMTP pending
+
+**Status:** smoke test still NOT started (no pilot property in prod yet). Hit a hard blocker — **invited users could not sign in** — now root-caused and fixed in code; final enablement (email templates) needs **custom SMTP**, which Kumar is setting up before next session.
+
+**Fixed + deployed this session:**
+- **Supabase MCP works for prod now** (the connector was on an empty org; reconnected). Prod ref `ztunzdpmazwwwkxcpyfp` (org `qrpnbimuziaoekoznfxm`). Claude can `execute_sql` against prod to verify smoke steps + read GoTrue logs (`get_logs service=auth`). Vercel CLI is authed (`kumar-8015`); portal `prj_SwRzM2yQQ58iCqj0Js9HZ5XTpBAJ`, kiosk `prj_pw6EUnewpAG6yOxJxpQoJMWasmyv`, team `team_SS9GSqbP7VOjZRPyQK6vCATN`.
+- **`NEXT_PUBLIC_APP_URL` was a *protected* Vercel alias** → invite links hit the Vercel deployment-protection wall ("Vercel sign-up page"). Fixed env to clean alias `https://lobby-connect-portal.vercel.app` + rebuilt. Supabase Auth **Site URL + redirect allow-list** (`https://lobby-connect-portal.vercel.app/**`) set to clean alias. Vercel Deployment Protection left **ON** (only the bare alias is public — all generated links MUST use it; kiosk + Twilio webhook already do).
+- **Middleware `/_vercel` exclusion** — commit `930a5dc`.
+- **THE BIG FIX — invite/onboarding/sign-in — commit `24fd100`, deployed green.** Supabase email links return the session in the URL **fragment**, which the server-side `/auth/callback` (PKCE `exchangeCodeForSession`) can't read → no session → users bounced to `/sign-in`, never reached `/onboarding`, never set a password → every sign-in returned `invalid_credentials`. (Manually-created dashboard users worked because they skip this flow — that was the historical "only manual users work" workaround.) Confirmed via GoTrue logs (`user_signedup` at /verify, no PKCE exchange, then `password → 400 invalid_credentials`). **Fix:** new **`/auth/confirm`** route using `verifyOtp({token_hash,type})` with request→response cookie pairing; **`/auth/signout`** fixed the same way (it was a silent no-op = the "can't sign out" symptom). 252 tests green, typecheck+lint clean.
+
+**PICK UP HERE — to make the auth fix live end-to-end:**
+1. **Custom SMTP (REQUIRED).** Supabase now gates email-template editing behind custom SMTP, AND the built-in email is rate-limited (resets weren't delivering). Kumar is setting up **Brevo or SendGrid single-sender** (verify his Gmail, *no domain needed*). NOTE: Resend without a domain only sends to your own signup email — not usable for inviting others. Fields/steps in `docs/setup/2026-06-04-auth-email-templates.md`.
+2. **Edit the 2 email templates** → point at `/auth/confirm` (exact strings in that doc): Invite → `…?token_hash={{ .TokenHash }}&type=invite&next=/onboarding`; Reset Password → `…&type=recovery&next=/auth/update-password`.
+3. **Test the fixed flow:** invite a fresh email → should now reach `/onboarding` → set password → sign in. Claude verifies live via GoTrue logs (`verifyOtp` ok, `password` grant → 200) + DB (`has_password`).
+4. **Recreate the broken test users:** `bovarovadilnoza0@gmail.com` (the real pilot AGENT) and `kumar@unbrandt.com` (throwaway) currently can't sign in (never set a password). After templates are fixed: **hard-delete + re-invite** through the fixed flow (re-inviting an existing email is blocked in-app — `lib/users/invite.ts`).
+5. **THEN run the smoke** — `docs/setup/2026-06-04-smoke-test-checklist.md` §1 onward. §3 voice + §4 kiosk can run with the **admin** account as the agent (don't strictly need Dilnoza); §2 RBAC + §6 owner need a second working user.
+
+**Open caveats (2026-06-04):**
+- **Analytics SyntaxError ("Unexpected token '<'") — cosmetic, NOT fixed.** Kumar enabled Web Analytics but `/_vercel/insights/script.js` still 404s (HTML). The actually-injected path is `/<hash>/script.js` at root, which the `_vercel` middleware exclusion doesn't cover. Sentry noise only — revisit later, or just remove `<Analytics/>` from the portal root layout.
+- **Custom SMTP + a real domain are launch prerequisites** for deliverability (gmail-from via 3rd-party SMTP may spam-folder). SMTP also gates template editing.
+- Daily-cron / emergency-933 / kiosk-token caveats unchanged (above).
