@@ -15,14 +15,20 @@ export type SignalSpec = {
   downAfterMs?: number;
 };
 
+// Presence-sweep cron cadence. PILOT (Vercel Hobby caps crons at once/day) = daily.
+// BEFORE LAUNCH: set apps/portal/vercel.json's cron schedule back to "* * * * *"
+// AND change this constant to 60_000 (per-minute), then move to Vercel Pro. The
+// thresholds below derive from it, so this one constant is the entire switch.
+const CRON_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily (pilot). Per-minute = 60_000.
+
 export const SIGNAL_SPECS: readonly SignalSpec[] = [
   { signal: "twilio_webhook", label: "Twilio webhook", mode: "info" },
   {
     signal: "cron_mark_stale_offline",
     label: "Presence sweep (cron)",
     mode: "liveness",
-    warnAfterMs: 90_000, // runs every minute; > 90s is a missed beat
-    downAfterMs: 300_000, // > 5 min: treat as stopped
+    warnAfterMs: CRON_SWEEP_INTERVAL_MS * 1.5, // 1.5 missed intervals → warn
+    downAfterMs: CRON_SWEEP_INTERVAL_MS * 3, // 3 missed intervals → treat as stopped
   },
 ] as const;
 

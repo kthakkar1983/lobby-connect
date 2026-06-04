@@ -5,6 +5,6 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "outputDirectory": ".next",
   "crons": [
-    { "path": "/api/cron/mark-stale-offline", "schedule": "* * * * *" }
+    { "path": "/api/cron/mark-stale-offline", "schedule": "0 8 * * *" }
   ]
 }

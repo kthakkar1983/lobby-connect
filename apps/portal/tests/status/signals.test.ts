@@ -20,9 +20,11 @@ describe("classifyHeartbeat", () => {
     expect(classifyHeartbeat(null, NOW, cron)).toBe("unknown");
   });
   it("liveness: ok / warn / down by age", () => {
+    // Pilot cadence is daily: warn after 1.5 days, down after 3 days.
+    const HOUR = 3_600_000;
     expect(classifyHeartbeat(ago(10_000), NOW, cron)).toBe("ok");
-    expect(classifyHeartbeat(ago(120_000), NOW, cron)).toBe("warn");
-    expect(classifyHeartbeat(ago(600_000), NOW, cron)).toBe("down");
+    expect(classifyHeartbeat(ago(40 * HOUR), NOW, cron)).toBe("warn"); // > 36h
+    expect(classifyHeartbeat(ago(80 * HOUR), NOW, cron)).toBe("down"); // > 72h
   });
   it("info: always ok once seen, regardless of age", () => {
     expect(classifyHeartbeat(ago(86_400_000), NOW, twilio)).toBe("ok");

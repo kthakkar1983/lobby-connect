@@ -67,9 +67,12 @@ The portal and kiosk are two separate Vercel projects from the same monorepo.
    the two Vercel URLs.
 3. **Set env** for each app (§5), including the cross-reference URLs now that both URLs exist.
 4. **Redeploy** both so the URL-dependent vars take effect.
-5. **Cron plan check** — `vercel.json` schedules the presence sweep every minute (`* * * * *`). Vercel
-   **Hobby caps crons at once per day**; per-minute requires **Pro**. On Hobby, either upgrade or accept a
-   coarser sweep (and `/status`'s cron card will read amber/red between runs).
+5. **Cron** — set to **daily** (`0 8 * * *`) for the Hobby pilot, since Vercel **Hobby caps crons at once
+   per day**. The `/status` presence card is tuned to match (warn after 1.5 days, down after 3). The
+   dashboard's live availability label may lag (cosmetic only — call routing is unaffected).
+   **Before public launch:** move to **Vercel Pro**, set `apps/portal/vercel.json`'s schedule back to
+   `* * * * *`, and set `CRON_SWEEP_INTERVAL_MS` in `apps/portal/lib/status/signals.ts` to `60_000`
+   (that one constant retunes the `/status` thresholds). Two-line flip.
 
 ---
 
