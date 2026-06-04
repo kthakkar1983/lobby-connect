@@ -1,0 +1,163 @@
+# Lobby Connect — v1 Pilot Launch Checklist
+
+**Status at time of writing:** v1 is **feature-complete** (Plan 8 was the final build plan). Everything
+runs locally; **nothing has been provisioned on remote Supabase or Vercel yet.** This runbook takes the
+pilot from local-only to a live deployment for one hotel.
+
+**Legend:** 🧑 = you must do this manually (external dashboard/console — Claude has no access) ·
+🤖 = Claude can do in-repo · ✅ = already done.
+
+---
+
+## 0. Already done ✅
+
+- All v1 code complete and committed to `main` (migrations `0001`–`0011`, both apps, 252 tests passing).
+- Portal Sentry env wired in `apps/portal/.env.local` (DSN + auth token + org/project).
+- Kiosk Sentry DSN in hand (paste at deploy — see §5).
+- Deploy secrets generated (see §6 — paste pending).
+- `apps/portal/vercel.json` already declares the `mark-stale-offline` cron (`* * * * *`).
+
+---
+
+## 1. Provision production Supabase 🧑
+
+1. **Create the project** — Supabase dashboard → New project. Note the region.
+2. **Grab credentials** (Settings → API): `Project URL`, `anon` key, `service_role` key.
+   These become `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+3. **Apply migrations `0001`–`0011`** — either:
+   - `supabase link --project-ref <ref>` then `supabase db push` (applies the whole `supabase/migrations/` chain in order), **or**
+   - paste each migration file into the dashboard SQL editor in numeric order.
+4. **DO NOT run `supabase/seed.sql` as-is.** It inserts fake users straight into `auth.users` and is
+   explicitly *local-dev only*. Use the prod bootstrap in the Appendix instead.
+5. **Bootstrap the operator + first admin** — run the Appendix SQL after creating the admin via
+   Authentication → Add user. The admin then invites everyone else through the in-app flow.
+6. **Auth URL config (easy to miss)** — Authentication → URL Configuration → set **Site URL** and the
+   **redirect allow-list** to the prod portal URL. Otherwise invite / password-reset emails point at
+   `localhost` and the links break.
+
+---
+
+## 2. Twilio (reuse the dev account/number) 🧑
+
+1. Phone Numbers → your pilot number → **Voice webhook** → `https://<prod-portal>/api/twilio/voice/incoming`,
+   method **HTTP POST**. (The `dial-result` and `status` callbacks resolve from the request origin, so they
+   follow automatically — no separate config.)
+2. Confirm the **E911 emergency address** is registered on the number (required for the in-call 911 path).
+3. In prod env, set `EMERGENCY_DIAL_NUMBER=911`. **Keep `933` everywhere non-prod** (933 = address-readback
+   test, never reaches a PSAP).
+4. See `docs/setup/2026-05-30-twilio-voice-setup.md` for the full original setup.
+
+---
+
+## 3. Agora (reuse the existing app) 🧑
+
+No new provisioning — just have `AGORA_APP_ID` + `AGORA_APP_CERTIFICATE` ready to paste into the portal's
+Vercel env (the kiosk fetches its video token from the portal, so the kiosk needs no Agora secret).
+
+---
+
+## 4. Deploy to Vercel 🧑
+
+The portal and kiosk are two separate Vercel projects from the same monorepo.
+
+1. **Create both projects**, root directories `apps/portal` and `apps/kiosk`. The portal's build/cron config
+   is already in `apps/portal/vercel.json`.
+2. **First deploy** both (env can be partially blank — the Sentry SDK and optional vars no-op). This yields
+   the two Vercel URLs.
+3. **Set env** for each app (§5), including the cross-reference URLs now that both URLs exist.
+4. **Redeploy** both so the URL-dependent vars take effect.
+5. **Cron plan check** — `vercel.json` schedules the presence sweep every minute (`* * * * *`). Vercel
+   **Hobby caps crons at once per day**; per-minute requires **Pro**. On Hobby, either upgrade or accept a
+   coarser sweep (and `/status`'s cron card will read amber/red between runs).
+
+---
+
+## 5. Environment variable inventory
+
+### Portal (Vercel → portal project → Settings → Environment Variables)
+
+| Var | Need | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | ❗ required | from §1 (prod Supabase) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ❗ required | from §1 |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❗ required | from §1 — mark **sensitive** |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | required | reuse dev values |
+| `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | required | reuse dev values |
+| `TWILIO_PHONE_NUMBER` | required | the pilot number, E.164 |
+| `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` | required | reuse dev values |
+| `CRON_SECRET` | required | §6 — gates the cron route |
+| `KIOSK_CONFIG_SECRET` | required | §6 — signs kiosk config tokens |
+| `EMERGENCY_DIAL_NUMBER` | required | **`911`** in prod only |
+| `NEXT_PUBLIC_APP_URL` | set after first deploy | prod portal URL |
+| `KIOSK_ORIGIN` | set after first deploy | prod **kiosk** URL — CORS allow-origin |
+| `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` | ✅ have | portal DSN |
+| `SENTRY_AUTH_TOKEN` | ✅ have | mark **sensitive**, server-only |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | ✅ have | `lobby-connect` / `portal` |
+
+### Kiosk (Vercel → kiosk project)
+
+| Var | Need | Notes |
+|---|---|---|
+| `VITE_PORTAL_API_URL` | required | set after first deploy → prod portal URL |
+| `VITE_SENTRY_DSN` | ✅ in hand | kiosk DSN |
+
+> **Cross-reference loop:** the portal needs the kiosk's URL (`KIOSK_ORIGIN`) and the kiosk needs the
+> portal's URL (`VITE_PORTAL_API_URL`), but neither URL exists until deployed. That's why §4 is
+> *deploy → set URLs → redeploy*.
+
+---
+
+## 6. Generated secrets — paste targets
+
+Generated for this launch (also put these in `apps/portal/.env.local` for local parity):
+
+```
+CRON_SECRET=<generated — see chat / regenerate with: openssl rand -hex 32>
+KIOSK_CONFIG_SECRET=<generated — see chat / regenerate with: openssl rand -hex 32>
+```
+
+> Secrets are intentionally **not committed**. Regenerate any time with `openssl rand -hex 32`.
+
+---
+
+## 7. End-to-end smoke (after deploy) 🧑
+
+- [ ] Sign in as the prod admin → `/admin/users`, `/admin/properties`, `/admin/assignments` load.
+- [ ] Create the pilot property, set its routing DID, assign a primary agent, toggle `accepting_calls`.
+- [ ] Place a real inbound call → agent softphone rings → answer → call row goes RINGING→IN_PROGRESS→COMPLETED.
+- [ ] Kiosk: open the kiosk URL on the tablet → start a video session → two-way audio/video + Room#/notes save.
+- [ ] Emergency: trigger the in-call 911 path against **933** first; switch to 911 only when confident.
+- [ ] Owner portal on a phone → home glance cards, call history, incident detail all render.
+- [ ] `/admin/status`: Supabase card green; Sentry card shows a count + "View in Sentry"; `twilio_webhook`
+      card flips to "just now" after the test call; presence-sweep card green.
+- [ ] `/admin/audit` lists the actions you just performed; the action filter narrows correctly.
+- [ ] Trigger a deliberate error → confirm it reaches Sentry **with no phone number / recording URL** in the payload.
+- [ ] Negative: an agent/owner hitting `/admin/status` or `/admin/audit` is redirected.
+
+---
+
+## Appendix — prod bootstrap SQL
+
+Run **after** migrations `0001`–`0011`, and **after** creating the admin via
+Dashboard → Authentication → Add user (real email + password):
+
+```sql
+-- 1. Operator (single tenant for v1).
+insert into operators (id, name, slug)
+values (gen_random_uuid(), 'Lobby Connect', 'lobby-connect')
+on conflict (slug) do nothing;
+
+-- 2. Link the admin auth user to a profile.
+--    Replace <AUTH_USER_ID> with the id shown in Authentication → Users,
+--    and set the real name/email.
+insert into profiles (id, operator_id, role, full_name, email, status, active)
+values (
+  '<AUTH_USER_ID>',
+  (select id from operators where slug = 'lobby-connect'),
+  'ADMIN',
+  'Your Name',
+  'you@yourhotel.com',
+  'OFFLINE',
+  true
+);
+```
