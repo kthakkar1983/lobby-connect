@@ -118,7 +118,7 @@ function CreateUserDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
       <DialogTrigger asChild>
         <Button>
           <UserPlus className="mr-2 h-4 w-4" />
@@ -306,7 +306,7 @@ function ResetPasswordDialog(props: {
   }
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog open={props.open} onOpenChange={(o) => { if (!o) setError(null); props.onOpenChange(o); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Reset password for {props.user.full_name}</DialogTitle>
