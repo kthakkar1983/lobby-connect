@@ -15,6 +15,7 @@ export type RequiredProfile = {
   role: Role;
   operator_id: string;
   active: boolean;
+  must_change_password: boolean;
 };
 
 export async function requireRole(role: Role): Promise<RequiredProfile> {
@@ -30,12 +31,16 @@ export async function requireRole(role: Role): Promise<RequiredProfile> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, operator_id, active")
+    .select("id, role, operator_id, active, must_change_password")
     .eq("id", user.id)
     .maybeSingle();
 
   if (!profile || !profile.active) {
     redirect("/sign-in");
+  }
+
+  if (profile.must_change_password) {
+    redirect("/onboarding");
   }
 
   if (profile.role !== role) {

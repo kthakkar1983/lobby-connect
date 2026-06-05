@@ -54,17 +54,23 @@ export async function onboardingAction(
 
   const nameChanged = profile != null && profile.full_name !== fullName;
 
-  if (nameChanged) {
-    const { error: nameUpdateError } = await admin
-      .from("profiles")
-      .update({ full_name: fullName })
-      .eq("id", user.id);
-    if (nameUpdateError) {
-      return {
-        error:
-          "Password saved, but couldn't update your name. Try again from your account page.",
-      };
-    }
+  // Always clear must_change_password (the onboarding gate) here, and set the
+  // name in the same write when it changed. Admin client => auth.uid() is null
+  // => the 0012 self-column guard is skipped.
+  const profileUpdate: { must_change_password: boolean; full_name?: string } = {
+    must_change_password: false,
+  };
+  if (nameChanged) profileUpdate.full_name = fullName;
+
+  const { error: profileUpdateError } = await admin
+    .from("profiles")
+    .update(profileUpdate)
+    .eq("id", user.id);
+  if (profileUpdateError) {
+    return {
+      error:
+        "Password saved, but couldn't finish setup. Try again from your account page.",
+    };
   }
 
   await logAuditEvent({

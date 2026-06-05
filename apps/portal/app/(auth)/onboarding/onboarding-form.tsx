@@ -52,6 +52,7 @@ export default function OnboardingForm({
           minLength={8}
           autoComplete="new-password"
         />
+        <p className="text-xs text-text-muted">Must be at least 8 characters.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
