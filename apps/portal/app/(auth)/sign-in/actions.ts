@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { logSignIn } from "@/lib/auth/audit";
+import { mapSignInError } from "@/lib/auth/sign-in-errors";
 
 export type SignInState = {
   error: string | null;
@@ -26,7 +27,23 @@ export async function signInAction(
   });
 
   if (error || !data.user) {
-    return { error: "Invalid email or password." };
+    return { error: mapSignInError({ code: error?.code, status: error?.status }) };
+  }
+
+  // Block deactivated users with a specific message. GoTrue authenticates them
+  // (active is our app flag, not GoTrue's), so sign them back out before any
+  // protected route silently bounces them to /sign-in.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("active")
+    .eq("id", data.user.id)
+    .maybeSingle();
+
+  if (!profile || !profile.active) {
+    await supabase.auth.signOut();
+    return {
+      error: "This account has been deactivated. Please contact your administrator.",
+    };
   }
 
   await logSignIn(data.user.id);
