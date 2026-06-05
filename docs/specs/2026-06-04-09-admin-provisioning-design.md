@@ -162,11 +162,16 @@ export function mapSignInError(e: { code?: string; status?: number }): string {
     return "Too many attempts. Please wait a few minutes and try again.";
   if (e.code === "email_not_confirmed")
     return "Your account isn't fully set up yet. Please contact your administrator.";
-  if (e.code === "invalid_credentials")
-    return "Invalid email or password.";
-  return "Something went wrong. Please try again."; // unexpected / unknown
+  return "Invalid email or password."; // invalid_credentials + robust default
 }
 ```
+
+`error.code` is unreliable at supabase-js `^2.45` (often undefined), so the
+rate-limit branch keys on `status === 429` and the default covers
+`invalid_credentials` whether or not `code` is present. The **deactivated** case is
+handled separately in `signInAction` (a post-success `profiles.active` check), not
+here. A truly unexpected error (e.g. network) throws rather than returning an
+`AuthError`, so it surfaces via the action's try/catch as the same default.
 
 `signInAction`:
 
