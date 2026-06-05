@@ -405,3 +405,23 @@ re-enable (the `/auth/confirm` route + `docs/setup/2026-06-04-auth-email-templat
 3. **THEN run the full smoke** — `docs/setup/2026-06-04-smoke-test-checklist.md` §1 onward. §3 voice + §4 kiosk can use the admin as the agent; §2 RBAC + §6 owner need a second working user. Emergency §5 is 933-only (prod env is real 911 — flip to 933 + redeploy to test, then restore). The SMTP/email-template steps (`docs/setup/2026-06-04-auth-email-templates.md`) are now OPTIONAL (defer to post-pilot).
 
 **Superseded / no longer required for the pilot:** custom SMTP, editing the 2 email templates, hard-delete+re-invite — admin-provisioned temp passwords replace the email flow. Keep those docs only for the future email re-enable.
+
+---
+
+## 2026-06-05 (session 3) — SMOKE STARTED: voice + sign-out fixed, Plan 9 recovery validated in prod
+
+**Smoke is now IN PROGRESS** (`docs/setup/2026-06-04-smoke-test-checklist.md`). Confirmed working this session: **§1 seed**, **§2 RBAC**, **§4 kiosk video** (a COMPLETED VIDEO call row handled by Dilnoza). Plan 9's **stuck-user recovery flow validated end-to-end in prod** — both `bovarovadilnoza0@gmail.com` and `kumar@unbrandt.com` were reset → forced `/onboarding` → set own password → signed in. So admin-provisioned temp passwords + forced first-login change work on prod.
+
+**Two bugs found + fixed:**
+
+1. **Voice (§3) — `routing_did` mismatch (the "No one is available" cause). FIXED (data).** Inbound calls hit the not-in-service apology because `properties.routing_did` was `+14058610196` but the actual (and ONLY) Twilio number on the account is `+14058750410` (mistyped at property-create; audit showed one `property.created`, no later edit). Triangulated three ways: Twilio call `To`, the account's sole number, and the app's `TWILIO_PHONE_NUMBER` env all = `+14058750410`. Corrected on prod → `routing_did = +14058750410` (via MCP `execute_sql`; **no audit row** — a panel save would log one). Webhook lookup now matches.
+   - **The earlier Twilio error 11200 was a RED HERRING / already resolved.** It came from Twilio POSTing to a *deployment-protected* alias (`lobby-connect-portal-kumar-thakkars-projects.vercel.app`) → 401 + Vercel SSO wall → Twilio can't parse TwiML. But the **live** Twilio config (verified via Twilio REST API) already points `voice_url` + `status_callback` at the clean `https://lobby-connect-portal.vercel.app`, no fallback URL, one number. Reproduced the wall (clean URL → our `403 Invalid signature`; protected URL → `401` SSO). The old URL is **not hardcoded anywhere** in the repo. So nothing to change for the URL — it was historical.
+
+2. **Sign-out broken from the user-menu dropdown (admin/owner). FIXED + DEPLOYED (`d52f6be`).** The Sign-out `<form>` was nested inside `<DropdownMenuItem asChild>`; Radix's item pointer-event handling swallowed the inner submit, so `POST /auth/signout` never fired (verified: zero such requests in Vercel logs). Fix: render the POST form **outside** the menu, trigger via `formRef.requestSubmit()` in the item's `onSelect` (with `preventDefault` so Radix doesn't unmount the menu before navigation). `apps/portal/components/user-menu.tsx`, now `"use client"`. Agent layout was never affected (bare form, no menu). Deployed: prod `dpl_A5dnvjx2QfuYGrKPXXgi72Sma9QX` READY on the clean alias.
+
+**PICK UP HERE — finish the smoke:**
+1. **Retest §3 voice connect:** with Dilnoza or an admin signed into the portal (dashboard open → softphone registered), call `+14058750410` → softphone should ring → Answer → two-way audio; `calls` row `RINGING → IN_PROGRESS → COMPLETED`. Also do the no-answer case (apology + `NO_ANSWER`).
+2. **Retest sign-out** from the admin user menu (hard-refresh once to drop the stale client bundle).
+3. **§5 emergency (933-only)**, **§6 owner** (needs the 2nd recovered user), **§7 observability**. Emergency: flip `EMERGENCY_DIAL_NUMBER` to `933` + redeploy, test, then restore `911`.
+
+**Minor cleanups (non-blocking):** property **timezone** is `America/New_York` but Oklahoma City is Central → set `America/Chicago`. The `routing_did` fix was SQL-direct so it has no audit row (cosmetic) — re-saving the property in the panel would record one.

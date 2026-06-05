@@ -5,8 +5,15 @@
 
 **Status when this was written (2026-06-04):** prod Supabase live (migrations `0001`–`0011` + bootstrap
 applied), Supabase Auth Site URL + redirect URLs set, both apps deployed green on Vercel with full prod env,
-Twilio voice webhook repointed. Admin sign-in confirmed working. **Nothing in the smoke flow below has been
-run yet.**
+Twilio voice webhook repointed. Admin sign-in confirmed working.
+
+**Progress (2026-06-05):** §1 seed, §2 RBAC, §4 kiosk video **PASS**. Plan 9 stuck-user recovery validated
+in prod (both users reset → onboarding → signed in). **§3 voice** initially hit "no one is available" — root
+cause was a `routing_did` mismatch (property had `+14058610196`; the account's only Twilio number is
+`+14058750410`), now **corrected on prod**. (The Twilio error 11200 seen in logs was historical — the live
+webhook already points at the clean `lobby-connect-portal.vercel.app`, not the deployment-protected alias.)
+A **sign-out** bug from the user-menu dropdown was also fixed + deployed (`d52f6be`). **Still to run:** retest
+§3 voice *connect* (agent signed in to answer), §5 emergency (933-only), §6 owner, §7 observability.
 
 **Live URLs**
 - Portal: `https://lobby-connect-portal.vercel.app`
