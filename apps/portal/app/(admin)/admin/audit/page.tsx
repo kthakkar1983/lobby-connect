@@ -14,9 +14,11 @@ import { AuditTable } from "./audit-table";
 const KNOWN_ACTIONS = [
   "user.signed_in",
   "user.signed_out",
+  "user.created",
   "user.invited",
   "user.onboarded",
   "user.password_reset",
+  "user.password_reset_by_admin",
   "user.profile_edited",
   "user.role_changed",
   "user.active_toggled",

@@ -5,12 +5,13 @@ import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
-import { inviteUser } from "@/lib/users/invite";
+import { provisionUser } from "@/lib/users/provision";
 import { identityForRole } from "@/lib/users/twilio-identity";
 import {
   validateEmail,
   validateFullName,
   validateRole,
+  validatePassword,
 } from "@/lib/users/validate";
 import {
   assertNotSelfDemote,
@@ -18,15 +19,15 @@ import {
   assertNotSelfDelete,
   type UserPatch,
 } from "@/lib/users/guards";
-import { env } from "@/lib/env";
 import type { Role } from "@lc/shared";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-export async function inviteUserAction(input: {
+export async function createUserAction(input: {
   email: string;
   full_name: string;
   role: string;
+  tempPassword: string;
 }): Promise<ActionResult> {
   const actor = await requireRole("ADMIN");
 
@@ -39,24 +40,26 @@ export async function inviteUserAction(input: {
   const roleError = validateRole(input.role);
   if (roleError) return { ok: false, error: roleError };
 
+  const pwError = validatePassword(input.tempPassword);
+  if (pwError) return { ok: false, error: pwError };
+
   const admin = createAdminClient();
-  const appUrl = env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const result = await inviteUser({
+  const result = await provisionUser({
     admin,
     operatorId: actor.operator_id,
     input: {
       email: input.email.trim().toLowerCase(),
       full_name: input.full_name.trim(),
       role: input.role as Role,
+      tempPassword: input.tempPassword,
     },
-    redirectTo: `${appUrl}/auth/callback?next=/onboarding`,
   });
 
   if (!result.ok) return result;
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "user.invited",
+    action: "user.created",
     entityType: "user",
     entityId: result.userId,
     details: {
@@ -243,6 +246,56 @@ export async function hardDeleteUserAction(input: {
   if (error) {
     return { ok: false, error: `Failed to delete user: ${error.message}` };
   }
+
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+export async function resetPasswordAction(input: {
+  targetUserId: string;
+  tempPassword: string;
+}): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const pwError = validatePassword(input.tempPassword);
+  if (pwError) return { ok: false, error: pwError };
+
+  const supabase = await createServerClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("id, operator_id, email")
+    .eq("id", input.targetUserId)
+    .maybeSingle();
+
+  if (!target || target.operator_id !== actor.operator_id) {
+    return { ok: false, error: "User not found in your operator." };
+  }
+
+  const admin = createAdminClient();
+
+  const { error: pwUpdateError } = await admin.auth.admin.updateUserById(
+    input.targetUserId,
+    { password: input.tempPassword },
+  );
+  if (pwUpdateError) {
+    return { ok: false, error: `Failed to reset password: ${pwUpdateError.message}` };
+  }
+
+  const { error: flagError } = await admin
+    .from("profiles")
+    .update({ must_change_password: true })
+    .eq("id", input.targetUserId);
+  if (flagError) {
+    return { ok: false, error: `Failed to flag account: ${flagError.message}` };
+  }
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: "user.password_reset_by_admin",
+    entityType: "user",
+    entityId: input.targetUserId,
+    details: { email: target.email },
+  });
 
   revalidatePath("/admin/users");
   return { ok: true };
