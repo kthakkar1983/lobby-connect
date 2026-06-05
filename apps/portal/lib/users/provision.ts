@@ -4,24 +4,24 @@ import type { Database, Role } from "@lc/shared";
 
 import { identityForRole } from "@/lib/users/twilio-identity";
 
-export type InviteInput = {
+export type ProvisionInput = {
   email: string;
   full_name: string;
   role: Role;
+  tempPassword: string;
 };
 
-export type InviteResult =
+export type ProvisionResult =
   | { ok: true; userId: string }
   | { ok: false; error: string };
 
 type Args = {
   admin: SupabaseClient<Database>;
   operatorId: string;
-  input: InviteInput;
-  redirectTo: string;
+  input: ProvisionInput;
 };
 
-export async function inviteUser(args: Args): Promise<InviteResult> {
+export async function provisionUser(args: Args): Promise<ProvisionResult> {
   const email = args.input.email.trim().toLowerCase();
 
   // 1. Pre-check existing profile.
@@ -32,33 +32,30 @@ export async function inviteUser(args: Args): Promise<InviteResult> {
     .maybeSingle();
 
   if (existing) {
-    return {
-      ok: false,
-      error: "A user with this email already exists.",
-    };
+    return { ok: false, error: "A user with this email already exists." };
   }
 
-  // 2. Invite via Supabase Auth.
-  const { data: invited, error: inviteError } =
-    await args.admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: args.redirectTo,
-      data: {
+  // 2. Create a confirmed auth user with the admin-typed temp password.
+  //    email_confirm: true => no email is sent; the user can sign in immediately.
+  const { data: created, error: createError } =
+    await args.admin.auth.admin.createUser({
+      email,
+      password: args.input.tempPassword,
+      email_confirm: true,
+      user_metadata: {
         full_name: args.input.full_name,
         role: args.input.role,
       },
     });
 
-  if (inviteError || !invited?.user) {
-    const message = inviteError?.message ?? "unknown error";
-    return {
-      ok: false,
-      error: `Failed to send invitation: ${message}`,
-    };
+  if (createError || !created?.user) {
+    const message = createError?.message ?? "unknown error";
+    return { ok: false, error: `Failed to create user: ${message}` };
   }
 
-  const newUserId = invited.user.id;
+  const newUserId = created.user.id;
 
-  // 3. Insert profile.
+  // 3. Insert profile. must_change_password forces onboarding at first sign-in.
   const { error: insertError } = await args.admin.from("profiles").insert({
     id: newUserId,
     operator_id: args.operatorId,
@@ -68,15 +65,13 @@ export async function inviteUser(args: Args): Promise<InviteResult> {
     twilio_identity: identityForRole(args.input.role, newUserId),
     status: "OFFLINE",
     active: true,
+    must_change_password: true,
   });
 
   if (insertError) {
-    // 4. Roll back the auth user so the operator can retry cleanly.
+    // 4. Roll back the auth user so the admin can retry cleanly.
     await args.admin.auth.admin.deleteUser(newUserId);
-    return {
-      ok: false,
-      error: `Failed to create profile: ${insertError.message}`,
-    };
+    return { ok: false, error: `Failed to create profile: ${insertError.message}` };
   }
 
   return { ok: true, userId: newUserId };
