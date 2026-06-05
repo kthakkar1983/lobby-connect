@@ -9,7 +9,7 @@ export default async function UsersPage() {
   const { data: users, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, role, status, active, last_seen_at, created_at",
+      "id, full_name, email, role, status, active, last_seen_at, created_at, must_change_password",
     )
     .eq("operator_id", actor.operator_id)
     .order("created_at", { ascending: false });

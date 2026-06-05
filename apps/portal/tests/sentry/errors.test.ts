@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { getRecentErrorCount } from "@/lib/sentry/errors";
 
-function fakeFetch(body: unknown, ok = true, status = 200): typeof fetch {
+function fakeFetch(body: unknown, _ok = true, status = 200): typeof fetch {
   return (async () =>
     new Response(JSON.stringify(body), {
       status,

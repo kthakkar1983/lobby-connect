@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { UserRound, UserPlus, MoreHorizontal } from "lucide-react";
+import { UserRound, UserPlus, MoreHorizontal, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,10 +57,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  inviteUserAction,
+  createUserAction,
+  resetPasswordAction,
   updateUserAction,
   hardDeleteUserAction,
 } from "./actions";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export type UserRow = {
   id: string;
@@ -69,6 +71,7 @@ export type UserRow = {
   role: "ADMIN" | "AGENT" | "OWNER";
   status: "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
   active: boolean;
+  must_change_password: boolean;
   last_seen_at: string | null;
   created_at: string;
 };
@@ -90,7 +93,7 @@ function relative(iso: string | null): string {
   return `${months} months ago`;
 }
 
-function InviteDialog() {
+function CreateUserDialog() {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -98,14 +101,15 @@ function InviteDialog() {
   function onSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const result = await inviteUserAction({
+      const result = await createUserAction({
         email: String(formData.get("email") ?? ""),
         full_name: String(formData.get("full_name") ?? ""),
         role: String(formData.get("role") ?? ""),
+        tempPassword: String(formData.get("tempPassword") ?? ""),
       });
 
       if (result.ok) {
-        toast.success("Invitation sent");
+        toast.success("User created. Share their temporary password — they'll set their own at first sign-in.");
         setOpen(false);
       } else {
         setError(result.error);
@@ -118,41 +122,30 @@ function InviteDialog() {
       <DialogTrigger asChild>
         <Button>
           <UserPlus className="mr-2 h-4 w-4" />
-          Invite user
+          Add user
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Invite a user</DialogTitle>
+          <DialogTitle>Add a user</DialogTitle>
           <DialogDescription>
-            They&apos;ll receive an email with a link to set their password.
+            Set a temporary password and share it with them. They&apos;ll be
+            asked to choose their own at first sign-in.
           </DialogDescription>
         </DialogHeader>
         <form action={onSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="invite-email">Email</Label>
-            <Input
-              id="invite-email"
-              name="email"
-              type="email"
-              required
-              autoComplete="off"
-            />
+            <Label htmlFor="create-email">Email</Label>
+            <Input id="create-email" name="email" type="email" required autoComplete="off" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="invite-name">Full name</Label>
-            <Input
-              id="invite-name"
-              name="full_name"
-              type="text"
-              required
-              autoComplete="off"
-            />
+            <Label htmlFor="create-name">Full name</Label>
+            <Input id="create-name" name="full_name" type="text" required autoComplete="off" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="invite-role">Role</Label>
+            <Label htmlFor="create-role">Role</Label>
             <Select name="role" defaultValue="AGENT">
-              <SelectTrigger id="invite-role">
+              <SelectTrigger id="create-role">
                 <SelectValue placeholder="Choose a role" />
               </SelectTrigger>
               <SelectContent>
@@ -162,14 +155,23 @@ function InviteDialog() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="create-password">Temporary password</Label>
+            <PasswordInput
+              id="create-password"
+              name="tempPassword"
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-text-muted">At least 8 characters.</p>
+          </div>
           {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
+            <p role="alert" className="text-sm text-destructive">{error}</p>
           ) : null}
           <DialogFooter>
             <Button type="submit" disabled={pending}>
-              {pending ? "Sending…" : "Send invitation"}
+              {pending ? "Creating…" : "Create user"}
             </Button>
           </DialogFooter>
         </form>
@@ -279,8 +281,69 @@ function EditSheet(props: {
   );
 }
 
+function ResetPasswordDialog(props: {
+  user: UserRow;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function onSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await resetPasswordAction({
+        targetUserId: props.user.id,
+        tempPassword: String(formData.get("tempPassword") ?? ""),
+      });
+      if (result.ok) {
+        toast.success("Password reset. Share the temporary password — they'll set a new one at next sign-in.");
+        props.onOpenChange(false);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reset password for {props.user.full_name}</DialogTitle>
+          <DialogDescription>
+            Set a temporary password and share it with them. They&apos;ll be
+            asked to choose a new one at next sign-in.
+          </DialogDescription>
+        </DialogHeader>
+        <form action={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="reset-password">Temporary password</Label>
+            <PasswordInput
+              id="reset-password"
+              name="tempPassword"
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-text-muted">At least 8 characters.</p>
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">{error}</p>
+          ) : null}
+          <DialogFooter>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Resetting…" : "Reset password"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -330,6 +393,10 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
           <DropdownMenuItem onSelect={() => setEditOpen(true)}>
             Edit
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setResetOpen(true)}>
+            <KeyRound className="mr-2 h-4 w-4" />
+            Reset password
+          </DropdownMenuItem>
           {!isSelf ? (
             <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}>
               {user.active ? "Deactivate" : "Reactivate"}
@@ -351,6 +418,12 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
         actorId={actorId}
         open={editOpen}
         onOpenChange={setEditOpen}
+      />
+
+      <ResetPasswordDialog
+        user={user}
+        open={resetOpen}
+        onOpenChange={setResetOpen}
       />
 
       <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
@@ -443,7 +516,7 @@ export function UsersTable({ users, actorId }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           className="max-w-xs"
         />
-        <InviteDialog />
+        <CreateUserDialog />
       </div>
 
       {users.length === 0 ? (
@@ -451,7 +524,7 @@ export function UsersTable({ users, actorId }: Props) {
           <UserRound className="h-10 w-10 text-text-muted/40" />
           <p className="text-sm font-medium text-foreground">No users yet</p>
           <p className="text-xs text-text-muted">
-            Invite your first user to get started.
+            Add your first user to get started.
           </p>
         </div>
       ) : (
@@ -464,7 +537,7 @@ export function UsersTable({ users, actorId }: Props) {
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Active</TableHead>
-                <TableHead>Invited</TableHead>
+                <TableHead>Added</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -472,7 +545,14 @@ export function UsersTable({ users, actorId }: Props) {
               {filtered.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-foreground">
-                    {u.full_name}
+                    <span className="inline-flex items-center gap-2">
+                      {u.full_name}
+                      {u.must_change_password ? (
+                        <Badge variant="outline" className="text-xs font-normal text-text-muted">
+                          Pending setup
+                        </Badge>
+                      ) : null}
+                    </span>
                   </TableCell>
                   <TableCell className="text-text-muted">{u.email}</TableCell>
                   <TableCell>
