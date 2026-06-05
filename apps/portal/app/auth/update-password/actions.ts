@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { validatePassword } from "@/lib/users/validate";
 
 export type UpdatePasswordState = {
   error: string | null;
@@ -15,9 +16,8 @@ export async function updatePasswordAction(
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (!password || password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
-  }
+  const pwError = validatePassword(password);
+  if (pwError) return { error: pwError };
   if (password !== confirm) {
     return { error: "Passwords do not match." };
   }

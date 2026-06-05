@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { onboardingAction, type OnboardingState } from "./actions";
 
 const initialState: OnboardingState = { error: null };
@@ -44,10 +45,9 @@ export default function OnboardingForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="onboard-password">New password</Label>
-        <Input
+        <PasswordInput
           id="onboard-password"
           name="password"
-          type="password"
           required
           minLength={8}
           autoComplete="new-password"
@@ -57,10 +57,9 @@ export default function OnboardingForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="onboard-confirm">Confirm password</Label>
-        <Input
+        <PasswordInput
           id="onboard-confirm"
           name="confirm"
-          type="password"
           required
           autoComplete="new-password"
         />

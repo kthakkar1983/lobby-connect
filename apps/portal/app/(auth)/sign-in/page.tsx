@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { signInAction, type SignInState } from "./actions";
+import { PasswordInput } from "@/components/ui/password-input";
 
 const initialState: SignInState = { error: null };
 
@@ -28,12 +29,11 @@ export default function SignInPage() {
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-foreground">Password</span>
-        <input
+        <PasswordInput
           name="password"
-          type="password"
           autoComplete="current-password"
           required
-          className="rounded-md border border-input bg-background px-3 py-2 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-auto rounded-md border-input bg-background px-3 py-2"
         />
       </label>
 
@@ -51,12 +51,9 @@ export default function SignInPage() {
         {pending ? "Signing in…" : "Sign in"}
       </button>
 
-      <a
-        href="/forgot-password"
-        className="text-center text-sm text-text-muted hover:text-foreground"
-      >
-        Forgot password?
-      </a>
+      <p className="text-center text-sm text-text-muted">
+        Forgot your password? Contact your administrator.
+      </p>
     </form>
   );
 }
