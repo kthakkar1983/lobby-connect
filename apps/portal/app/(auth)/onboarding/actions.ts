@@ -69,7 +69,7 @@ export async function onboardingAction(
   if (profileUpdateError) {
     return {
       error:
-        "Password saved, but couldn't finish setup. Try again from your account page.",
+        "Password saved, but couldn't complete setup. Please try submitting again.",
     };
   }
 
