@@ -375,7 +375,7 @@ Plan 8 was the final v1 build plan — **v1 is feature-complete.** Remaining wor
 
 ## Plan 9 — Email-free admin provisioning — COMPLETE (`plan-09-admin-provisioning-complete`)
 
-**Branch:** `feat/09-admin-provisioning` (not yet merged to main as of this note). **Tag:** `plan-09-admin-provisioning-complete`.
+**Status: MERGED + SHIPPED TO PROD (2026-06-05).** Merged to `main` (fast-forward, tip `24a8dcb`), feature branch deleted, tag `plan-09-admin-provisioning-complete` pushed to origin.
 **Spec:** `docs/specs/2026-06-04-09-admin-provisioning-design.md` · **Plan:** `docs/plans/2026-06-04-09-admin-provisioning.md`.
 
 **This resolves the login blocker WITHOUT custom SMTP.** Instead of email invites, an admin now creates a
@@ -394,11 +394,14 @@ re-enable (the `/auth/confirm` route + `docs/setup/2026-06-04-auth-email-templat
 
 **Known/by-design behavior:** an admin can reset their OWN password (it's the only self-service password-change path in v1 since update-password is dormant) — doing so flags them and sends them through onboarding next sign-in. Intentional, not a lockout.
 
-**PICK UP HERE — make Plan 9 live + run the smoke (no SMTP needed):**
-1. **Merge `feat/09-admin-provisioning` → main and deploy** the portal to Vercel.
-2. **Apply migration 0012 to prod** (Supabase prod ref `ztunzdpmazwwwkxcpyfp`): run `supabase/migrations/0012_admin_provisioning.sql` via the dashboard SQL editor or MCP `apply_migration`. (Local already applied + verified.)
-3. **Set GoTrue prod Min password length = 8** (Auth → Providers → Email) so server matches the UI.
-4. **Recover the two broken prod users** the easy way now: `/admin/users` → each user → **Reset password** → set a temp password → hand it over → they sign in → forced onboarding. (No more hard-delete + re-invite; `bovarovadilnoza0@gmail.com` = pilot AGENT, `kumar@unbrandt.com` = throwaway.)
-5. **THEN run the smoke** — `docs/setup/2026-06-04-smoke-test-checklist.md` §1 onward. The SMTP/email-template steps in `docs/setup/2026-06-04-auth-email-templates.md` are now OPTIONAL (defer to post-pilot).
+**ALREADY DONE this session (2026-06-05) — do NOT redo:**
+- Merged to main + tagged + pushed (above).
+- **Migration 0012 APPLIED to prod** (`lobby-connect-prod`, ref `ztunzdpmazwwwkxcpyfp`) via MCP `apply_migration` — recorded in prod migration history as `admin_provisioning` (timestamp version `20260605044500`). Column + guard live on prod.
+- **Production deploy LIVE + verified** — Vercel Git auto-deploy on push to main built green (`next build` passed); deployment `dpl_J3CxSw6z1fqzTj5SMabQhmS9FvtL` (commit `24a8dcb`) serving the canonical `https://lobby-connect-portal.vercel.app`. Confirmed: `/sign-in` → 200 and serves the NEW build (the dormant "Contact your administrator" copy is present).
 
-**Superseded from the session-2 "PICK UP HERE" above:** custom SMTP, editing the 2 email templates, and hard-delete+re-invite are NO LONGER required for the pilot — admin-provisioned temp passwords replace the email flow. Keep them only for the future email re-enable.
+**PICK UP HERE — run the smoke (no SMTP needed; everything is deployed):**
+1. **(Optional, 30s)** Supabase dashboard → Auth → Providers → Email → **Min password length = 8** (UI already enforces 8; this just aligns the server). Not a blocker.
+2. **Recover the two stuck prod users — also smoke check #1:** sign in to prod as admin → **/admin/users** → **Reset password** on `bovarovadilnoza0@gmail.com` (pilot AGENT) and `kumar@unbrandt.com` (throwaway) → set a temp password → share it → they sign in → forced through `/onboarding` to set their own. Watch the **"Pending setup"** badge clear after they finish. (Claude can watch this live: Supabase MCP is on prod — read GoTrue logs `get_logs service=auth` to confirm the `password` grant → 200 + the flag clearing, and `execute_sql` to confirm `must_change_password` flips.)
+3. **THEN run the full smoke** — `docs/setup/2026-06-04-smoke-test-checklist.md` §1 onward. §3 voice + §4 kiosk can use the admin as the agent; §2 RBAC + §6 owner need a second working user. Emergency §5 is 933-only (prod env is real 911 — flip to 933 + redeploy to test, then restore). The SMTP/email-template steps (`docs/setup/2026-06-04-auth-email-templates.md`) are now OPTIONAL (defer to post-pilot).
+
+**Superseded / no longer required for the pilot:** custom SMTP, editing the 2 email templates, hard-delete+re-invite — admin-provisioned temp passwords replace the email flow. Keep those docs only for the future email re-enable.
