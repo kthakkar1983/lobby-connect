@@ -370,3 +370,35 @@ Plan 8 was the final v1 build plan — **v1 is feature-complete.** Remaining wor
 - **Analytics SyntaxError ("Unexpected token '<'") — cosmetic, NOT fixed.** Kumar enabled Web Analytics but `/_vercel/insights/script.js` still 404s (HTML). The actually-injected path is `/<hash>/script.js` at root, which the `_vercel` middleware exclusion doesn't cover. Sentry noise only — revisit later, or just remove `<Analytics/>` from the portal root layout.
 - **Custom SMTP + a real domain are launch prerequisites** for deliverability (gmail-from via 3rd-party SMTP may spam-folder). SMTP also gates template editing.
 - Daily-cron / emergency-933 / kiosk-token caveats unchanged (above).
+
+---
+
+## Plan 9 — Email-free admin provisioning — COMPLETE (`plan-09-admin-provisioning-complete`)
+
+**Branch:** `feat/09-admin-provisioning` (not yet merged to main as of this note). **Tag:** `plan-09-admin-provisioning-complete`.
+**Spec:** `docs/specs/2026-06-04-09-admin-provisioning-design.md` · **Plan:** `docs/plans/2026-06-04-09-admin-provisioning.md`.
+
+**This resolves the login blocker WITHOUT custom SMTP.** Instead of email invites, an admin now creates a
+user with a typed **temporary password** (no email sent), and the user is forced to set their own password
+at first sign-in. SMTP / email templates are no longer a pilot prerequisite — they become a *post-pilot*
+re-enable (the `/auth/confirm` route + `docs/setup/2026-06-04-auth-email-templates.md` are the dormant seam).
+
+**What shipped (10 TDD tasks, 257 tests, typecheck + lint green):**
+- `provisionUser` (`lib/users/provision.ts`, replaces `invite.ts`) → `admin.auth.admin.createUser({ email_confirm:true, user_metadata })` + profile insert with `must_change_password:true`; rollback on insert failure.
+- Migration **0012**: `profiles.must_change_password boolean not null default false` + **column-guard trigger** `enforce_profile_self_columns` (closes a real privilege-escalation hole — `profiles_update_self` was row-level only, so a non-admin could PATCH their own `role`/`active`; now only `full_name` is self-editable). **Verified locally via simulated-JWT SQL**: AGENT self-promote/self-flag/self-deactivate all blocked; `full_name` + service-role writes allowed.
+- `requireRole` gate: `must_change_password` users are redirected to `/onboarding` (after the active check, before the role check); onboarding clears the flag via the admin client.
+- `createUserAction` + `resetPasswordAction` (admin "Reset password" → new temp password + re-flags). Audit `user.created` / `user.password_reset_by_admin` (added to `/admin/audit` catalog).
+- Sign-in specific errors (`lib/auth/sign-in-errors.ts` `mapSignInError`) + **deactivated-user block** (post-auth `profiles.active` check → signOut + specific message; closes the old silent bounce).
+- Reusable `PasswordInput` show/hide on every password field (sign-in, onboarding, update-password, admin create + reset).
+- "Pending setup" badge on `/admin/users` when `must_change_password`. "Forgot password?" link replaced with "Contact your administrator." (email reset dormant).
+
+**Known/by-design behavior:** an admin can reset their OWN password (it's the only self-service password-change path in v1 since update-password is dormant) — doing so flags them and sends them through onboarding next sign-in. Intentional, not a lockout.
+
+**PICK UP HERE — make Plan 9 live + run the smoke (no SMTP needed):**
+1. **Merge `feat/09-admin-provisioning` → main and deploy** the portal to Vercel.
+2. **Apply migration 0012 to prod** (Supabase prod ref `ztunzdpmazwwwkxcpyfp`): run `supabase/migrations/0012_admin_provisioning.sql` via the dashboard SQL editor or MCP `apply_migration`. (Local already applied + verified.)
+3. **Set GoTrue prod Min password length = 8** (Auth → Providers → Email) so server matches the UI.
+4. **Recover the two broken prod users** the easy way now: `/admin/users` → each user → **Reset password** → set a temp password → hand it over → they sign in → forced onboarding. (No more hard-delete + re-invite; `bovarovadilnoza0@gmail.com` = pilot AGENT, `kumar@unbrandt.com` = throwaway.)
+5. **THEN run the smoke** — `docs/setup/2026-06-04-smoke-test-checklist.md` §1 onward. The SMTP/email-template steps in `docs/setup/2026-06-04-auth-email-templates.md` are now OPTIONAL (defer to post-pilot).
+
+**Superseded from the session-2 "PICK UP HERE" above:** custom SMTP, editing the 2 email templates, and hard-delete+re-invite are NO LONGER required for the pilot — admin-provisioned temp passwords replace the email flow. Keep them only for the future email re-enable.
