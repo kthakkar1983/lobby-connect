@@ -73,6 +73,7 @@ export type Database = {
           twilio_identity: string | null;
           status: ProfileStatus;
           active: boolean;
+          must_change_password: boolean;
           mfa_secret: string | null;
           last_seen_at: string | null;
           created_at: string;
@@ -87,6 +88,7 @@ export type Database = {
           twilio_identity?: string | null;
           status?: ProfileStatus;
           active?: boolean;
+          must_change_password?: boolean;
           mfa_secret?: string | null;
           last_seen_at?: string | null;
           created_at?: string;
@@ -101,6 +103,7 @@ export type Database = {
           twilio_identity?: string | null;
           status?: ProfileStatus;
           active?: boolean;
+          must_change_password?: boolean;
           mfa_secret?: string | null;
           last_seen_at?: string | null;
           created_at?: string;
