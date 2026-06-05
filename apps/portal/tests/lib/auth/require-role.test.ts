@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 function mockProfileQuery(result: {
-  data: { id: string; role: "AGENT" | "ADMIN" | "OWNER"; operator_id: string; active: boolean } | null;
+  data: { id: string; role: "AGENT" | "ADMIN" | "OWNER"; operator_id: string; active: boolean; must_change_password: boolean } | null;
   error: { message: string } | null;
 }) {
   singleMock.mockResolvedValueOnce(result);
@@ -52,7 +52,7 @@ describe("requireRole", () => {
       error: null,
     });
     mockProfileQuery({
-      data: { id: "user-1", role: "AGENT", operator_id: "op-1", active: true },
+      data: { id: "user-1", role: "AGENT", operator_id: "op-1", active: true, must_change_password: false },
       error: null,
     });
     const { requireRole } = await import("@/lib/auth/require-role");
@@ -67,12 +67,27 @@ describe("requireRole", () => {
       error: null,
     });
     mockProfileQuery({
-      data: { id: "user-1", role: "ADMIN", operator_id: "op-1", active: false },
+      data: { id: "user-1", role: "ADMIN", operator_id: "op-1", active: false, must_change_password: false },
       error: null,
     });
     const { requireRole } = await import("@/lib/auth/require-role");
 
     await expect(requireRole("ADMIN")).rejects.toThrow("__redirect__:/sign-in");
+  });
+
+  it("redirects to /onboarding when must_change_password is true", async () => {
+    getUserMock.mockResolvedValueOnce({
+      data: { user: { id: "user-1" } },
+      error: null,
+    });
+    mockProfileQuery({
+      data: { id: "user-1", role: "ADMIN", operator_id: "op-1", active: true, must_change_password: true },
+      error: null,
+    });
+    const { requireRole } = await import("@/lib/auth/require-role");
+
+    await expect(requireRole("ADMIN")).rejects.toThrow("__redirect__:/onboarding");
+    expect(redirectMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("returns the profile when role matches and user is active", async () => {
@@ -81,7 +96,7 @@ describe("requireRole", () => {
       error: null,
     });
     mockProfileQuery({
-      data: { id: "user-1", role: "ADMIN", operator_id: "op-1", active: true },
+      data: { id: "user-1", role: "ADMIN", operator_id: "op-1", active: true, must_change_password: false },
       error: null,
     });
     const { requireRole } = await import("@/lib/auth/require-role");
@@ -92,6 +107,7 @@ describe("requireRole", () => {
       role: "ADMIN",
       operator_id: "op-1",
       active: true,
+      must_change_password: false,
     });
     expect(redirectMock).not.toHaveBeenCalled();
   });
