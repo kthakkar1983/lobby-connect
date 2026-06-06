@@ -125,6 +125,21 @@ open** (this connects the softphone). Make sure mic permission is granted.
 - [ ] **No-answer case:** start a kiosk call and don't accept on the agent side. **Expected:** kiosk times
       out to the apology screen; `calls` row ends `NO_ANSWER`.
 
+### 4b. Resilience — crash / disconnect recovery (session 6)
+
+- [ ] **Crash recovery (the original bug):** during a connected video call, **kill the kiosk tab** (or hard-reload
+      it). **Expected:** the agent returns to ready **and** the `calls` row finalizes — it must **not** stay
+      stuck `IN_PROGRESS` (the agent-side finalizer closes it via Agora `user-left`; verify in owner call
+      history / DB).
+- [ ] **Reconnect overlay:** mid-call, toggle the kiosk's WiFi **off briefly** → a **"Reconnecting…"** overlay
+      appears → back **on** → call resumes. Kill the network **hard** → kiosk falls through to the **apology
+      screen → home**.
+- [ ] **Reaper backstop:** any video call left `IN_PROGRESS`/`RINGING` past its window is closed by the daily
+      `0 20 * * *` reaper (`FAILED`+`flagged_for_review` / `NO_ANSWER`). Confirm via `/admin/status`
+      (`cron_reap_stale_calls` heartbeat) after a run. (First run will also close the pre-fix leak `bfe29f15`.)
+- [ ] **Owner playbook pop-up:** owner portal → property → **View** playbook → opens in a new tab reliably,
+      even with a pop-up blocker on (no silent no-op).
+
 ---
 
 ## 5. Emergency path — ⚠️ 933 ONLY
