@@ -5,6 +5,7 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "outputDirectory": ".next",
   "crons": [
-    { "path": "/api/cron/mark-stale-offline", "schedule": "0 8 * * *" }
+    { "path": "/api/cron/mark-stale-offline", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/reap-stale-calls", "schedule": "*/15 * * * *" }
   ]
 }
