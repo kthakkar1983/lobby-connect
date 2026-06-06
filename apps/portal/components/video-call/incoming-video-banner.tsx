@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
+
+import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 
 export interface IncomingVideoCall {
   id: string;
@@ -9,10 +11,13 @@ export interface IncomingVideoCall {
   propertyName: string;
 }
 
-const POLL_MS = 20_000;
+// Poll briskly so the ring starts within a few seconds of the guest tapping
+// Call (the agent has no push signal for video — see the kiosk-video design doc).
+const POLL_MS = 3_000;
 
 export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVideoCall) => void }) {
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
+  const ringtoneRef = useRef<Ringtone | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -36,6 +41,27 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
       window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  // Build the ringtone once, on the client only (new Audio needs the browser).
+  useEffect(() => {
+    const audio = new Audio("/sounds/ring.mp3");
+    audio.loop = true;
+    audio.preload = "auto";
+    const ringtone = createRingtone(audio);
+    ringtoneRef.current = ringtone;
+    return () => {
+      ringtone.stop();
+      ringtoneRef.current = null;
+    };
+  }, []);
+
+  // Ring while a call is waiting; silence it once answered, declined, or gone.
+  // (Accepting unmounts this banner, whose cleanup also stops the ring.)
+  const isRinging = calls.length > 0;
+  useEffect(() => {
+    if (isRinging) ringtoneRef.current?.start();
+    else ringtoneRef.current?.stop();
+  }, [isRinging]);
 
   if (calls.length === 0) return null;
   const call = calls[0];
