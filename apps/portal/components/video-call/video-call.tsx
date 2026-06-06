@@ -102,6 +102,10 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
           body: JSON.stringify({ callId, roomNumber, notes }),
         }).catch(() => {});
       }
+      // Finalize the call row server-side. The kiosk normally owns this, but if
+      // it crashed mid-call (the `user-left` that triggered this handler), it
+      // never will — so close it here. Idempotent server-side if the kiosk wins.
+      await fetch(`/api/calls/${callId}/end-video`, { method: "POST" }).catch(() => {});
       audioRef.current?.close();
       videoRef.current?.close();
       await clientRef.current?.leave();
