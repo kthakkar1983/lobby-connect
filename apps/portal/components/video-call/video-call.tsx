@@ -21,6 +21,7 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const videoRef = useRef<ICameraVideoTrack | null>(null);
+  const finalizingRef = useRef(false);
 
   // Accept the call, then join Agora.
   // NOTE: the cleanup must tear down the client/tracks, and we must bail on
@@ -94,6 +95,10 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
   }, [callId]);
 
   async function handleEnd() {
+    // Idempotent: user-left (guest hung up / crashed) and the End button can both
+    // reach here — run the finalize + teardown exactly once.
+    if (finalizingRef.current) return;
+    finalizingRef.current = true;
     try {
       if (roomNumber || notes) {
         await fetch("/api/calls/notes", {

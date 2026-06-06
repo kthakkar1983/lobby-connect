@@ -73,7 +73,7 @@ describe("GET /api/cron/reap-stale-calls", () => {
     expect(inProgress!.payload.state).toBe("FAILED");
     expect(inProgress!.payload.flagged_for_review).toBe(true);
     expect(inProgress!.payload.ended_at).toEqual(expect.any(String));
-    expect(inProgress!.filters).toHaveProperty("answered_at__lt");
+    expect(inProgress!.filters).toHaveProperty("created_at__lt");
   });
 
   it("closes stale RINGING video calls as NO_ANSWER", async () => {

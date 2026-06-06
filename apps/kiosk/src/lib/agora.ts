@@ -28,9 +28,12 @@ export async function joinChannel(opts: {
 
   client.on("user-published", async (user, mediaType) => {
     await client.subscribe(user, mediaType);
-    if (mediaType === "video") opts.onRemoteVideo(user.videoTrack);
+    if (mediaType === "video") {
+      opts.onRemoteVideo(user.videoTrack);
+      // Fire "agent present" once, on video — not on each published track.
+      opts.onAgentJoined();
+    }
     if (mediaType === "audio") user.audioTrack?.play();
-    opts.onAgentJoined();
   });
   client.on("user-left", () => opts.onAgentLeft());
   client.on("connection-state-change", (cur, prev, reason) =>

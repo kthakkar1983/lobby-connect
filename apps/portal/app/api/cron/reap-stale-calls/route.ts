@@ -28,8 +28,10 @@ export async function GET(request: Request): Promise<NextResponse> {
   const endedAt = new Date(now).toISOString();
   const admin = createAdminClient();
 
-  // Answered video calls live past any plausible front-desk length → the kiosk
-  // that owns finalization died mid-call. Close as FAILED and flag for review.
+  // Video calls still IN_PROGRESS long past any plausible front-desk length →
+  // the kiosk that owns finalization died mid-call. Keyed on created_at (always
+  // set) rather than answered_at (which a partial write could leave NULL), so
+  // the backstop has no blind spot. Close as FAILED and flag for review.
   await admin
     .from("calls")
     .update({
@@ -40,7 +42,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     })
     .eq("channel", "VIDEO")
     .eq("state", "IN_PROGRESS")
-    .lt("answered_at", inProgressBefore);
+    .lt("created_at", inProgressBefore);
 
   // Video calls stuck ringing far past the 120s window → kiosk died before the
   // agent answered. Close as NO_ANSWER.

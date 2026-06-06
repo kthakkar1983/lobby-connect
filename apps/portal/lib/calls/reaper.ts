@@ -16,7 +16,7 @@ export const REAP_IN_PROGRESS_AFTER_MS = 30 * 60_000; // 30 min
 export const REAP_RINGING_AFTER_MS = 10 * 60_000; // 10 min
 
 export interface ReapCutoffs {
-  /** Reap IN_PROGRESS video rows whose `answered_at` is before this ISO time. */
+  /** Reap IN_PROGRESS video rows whose `created_at` is before this ISO time. */
   readonly inProgressBefore: string;
   /** Reap RINGING video rows whose `ring_started_at` is before this ISO time. */
   readonly ringingBefore: string;
