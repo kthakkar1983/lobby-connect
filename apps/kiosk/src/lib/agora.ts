@@ -21,6 +21,7 @@ export async function joinChannel(opts: {
   onRemoteVideo: (track: IAgoraRTCRemoteUser["videoTrack"]) => void;
   onAgentJoined: () => void;
   onAgentLeft: () => void;
+  onConnectionStateChange: (current: string, previous: string, reason?: string) => void;
 }): Promise<KioskAgoraSession> {
   const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
   const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
@@ -32,6 +33,9 @@ export async function joinChannel(opts: {
     opts.onAgentJoined();
   });
   client.on("user-left", () => opts.onAgentLeft());
+  client.on("connection-state-change", (cur, prev, reason) =>
+    opts.onConnectionStateChange(cur, prev, reason),
+  );
 
   await client.join(opts.appId, opts.channel, opts.token, opts.uid);
   const localAudio = await AgoraRTC.createMicrophoneAudioTrack();
@@ -45,7 +49,13 @@ export async function joinChannel(opts: {
     leave: async () => {
       localAudio.close();
       localVideo.close();
-      await client.leave();
+      // A leave during a network drop can reject (already disconnected) — the
+      // session is over either way, so swallow it.
+      try {
+        await client.leave();
+      } catch {
+        /* already disconnected */
+      }
     },
   };
 }

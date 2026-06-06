@@ -4,6 +4,7 @@ import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from
 import { reduce, initialState } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
+import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
 import { Home } from "./screens/Home";
 import { RecordingNotice } from "./screens/RecordingNotice";
@@ -21,6 +22,7 @@ export function App() {
   const [localVideo, setLocalVideo] = useState<ICameraVideoTrack | null>(null);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const sessionRef = useRef<KioskAgoraSession | null>(null);
   const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
@@ -43,6 +45,7 @@ export function App() {
     setLocalVideo(null);
     setMuted(false);
     setCameraOff(false);
+    setReconnecting(false);
   }, []);
 
   const onAccept = useCallback(async () => {
@@ -59,6 +62,22 @@ export function App() {
           void teardown();
           void endCall(callIdRef.current!, "completed");
           dispatch({ type: "END_CALL" });
+        },
+        onConnectionStateChange: (cur, _prev, reason) => {
+          const outcome = interpretConnectionState(cur, reason);
+          if (outcome === "lost") {
+            // SDK is retrying — show the overlay, don't tear down yet.
+            setReconnecting(true);
+          } else if (outcome === "restored") {
+            setReconnecting(false);
+          } else if (outcome === "terminal") {
+            // SDK gave up. Close the call and fall through to the apology screen.
+            setReconnecting(false);
+            const id = callIdRef.current;
+            void teardown();
+            if (id) void endCall(id, "failed");
+            dispatch({ type: "ERROR" });
+          }
         },
       });
       sessionRef.current = session;
@@ -106,16 +125,46 @@ export function App() {
     return <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>Loading…</div>;
   }
 
-  switch (state.screen) {
-    case "home":
-      return <Home config={config} onCall={() => dispatch({ type: "TAP_CALL" })} />;
-    case "disclosure":
-      return <RecordingNotice onOk={onAccept} />;
-    case "ringing":
-      return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
-    case "connected":
-      return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd} />;
-    case "apology":
-      return <Apology message={config.apologyMessage} phone={config.phoneNumber} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
-  }
+  const screen = (() => {
+    switch (state.screen) {
+      case "home":
+        return <Home config={config} onCall={() => dispatch({ type: "TAP_CALL" })} />;
+      case "disclosure":
+        return <RecordingNotice onOk={onAccept} />;
+      case "ringing":
+        return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
+      case "connected":
+        return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd} />;
+      case "apology":
+        return <Apology message={config.apologyMessage} phone={config.phoneNumber} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
+    }
+  })();
+
+  return (
+    <>
+      {screen}
+      {reconnecting && <ReconnectingOverlay />}
+    </>
+  );
+}
+
+/** Shown over the live call while the Agora SDK retries a dropped connection. */
+function ReconnectingOverlay() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.6)",
+        color: "#fff",
+        fontSize: 24,
+        zIndex: 50,
+      }}
+    >
+      Reconnecting…
+    </div>
+  );
 }
