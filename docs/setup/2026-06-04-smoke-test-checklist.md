@@ -23,6 +23,14 @@ Sentry scrub (ingestion confirmed + unit-test-covered). **Only §5 emergency (93
 `EMERGENCY_DIAL_NUMBER` left untouched at real **`911`**. Full Sentry diagnosis (incl. the `vercel env pull`
 Sensitive-var gotcha) is in `memory/project-status.md` → session-4.
 
+**Progress (2026-06-06, session 5):** triaged 4 issues Kumar found in testing — 3 fixed + deployed, 1 non-bug.
+**§3 voice** now shows **"Incoming call · {hotel}"** on the agent ring (property name forwarded via a `<Client>`
+TwiML parameter) — verified live. **§4 kiosk video** now **plays a ringtone** on the agent dashboard
+(`public/sounds/ring.mp3`) and the incoming-video poll was tightened 20s → 3s — verified live. The softphone
+now **auto-refreshes its Twilio token** (was dropping after ~1h; unit-tested, long-soak left to natural use).
+The owner "double audit" was **not a bug** (one row per changed field). Details: `memory/project-status.md`
+→ session-5. **Still only §5 emergency (933) remains.**
+
 **Live URLs**
 - Portal: `https://lobby-connect-portal.vercel.app`
 - Kiosk: `https://lobby-connect-kiosk.vercel.app`
@@ -89,6 +97,8 @@ open** (this connects the softphone). Make sure mic permission is granted.
 
 - [ ] **Answer case:** call the Twilio routing number from your phone. **Expected:** you hear the greeting;
       the portal softphone rings; click **Answer** → two-way audio works.
+- [ ] **Property name on ring (session 5):** the incoming softphone banner reads **"Incoming call · {hotel}"**,
+      not the bare "Incoming call…".
 - [ ] Hang up. **Expected (check `/admin/audit` or the DB):** the `calls` row went
       `RINGING → IN_PROGRESS → COMPLETED`, with `handled_by`, `answered_at`, and a non-null `duration_seconds`.
 - [ ] **No-answer case:** call again and **don't** answer. **Expected:** after the ring window (~120s) you
@@ -107,6 +117,9 @@ open** (this connects the softphone). Make sure mic permission is granted.
 - [ ] Keep the portal open on the laptop as the assigned agent (dashboard visible).
 - [ ] **Answer case:** on the kiosk, start a call (tap through the recording notice). **Expected:** the agent
       dashboard shows an **incoming-video banner** → click **Accept** → two-way video in the 40/60 split.
+- [ ] **Ringtone (session 5):** when the incoming-video banner appears, the agent also **hears `ring.mp3`
+      looping** (starts within ~3s; stops on Accept / decline / timeout). Needs one prior click on the
+      dashboard to unlock audio.
 - [ ] On the agent side, enter a **Room #** and a **note** during the call. **Expected:** they save.
 - [ ] End the call. **Expected:** `calls` row `RINGING → IN_PROGRESS → COMPLETED` with `duration_seconds`.
 - [ ] **No-answer case:** start a kiosk call and don't accept on the agent side. **Expected:** kiosk times
