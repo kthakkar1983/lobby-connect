@@ -103,13 +103,15 @@ describe("POST /api/twilio/voice/incoming", () => {
   });
 
   it("dials the assigned agent and inserts a RINGING call", async () => {
-    canned.property = { id: "p1", operator_id: "op1", active: true };
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
     canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
     expect(xml).toContain(
-      '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>',
+      '<Client><Identity>lc_a1</Identity>' +
+        '<Parameter name="callId" value="call-1"/>' +
+        '<Parameter name="propertyName" value="Hotel One"/></Client>',
     );
     expect(xml).toContain('action="https://abc.trycloudflare.com/api/twilio/voice/dial-result"');
     expect(insertSpy).toHaveBeenCalledTimes(1);
@@ -125,7 +127,7 @@ describe("POST /api/twilio/voice/incoming", () => {
   });
 
   it("plays apology + records NO_ANSWER when nobody is reachable", async () => {
-    canned.property = { id: "p1", operator_id: "op1", active: true };
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = null;
     canned.availRows = [];
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA2" }));
@@ -137,7 +139,7 @@ describe("POST /api/twilio/voice/incoming", () => {
   });
 
   it("is idempotent — an existing call for the CallSid is not re-inserted", async () => {
-    canned.property = { id: "p1", operator_id: "op1", active: true };
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
     canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
     canned.existingCall = { id: "call1" };
@@ -146,7 +148,7 @@ describe("POST /api/twilio/voice/incoming", () => {
   });
 
   it("dials both the assigned agent and an accepting admin", async () => {
-    canned.property = { id: "p1", operator_id: "op1", active: true };
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
     canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
     canned.availRows = [{ profile_id: "x1" }];

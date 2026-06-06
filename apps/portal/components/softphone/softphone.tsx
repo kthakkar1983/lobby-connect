@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
@@ -24,6 +25,9 @@ interface SoftphoneProps {
 }
 
 const HEARTBEAT_MS = 20_000;
+// Fire the Device's `tokenWillExpire` 30s before expiry (SDK default is 10s,
+// too tight to reliably refetch before the token lapses).
+const TOKEN_REFRESH_LEAD_MS = 30_000;
 
 async function postPresence(status: PresenceStatus): Promise<void> {
   await fetch("/api/presence", {
@@ -33,12 +37,20 @@ async function postPresence(status: PresenceStatus): Promise<void> {
   }).catch(() => {});
 }
 
+async function fetchVoiceToken(): Promise<string> {
+  const res = await fetch("/api/twilio/token");
+  if (!res.ok) throw new Error("token");
+  const { token } = (await res.json()) as { token: string };
+  return token;
+}
+
 export function Softphone({ role }: SoftphoneProps) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [ready, setReady] = useState(true); // login defaults to AVAILABLE
   const [muted, setMuted] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [incomingProperty, setIncomingProperty] = useState("");
   const [emergencyActive, setEmergencyActive] = useState(false);
   // Mirror into a ref so the SDK-vs-conference branch in the callbacks below
   // always reads the current value without re-creating the callbacks.
@@ -67,13 +79,23 @@ export function Softphone({ role }: SoftphoneProps) {
 
     (async () => {
       try {
-        const res = await fetch("/api/twilio/token");
-        if (!res.ok) throw new Error("token");
-        const { token } = (await res.json()) as { token: string };
+        const token = await fetchVoiceToken();
 
         const { Device } = await import("@twilio/voice-sdk");
-        device = new Device(token, { closeProtection: true });
+        device = new Device(token, {
+          closeProtection: true,
+          tokenRefreshMs: TOKEN_REFRESH_LEAD_MS,
+        });
         deviceRef.current = device;
+
+        // The access token is short-lived (1h). Refresh it in place before it
+        // expires so the Device never deregisters mid-shift — otherwise the
+        // line silently drops and only a page reload recovers it.
+        attachTokenAutoRefresh(device, {
+          fetchToken: fetchVoiceToken,
+          onRefreshError: (error) =>
+            console.error("[softphone] token refresh failed:", error),
+        });
 
         device.on("registered", () => {
           if (!cancelled) setPhase("ready");
@@ -85,7 +107,10 @@ export function Softphone({ role }: SoftphoneProps) {
         device.on("incoming", (call: any) => {
           callRef.current = call;
           callIdRef.current = call.customParameters?.get("callId") ?? "";
-          if (!cancelled) setPhase("incoming");
+          if (!cancelled) {
+            setIncomingProperty(call.customParameters?.get("propertyName") ?? "");
+            setPhase("incoming");
+          }
           call.on("disconnect", () => {
             void endCall();
           });
@@ -237,7 +262,9 @@ export function Softphone({ role }: SoftphoneProps) {
 
       {phase === "incoming" && (
         <div className="mt-3 space-y-2">
-          <p className="text-text-muted">Incoming call…</p>
+          <p className="text-text-muted">
+            {incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call…"}
+          </p>
           <div className="flex gap-2">
             <button
               type="button"

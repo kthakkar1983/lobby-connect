@@ -13,6 +13,7 @@ const opts = {
   actionUrl: "https://x.test/api/twilio/voice/dial-result",
   apologyMessage: "Sorry, no one is available.",
   callId: "call-1",
+  propertyName: "Grand Hotel",
 };
 
 describe("twiml builders", () => {
@@ -23,7 +24,9 @@ describe("twiml builders", () => {
         "<Response>" +
         "<Say>Connecting you to the front desk, one moment.</Say>" +
         '<Dial timeout="120" action="https://x.test/api/twilio/voice/dial-result" method="POST">' +
-        '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>' +
+        '<Client><Identity>lc_a1</Identity>' +
+        '<Parameter name="callId" value="call-1"/>' +
+        '<Parameter name="propertyName" value="Grand Hotel"/></Client>' +
         "</Dial>" +
         "</Response>",
     );
@@ -35,8 +38,22 @@ describe("twiml builders", () => {
       opts,
     );
     expect(xml).toContain(
-      '<Client><Identity>lc_a1</Identity><Parameter name="callId" value="call-1"/></Client>' +
-        '<Client><Identity>lc_x1</Identity><Parameter name="callId" value="call-1"/></Client>',
+      '<Client><Identity>lc_a1</Identity>' +
+        '<Parameter name="callId" value="call-1"/>' +
+        '<Parameter name="propertyName" value="Grand Hotel"/></Client>' +
+        '<Client><Identity>lc_x1</Identity>' +
+        '<Parameter name="callId" value="call-1"/>' +
+        '<Parameter name="propertyName" value="Grand Hotel"/></Client>',
+    );
+  });
+
+  it("passes the property name as a Client parameter, XML-escaped", () => {
+    const xml = buildIncomingTwiml([{ identity: "lc_a1" }], {
+      ...opts,
+      propertyName: "Tom & Jerry Inn",
+    });
+    expect(xml).toContain(
+      '<Parameter name="propertyName" value="Tom &amp; Jerry Inn"/>',
     );
   });
 

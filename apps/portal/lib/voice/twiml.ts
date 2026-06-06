@@ -17,6 +17,8 @@ export interface IncomingTwimlOpts {
   actionUrl: string;
   apologyMessage: string;
   callId: string;
+  /** Hotel name, surfaced on the agent's ringing softphone so they know who they're answering for. */
+  propertyName: string;
 }
 
 export function buildApologyTwiml(message: string): string {
@@ -43,7 +45,8 @@ export function buildIncomingTwiml(
     .map(
       (t) =>
         `<Client><Identity>${escapeXml(t.identity)}</Identity>` +
-        `<Parameter name="callId" value="${escapeXml(opts.callId)}"/></Client>`,
+        `<Parameter name="callId" value="${escapeXml(opts.callId)}"/>` +
+        `<Parameter name="propertyName" value="${escapeXml(opts.propertyName)}"/></Client>`,
     )
     .join("");
 

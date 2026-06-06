@@ -48,7 +48,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // 1. Property by routing_did (active only).
     const { data: property } = await admin
       .from("properties")
-      .select("id, operator_id, active")
+      .select("id, operator_id, active, name")
       .eq("routing_did", to)
       .maybeSingle();
 
@@ -144,6 +144,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         actionUrl,
         apologyMessage: APOLOGY,
         callId,
+        propertyName: property.name,
       }),
     );
   } catch (err) {
