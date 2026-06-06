@@ -470,3 +470,34 @@ The "fresh chat" session 4 asked for. Kumar reported 4 issues from smoke testing
 1. **More testing** — Kumar will run further smoke and surface any new issues; triage those first.
 2. **§5 emergency (933)** — still parked; run when ready. Sequence unchanged (smoke §5 / session-4 entry): only flip `EMERGENCY_DIAL_NUMBER=911→933` + redeploy when kiosk+agent are ready to call immediately, test the conference (guest+agent+933 + OKC address read-back + `incidents` row + `calls.emergency_conference_name`), confirm agent mute/leave, then restore **`911`** + redeploy + explicitly verify (value isn't readable via CLI).
 3. (Optional) long-soak confirm #2; downsize `ring.mp3`; group multi-field audit rows in the viewer.
+
+---
+
+## 2026-06-06 (session 6) — root-caused the kiosk "stuck connected" crashes + shipped full video-call resilience
+
+Kumar reported: during testing, a couple of random crashes left the **kiosk stuck on the Connected screen with no one there**, while the **agent returned to home/ready**. Also a pop-up blocker caused "unexpected behavior" once. He asked whether the crashes registered server-side or were just a bug — and (separately) whether call waiting was in v1 (answer: **cut** — held-call slot / second-call queuing is deferred; Hold/Swap render disabled). Then: **fix everything, production-grade, before go-to-market.**
+
+**Forensic verdict: a design-gap bug, INVISIBLE to all three monitoring surfaces.**
+- **DB (prod):** found exactly one dangling row — `bfe29f15`, VIDEO, **`IN_PROGRESS`, `ended_at` NULL, 4.3h old**. Video-call finalization is **kiosk-owned** (`/api/kiosk/call-ended` is the only finalizer); when the kiosk browser dies it never fires, so the row leaks forever, masquerading as an active call. AUDIO never leaks (Twilio status webhooks finalize server-side — zero dangling audio rows).
+- **Audit:** calls aren't audited at all (13 action types, all `user.*`/`property.*`/`assignment.*`) → zero footprint.
+- **Sentry:** a renderer hard-crash/freeze kills the JS context (uncatchable + can't flush); the kiosk also had **no ErrorBoundary**. DSN *is* set in both apps' prod env (verified) — so the blind spot was structural, not config.
+- **Asymmetry explained:** the kiosk died (renderer) → frozen screen + leaked row; the agent received the guest's Agora `user-left` → reset to ready, but `handleEnd` **never finalized the row** either.
+
+**Shipped (all TDD'd where logic exists, merged to `main`, deployed):**
+1. **Reaper cron** `/api/cron/reap-stale-calls` (+ `lib/calls/reaper.ts`) — closes stale VIDEO `IN_PROGRESS` (keyed on `created_at`, >30m) as `FAILED`+`flagged_for_review`, and stale `RINGING` (>10m) as `NO_ANSWER`; self-reports to `health_signals`. **Daily `0 20 * * *`** (see Hobby note).
+2. **Agent-side finalizer** `/api/calls/[id]/end-video` (operator-scoped, idempotent on `IN_PROGRESS`), wired into `video-call.tsx` `handleEnd` → a kiosk crash now closes the row in ~real time via the agent's `user-left`. The reaper is the both-sides-gone backstop.
+3. **Kiosk connection resilience** — Agora `connection-state-change` via pure `interpretConnectionState`: `RECONNECTING` shows a "Reconnecting…" overlay; terminal `DISCONNECTED` finalizes (`failed`) + falls to the apology screen → home. (`reason==="LEAVE"` ignored.) Fixes the frozen-screen-on-network-drop case.
+4. **Kiosk `ErrorBoundary`** — catches render errors → Sentry + auto-reload to the welcome screen (unattended tablet self-heals). Renderer hard-crash stays uncatchable in-page; reaper+finalizer keep server state correct there.
+5. **Owner playbook pop-up** — `playbook-card.tsx` opened `window.open` **after** an `await` → silently blocked. Now opens the tab synchronously on click; clear toast if blocked.
+6. **Portal `app/global-error.tsx`** — render errors in the agent/admin/owner dashboards were hitting a blank screen + never reaching Sentry (the portal analog of #4). Also cleared the Sentry build warning.
+   Plus two review findings: **`call-ended` idempotency guard** (`.in("state",["RINGING","IN_PROGRESS"])`) so the agent-vs-kiosk finalize race can't clobber a COMPLETED row back to FAILED; and **`onAgentJoined` fires once on video** (was per published track).
+
+**Commits** (branch `fix/video-call-resilience` → `--no-ff` merge `3293c14`): `84ec104` reaper · `369a62f` agent finalizer · `b031f78` kiosk resilience · `0ae4d95` owner popup · `f34b80c` review fixes + global-error · hotfix `b646e04` cron schedule. **Tests: portal 281, kiosk 16; typecheck + lint + both builds green.** Independent code-review pass done (feature-dev:code-reviewer) before merge.
+
+**Vercel Hobby cron gotcha (re-confirmed the hard way):** Hobby **ERRORS the deploy** on a sub-daily cron (not silent-cap) — same failure as the historical `dpl_2HthWVCc`/`e197c0a` presence-sweep incident. My initial `*/15 * * * *` reaper was caught from the deploy history and hotfixed to daily `0 20 * * *` **before** it shipped. **Tighten to `*/15` if/when the project moves to Vercel Pro** (one-line in `apps/portal/vercel.json`).
+
+**Open item — the one stuck prod row (`bfe29f15`):** a manual `UPDATE` to close it was **denied by the prod-data safety classifier** (out of scope for "push to prod"). It will be **auto-closed by the reaper on its next 20:00 UTC run** (the cron is now deployed). If Kumar wants it gone sooner, run the reaper manually (`GET /api/cron/reap-stale-calls` with the `CRON_SECRET` bearer) or close the row by hand.
+
+**PICK UP HERE (fresh chat):**
+1. **Prod smoke the resilience fixes** (deploy `dccqvap7f`, b646e04): (a) kiosk video call → agent answers → **kill the kiosk tab** mid-call → agent returns to ready AND the `calls` row finalizes (no longer leaks; verify in DB / owner call history); (b) mid-call, drop the kiosk's WiFi briefly → "Reconnecting…" overlay → restore → call continues; drop it hard → apology → home; (c) owner portal → property → **View** playbook → opens (no silent block); (d) confirm the reaper closed `bfe29f15` after 20:00 UTC.
+2. **§5 emergency (933)** — still the last original smoke item; sequence unchanged (flip `EMERGENCY_DIAL_NUMBER=911→933` + redeploy only when kiosk+agent are ready, test the conference, restore `911` + verify). Prod emergency is still **`911`** (untouched).
