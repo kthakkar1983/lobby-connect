@@ -15,16 +15,27 @@ export function PlaybookCard({ propertyId, version }: Props) {
   const [viewing, setViewing] = useState(false);
 
   async function view() {
+    // Open the tab synchronously, inside the click handler, so the browser keeps
+    // it tied to the user gesture. Calling window.open() *after* the await is
+    // treated as an unsolicited pop-up and silently blocked — the old bug.
+    const win = window.open("about:blank", "_blank");
     setViewing(true);
     try {
       const res = await fetch(`/api/owner/properties/${propertyId}/playbook`);
       const body = await res.json();
       if (body.hasPlaybook && body.signedUrl) {
-        window.open(body.signedUrl, "_blank", "noopener,noreferrer");
+        if (win) {
+          win.opener = null; // the signed-URL page can't reach back into the portal
+          win.location.replace(body.signedUrl);
+        } else {
+          toast.error("Pop-up blocked — allow pop-ups for this site to view the playbook.");
+        }
       } else {
+        win?.close();
         toast.error("No playbook uploaded yet.");
       }
     } catch {
+      win?.close();
       toast.error("Couldn't open the playbook.");
     } finally {
       setViewing(false);

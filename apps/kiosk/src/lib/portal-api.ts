@@ -22,7 +22,7 @@ export async function startCall(): Promise<CallStartResult> {
   return (await res.json()) as CallStartResult;
 }
 
-export async function endCall(callId: string, reason: "completed" | "no-answer" | "cancelled"): Promise<void> {
+export async function endCall(callId: string, reason: "completed" | "no-answer" | "cancelled" | "failed"): Promise<void> {
   await fetch(`${getPortalApiBase()}/api/kiosk/call-ended`, {
     method: "POST",
     headers: headers(),

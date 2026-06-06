@@ -5,6 +5,7 @@ const SECRET = "unit-secret";
 vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
 
 let callRow: Record<string, unknown> | null = null;
+let lastFilters: Record<string, unknown> = {};
 const updateSpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -13,7 +14,20 @@ vi.mock("@/lib/supabase/admin", () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
       update: (v: Record<string, unknown>) => {
         updateSpy(v);
-        return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+        const filters: Record<string, unknown> = {};
+        const builder: Record<string, unknown> = {
+          eq: (k: string, val: unknown) => {
+            filters[k] = val;
+            lastFilters = filters;
+            return builder;
+          },
+          in: (k: string, val: unknown) => {
+            filters[k] = val;
+            lastFilters = filters;
+            return Promise.resolve({ error: null });
+          },
+        };
+        return builder;
       },
     }),
   }),
@@ -31,6 +45,7 @@ function req(body: unknown, token?: string) {
 
 beforeEach(() => {
   updateSpy.mockClear();
+  lastFilters = {};
   callRow = { id: "call-1", property_id: "prop-1", state: "IN_PROGRESS", answered_at: "2026-06-01T00:00:00.000Z" };
 });
 
@@ -61,5 +76,13 @@ describe("POST /api/kiosk/call-ended", () => {
     callRow = { id: "call-1", property_id: "OTHER", state: "RINGING", answered_at: null };
     const token = signKioskToken("prop-1", SECRET);
     expect((await POST(req({ callId: "call-1", reason: "no-answer" }, token))).status).toBe(404);
+  });
+
+  it("scopes the finalize to active states so it can't reopen a finalized row", async () => {
+    // Guards the kiosk-vs-agent finalize race: if the agent already closed the
+    // call (COMPLETED), a late kiosk call-ended must not clobber it back to FAILED.
+    const token = signKioskToken("prop-1", SECRET);
+    await POST(req({ callId: "call-1", reason: "failed" }, token));
+    expect(lastFilters.state).toEqual(["RINGING", "IN_PROGRESS"]);
   });
 });

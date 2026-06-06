@@ -44,6 +44,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     ? Math.max(0, Math.round((endedAt.getTime() - new Date(call.answered_at).getTime()) / 1000))
     : null;
 
+  // Conditional on a still-active state so the kiosk-vs-agent finalize race is
+  // safe: whichever side closes the call first wins, and a late writer (e.g. the
+  // agent already marked it COMPLETED) no-ops instead of clobbering the row.
   await admin
     .from("calls")
     .update({
@@ -52,7 +55,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       duration_seconds: durationSeconds,
     })
     .eq("id", body.callId)
-    .eq("property_id", verified.propertyId);
+    .eq("property_id", verified.propertyId)
+    .in("state", ["RINGING", "IN_PROGRESS"]);
 
   return new NextResponse(null, { status: 204 });
 }
