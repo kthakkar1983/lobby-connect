@@ -43,3 +43,24 @@ at any scale.
 
 **Acceptance.** An admin can resend an invite to a pending user from the UI; the new email links to
 the clean-alias `/onboarding`; no hard delete required; already-active users still can't be re-invited.
+
+---
+
+## Observability / security
+
+### Rotate the Sentry auth token (exposed in chat during the §7 fix) 🔐 post-launch
+
+**Status:** open · **Raised:** 2026-06-06 (session-4 smoke, §7) · **Pilot workaround:** none needed — the token is valid + correctly scoped and serving; just rotate post-launch as hygiene.
+
+**Problem.** While fixing the `/admin/status` "Recent errors" probe, the prod `SENTRY_AUTH_TOKEN` (a Sentry **User Auth Token**) was pasted in plaintext into the session-4 Claude chat. It is now the live prod token (wired into Vercel → portal → Production, redeployed, confirmed working — `/admin/status` reads amber/2 errors). It is **not** in any file or git commit — only in the chat transcript.
+
+**Why it matters.** A secret that has left its secure channel should be rotated. Blast radius is limited (Sentry org data only), but it's standard hygiene before relying on it long-term.
+
+**Where it lives.** Vercel → `lobby-connect-portal` → Settings → Environment Variables (Production): `SENTRY_AUTH_TOKEN`. Consumed by `apps/portal/lib/sentry/errors.ts` (runtime issues-count probe) and `next.config.ts` `withSentryConfig` (build-time source-map upload).
+
+**Fix sketch.**
+- Sentry → Settings → Auth Tokens → new **User Auth Token** with **`event:read`** + `project:read` + `project:releases`. (The issues endpoint needs `event:read`; `project:read` alone returns 403 — this was the original session-4 bug.)
+- `vercel env rm SENTRY_AUTH_TOKEN production` then `vercel env add` the new value → **redeploy** portal.
+- **Revoke** the old token (`sntryu_2eed…`) in Sentry — it should then 401 on the issues API.
+
+**Acceptance.** `/admin/status` "Recent errors" still shows a count after the swap; old token revoked + returns 401.

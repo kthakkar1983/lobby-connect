@@ -15,6 +15,14 @@ webhook already points at the clean `lobby-connect-portal.vercel.app`, not the d
 A **sign-out** bug from the user-menu dropdown was also fixed + deployed (`d52f6be`). **Still to run:** retest
 §3 voice *connect* (agent signed in to answer), §5 emergency (933-only), §6 owner, §7 observability.
 
+**Progress (2026-06-06):** §3 voice, §6 owner, and sign-out all re-confirmed **green**. **§7 observability PASS** —
+`/admin/status` (Supabase / Twilio webhook / Presence sweep green; **Recent errors** was "Sentry unavailable",
+root-caused to the prod `SENTRY_AUTH_TOKEN` lacking the **`event:read`** scope the issues endpoint needs — a new
+User Auth Token was wired into Vercel prod + redeployed, now serving) + `/admin/audit` (list + filter pass) +
+Sentry scrub (ingestion confirmed + unit-test-covered). **Only §5 emergency (933) remains** — deferred by choice;
+`EMERGENCY_DIAL_NUMBER` left untouched at real **`911`**. Full Sentry diagnosis (incl. the `vercel env pull`
+Sensitive-var gotcha) is in `memory/project-status.md` → session-4.
+
 **Live URLs**
 - Portal: `https://lobby-connect-portal.vercel.app`
 - Kiosk: `https://lobby-connect-kiosk.vercel.app`

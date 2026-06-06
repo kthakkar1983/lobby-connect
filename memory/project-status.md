@@ -425,3 +425,27 @@ re-enable (the `/auth/confirm` route + `docs/setup/2026-06-04-auth-email-templat
 3. **§5 emergency (933-only)**, **§6 owner** (needs the 2nd recovered user), **§7 observability**. Emergency: flip `EMERGENCY_DIAL_NUMBER` to `933` + redeploy, test, then restore `911`.
 
 **Minor cleanups (non-blocking):** property **timezone** is `America/New_York` but Oklahoma City is Central → set `America/Chicago`. The `routing_did` fix was SQL-direct so it has no audit row (cosmetic) — re-saving the property in the panel would record one.
+
+---
+
+## 2026-06-06 (session 4) — §7 observability PASS (Sentry probe fixed); §5 emergency deferred
+
+**Smoke status now:** §1, §2, §3 (voice), §4 (kiosk video), §6 (owner), sign-out, and **§7 (observability)** all PASS/green. **Only §5 emergency (933) remains.** Kumar confirmed §3/§6/sign-out were re-run green *before* this session. He also flagged **other bugs/issues (unspecified)** to triage in a fresh chat — ASK him what they are first thing.
+
+**§7 observability — results:**
+- `/admin/status`: **Supabase / Twilio webhook / Presence sweep all green.** (Predicted from backend: `twilio_webhook` is `info` mode → always green once seen — last beat was the §3 no-answer call; presence cron last ran ~18h ago, under the 36h warn threshold → green, *not* the amber the smoke top-note warns about.) **Recent errors (24h) was "Sentry unavailable"** → diagnosed + FIXED below.
+- `/admin/audit`: 35 rows across 12 action types, list + action filter **PASS**. ("Load more" correctly hidden — only 35 rows < 50 page size; `validateAuditFilter` clamps min limit to 50 so it can't be forced via URL. Not a bug.)
+- Sentry scrub: **PASS (lightweight)** — ingestion confirmed (issues API → 200, events visible on dashboard), redaction covered by `lib/sentry/scrub.ts` unit tests. The only live events are infra/client noise (`SyntaxError: Unexpected token '<'` from the analytics 404, "connection closed") from non-call code paths → no phone/recording PII by construction, so they can't exercise live redaction (accepted limit of the lightweight check).
+
+**Sentry "Recent errors" probe — root-caused + FIXED in prod:**
+- Symptom: `getRecentErrorCount()` returned `null` → card "Sentry unavailable".
+- **Misstep to remember:** first concluded "prod Sentry vars are empty strings" from `vercel env pull` — WRONG. `vercel env pull` returns **blank for every Sensitive var** (all ~40 custom prod vars pulled `len=0`; only Vercel system vars like `VERCEL_OIDC_TOKEN`/`TURBO_*` survive). You cannot read prod env values via CLI. (Saved to build-quirks memory, along with: `grep` here is **ugrep** so `^`-anchored extraction misbehaves; and each Bash tool call gets a fresh `/tmp`.)
+- **True root cause:** the prod `SENTRY_AUTH_TOKEN` lacked **`event:read`** scope. The issues endpoint (`GET /projects/{org}/{project}/issues/`) requires `event:read`, **not** the `project:read` the observability plan/spec docs specify. Proven by curl: old token → **403** `{"detail":"You do not have permission"}`; new token w/ `event:read` → **200**, count 1. (403 — not 404 — also confirmed the slugs `lobby-connect`/`portal` were already correct in prod.)
+- **Fix applied to prod (DONE this session):** Kumar created a **User Auth Token** with all scopes; verified 200 via curl; then via Vercel CLI (`env rm`+`env add`, Production) set `SENTRY_ORG=lobby-connect`, `SENTRY_PROJECT=portal`, `SENTRY_AUTH_TOKEN=<new token>`; **redeployed** (`vercel redeploy` of the 7h prod deploy → new deployment `lobby-connect-portal-giuenczr9…` → **aliased to `lobby-connect-portal.vercel.app`**, build green).
+- **Follow-ups:** (1) **Visual confirm DONE (2026-06-06)** — `/admin/status` "Recent errors (24h)" now reads **amber / 2 unresolved** (correct — the cosmetic noise issues). Probe fix verified end-to-end. (2) **Rotate the Sentry token** — filed as a post-launch reminder in `docs/v2-backlog.md` → "Observability / security" (pasted in plaintext in the session-4 chat; not in any file/commit). (3) Optionally correct the observability plan/spec docs: issues endpoint needs `event:read`, not `project:read`.
+
+**Prod safety note:** `EMERGENCY_DIAL_NUMBER` was **NOT touched** — still **`911`** (real PSAP). The §5 933-flip was never started. Prod emergency dialing is safe/live.
+
+**PICK UP HERE (fresh chat):**
+1. **ASK Kumar to describe the other bugs/issues he noticed** — triage those first.
+2. Run **§5 emergency (933)** — the last smoke item. Sequence (only flip when kiosk+agent are ready to call immediately, to minimize the 933 window): set `EMERGENCY_DIAL_NUMBER=933` in Vercel prod + redeploy → kiosk→agent video call → trigger **Emergency** → expect Twilio conference (guest+agent+933) + OKC address read-back + `incidents` row + `calls.emergency_conference_name` set → confirm agent mute/leave → then set `EMERGENCY_DIAL_NUMBER=911` back + redeploy + **verify 911** (overwrite explicitly since the value isn't readable). See smoke §5.
