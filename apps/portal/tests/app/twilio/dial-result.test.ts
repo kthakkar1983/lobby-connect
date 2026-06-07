@@ -16,6 +16,8 @@ const updateSpy = vi.fn<() => Promise<{ error: null }>>(
 );
 let dialResultCurrentState: string | null = "RINGING";
 let dialResultEmergencyConf: string | null = null;
+// Number of leading reads that should return a transient error (then succeed).
+let dialResultReadErrors = 0;
 function makeAdminClient() {
   return {
     from() {
@@ -27,12 +29,18 @@ function makeAdminClient() {
       };
       builder.select = () => builder;
       builder.eq = () => builder;
-      builder.maybeSingle = () =>
-        Promise.resolve({
+      builder.maybeSingle = () => {
+        if (dialResultReadErrors > 0) {
+          dialResultReadErrors--;
+          return Promise.resolve({ data: null, error: { message: "blip" } });
+        }
+        return Promise.resolve({
           data: dialResultCurrentState
             ? { state: dialResultCurrentState, emergency_conference_name: dialResultEmergencyConf }
             : null,
+          error: null,
         });
+      };
       builder.then = (resolve: (v: unknown) => void) => resolve({ error: null });
       return builder;
     },
@@ -59,6 +67,7 @@ beforeEach(() => {
   updateSpy.mockClear();
   dialResultCurrentState = "RINGING";
   dialResultEmergencyConf = null;
+  dialResultReadErrors = 0;
   validateTwilioSignature.mockReturnValue(true);
 });
 
@@ -108,6 +117,28 @@ describe("POST /api/twilio/voice/dial-result", () => {
     expect(xml).toContain("<Conference");
     expect(xml).toContain("emg-call-1");
     // must NOT terminalize the call
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("retries a transient read error, then still routes the guest into the conference", async () => {
+    // The first read blips; without retry this would fall through to a hangup,
+    // stranding the guest mid-911. The retry must recover and route to 911.
+    dialResultReadErrors = 1;
+    dialResultEmergencyConf = "emg-call-1";
+    const res = await POST(makeRequest({ CallSid: "CAparent", DialCallStatus: "completed" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Conference");
+    expect(xml).toContain("emg-call-1");
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not terminalize the call when the read fails after all retries", async () => {
+    // Persistent failure: we can't tell whether this call is mid-911, so we must
+    // not clobber its state. Play the safe default audio without any DB write.
+    dialResultReadErrors = 10;
+    const res = await POST(makeRequest({ CallSid: "CAparent", DialCallStatus: "no-answer" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Say>");
     expect(updateSpy).not.toHaveBeenCalled();
   });
 });
