@@ -73,25 +73,12 @@ export type UserRow = {
   active: boolean;
   must_change_password: boolean;
   last_seen_at: string | null;
-  created_at: string;
 };
 
 type Props = {
   readonly users: UserRow[];
   readonly actorId: string;
 };
-
-function relative(iso: string | null): string {
-  if (!iso) return "—";
-  const ms = Date.now() - new Date(iso).getTime();
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "today";
-  if (days === 1) return "1 day ago";
-  if (days < 30) return `${days} days ago`;
-  const months = Math.floor(days / 30);
-  if (months === 1) return "1 month ago";
-  return `${months} months ago`;
-}
 
 function CreateUserDialog() {
   const [open, setOpen] = useState(false);
@@ -537,7 +524,6 @@ export function UsersTable({ users, actorId }: Props) {
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Active</TableHead>
-                <TableHead>Added</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -573,9 +559,6 @@ export function UsersTable({ users, actorId }: Props) {
                     </span>
                   </TableCell>
                   <TableCell>{u.active ? "Yes" : "No"}</TableCell>
-                  <TableCell className="text-text-muted">
-                    {relative(u.created_at)}
-                  </TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />
                   </TableCell>
