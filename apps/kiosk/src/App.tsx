@@ -6,6 +6,7 @@ import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } 
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
+import { LogoMark, SeamShimmer } from "./components/brand";
 import { Home } from "./screens/Home";
 import { RecordingNotice } from "./screens/RecordingNotice";
 import { Ringing } from "./screens/Ringing";
@@ -122,7 +123,12 @@ export function App() {
   }, [cameraOff, localVideo]);
 
   if (!config) {
-    return <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>Loading…</div>;
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-5">
+        <LogoMark className="size-12" />
+        <SeamShimmer />
+      </div>
+    );
   }
 
   const screen = (() => {
@@ -136,7 +142,7 @@ export function App() {
       case "connected":
         return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd} />;
       case "apology":
-        return <Apology message={config.apologyMessage} phone={config.phoneNumber} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
+        return <Apology message={config.apologyMessage} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
     }
   })();
 
@@ -151,20 +157,10 @@ export function App() {
 /** Shown over the live call while the Agora SDK retries a dropped connection. */
 function ReconnectingOverlay() {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.6)",
-        color: "#fff",
-        fontSize: 24,
-        zIndex: 50,
-      }}
-    >
-      Reconnecting…
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3.5 bg-call/[0.66] text-white">
+      <div className="seam-ring lc-anim-spin-fast size-14 rounded-pill p-[3px]" aria-hidden />
+      <div className="text-lg font-semibold">Reconnecting…</div>
+      <div className="text-sm text-white/70">Hold tight — we're getting you back</div>
     </div>
   );
 }
