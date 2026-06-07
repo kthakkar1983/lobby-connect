@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { Building2, ChevronRight, Siren } from "lucide-react";
+import { Building2, ChevronRight } from "lucide-react";
 import type { ProfileStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { presenceLabel, presenceDotClass } from "@/lib/owner/format";
-import { countTodayCalls, countOpenIncidents } from "@/lib/owner/summary";
+import { presenceLabel, presenceDotClass, isLivePresence } from "@/lib/owner/format";
+import { countTodayCalls, countOpenIncidents, latestCallTime } from "@/lib/owner/summary";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { Greeting } from "@/components/owner/greeting";
+import { StatTile } from "@/components/owner/stat-tile";
+import { Card } from "@/components/ui/card";
 
 export default async function OwnerHomePage() {
   const actor = await requireRole("OWNER");
@@ -68,60 +70,64 @@ export default async function OwnerHomePage() {
 
   const cards = props.map((p) => {
     const agent = agentByProperty.get(p.id) ?? null;
-    const todayCount = countTodayCalls(
-      (recentCalls ?? []).filter((c) => c.property_id === p.id),
-      p.timezone,
-      now,
-    );
+    const propCalls = (recentCalls ?? []).filter((c) => c.property_id === p.id);
+    const todayCount = countTodayCalls(propCalls, p.timezone, now);
     const openCount = countOpenIncidents(
       (openIncidents ?? []).filter((i) => i.property_id === p.id),
     );
-    return { id: p.id, name: p.name, agent, todayCount, openCount };
+    return {
+      id: p.id,
+      name: p.name,
+      agent,
+      todayCount,
+      openCount,
+      lastCall: latestCallTime(propCalls, p.timezone) ?? "—",
+      live: agent ? isLivePresence(agent.status) : false,
+    };
   });
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <AutoRefresh />
-      <h1 className="text-2xl font-semibold text-foreground">Home</h1>
+      <div>
+        <Greeting />
+        <p className="mt-1 text-sm text-text-muted">Your properties</p>
+      </div>
 
       {cards.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-border py-16 text-center">
-          <Building2 className="h-10 w-10 text-text-muted/20" aria-hidden="true" />
+        <Card className="items-center gap-2 p-16 text-center">
+          <Building2 className="size-10 text-text-muted/20" aria-hidden="true" />
           <p className="text-sm text-text-muted">No properties assigned to you yet.</p>
-        </div>
+        </Card>
       ) : (
         cards.map((c) => (
-          <Link
-            key={c.id}
-            href={`/owner/properties/${c.id}` as never}
-            className="flex items-center justify-between rounded-lg border border-border bg-card p-5 transition-colors hover:border-primary/40"
-          >
-            <div className="flex flex-col gap-2">
-              <span className="text-lg font-medium text-foreground">{c.name}</span>
+          <Link key={c.id} href={`/owner/properties/${c.id}` as never}>
+            <Card
+              className={cn(
+                "gap-3 p-5 transition-colors hover:border-accent/40",
+                c.openCount > 0
+                  ? "border-l-2 border-l-destructive"
+                  : c.live && "border-l-2 border-l-live",
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-medium text-foreground">{c.name}</span>
+                <ChevronRight className="size-5 text-text-muted" aria-hidden="true" />
+              </div>
               {c.agent ? (
                 <span className="flex items-center gap-2 text-sm text-text-muted">
-                  <span
-                    className={cn("h-2 w-2 rounded-full", presenceDotClass(c.agent.status))}
-                    aria-hidden="true"
-                  />
+                  <span className={cn("size-2 rounded-full", presenceDotClass(c.agent.status))} aria-hidden="true" />
                   {c.agent.full_name} · {presenceLabel(c.agent.status)}
                 </span>
               ) : (
                 <span className="text-sm text-text-muted">No agent assigned</span>
               )}
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-text-muted">
-                  {c.todayCount} call{c.todayCount === 1 ? "" : "s"} today
-                </span>
-                {c.openCount > 0 && (
-                  <Badge variant="destructive" className="gap-1">
-                    <Siren className="h-3 w-3" aria-hidden="true" />
-                    {c.openCount} open
-                  </Badge>
-                )}
+              <div className="flex gap-2">
+                <StatTile value={c.todayCount} label="Calls today" />
+                <StatTile value={c.openCount} label="Open" alert={c.openCount > 0} />
+                <StatTile value={c.lastCall} label="Last call" />
               </div>
-            </div>
-            <ChevronRight className="h-5 w-5 text-text-muted" aria-hidden="true" />
+            </Card>
           </Link>
         ))
       )}
