@@ -52,6 +52,9 @@ export function Softphone({ role }: SoftphoneProps) {
   const [notes, setNotes] = useState("");
   const [incomingProperty, setIncomingProperty] = useState("");
   const [emergencyActive, setEmergencyActive] = useState(false);
+  // True once a 911 trigger came back as failed/degraded — the agent must fall
+  // back to verbal relay / instruct the guest to dial 911 directly.
+  const [emergencyFailed, setEmergencyFailed] = useState(false);
   // Mirror into a ref so the SDK-vs-conference branch in the callbacks below
   // always reads the current value without re-creating the callbacks.
   const emergencyActiveRef = useRef(emergencyActive);
@@ -198,6 +201,7 @@ export function Softphone({ role }: SoftphoneProps) {
     setNotes("");
     setMuted(false);
     setEmergencyActive(false);
+    setEmergencyFailed(false);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
   }, [roomNumber, notes]);
@@ -225,14 +229,25 @@ export function Softphone({ role }: SoftphoneProps) {
     const id = callIdRef.current;
     if (!id) return;
     setEmergencyActive(true); // optimistic; the conference merge is server-side
+    setEmergencyFailed(false);
     try {
       const res = await fetch(`/api/calls/${id}/emergency`, { method: "POST" });
       if (!res.ok) {
-        // 502 = the 911 leg failed to add; the agent must fall back to verbal
-        // relay / instruct the guest to hang up and dial 911 directly.
+        // Dispatch failed. Roll emergencyActive back to whether the agent's own
+        // leg was actually redirected into the conference: if it wasn't, the
+        // agent is still on the normal SDK bridge, so mute/hangup must use the
+        // SDK again (and the button re-enables for a retry). If it was, keep it
+        // true so controls stay server-side. Either way, surface the failure.
+        const body = (await res.json().catch(() => ({}))) as {
+          agentRedirected?: boolean;
+        };
+        setEmergencyActive(Boolean(body.agentRedirected));
+        setEmergencyFailed(true);
         console.error("[softphone] emergency trigger failed:", res.status);
       }
     } catch (err) {
+      // Unknown server state — keep controls server-side (safer) and warn.
+      setEmergencyFailed(true);
       console.error("[softphone] emergency trigger error:", err);
     }
   }, []);
@@ -332,10 +347,16 @@ export function Softphone({ role }: SoftphoneProps) {
               <PhoneOff size={16} /> Hang up
             </button>
           </div>
-          {emergencyActive && (
+          {emergencyActive && !emergencyFailed && (
             <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-700">
               Emergency active — 911 is being conferenced in. Stay on the line and relay the
               property address and room number.
+            </p>
+          )}
+          {emergencyFailed && (
+            <p className="rounded-md border border-red-500 bg-red-100 px-3 py-2 font-medium text-red-800">
+              911 dispatch failed. Relay the property address and room number verbally, and have
+              the guest hang up and dial 911 directly.
             </p>
           )}
           <input
