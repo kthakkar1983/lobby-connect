@@ -501,3 +501,39 @@ Kumar reported: during testing, a couple of random crashes left the **kiosk stuc
 **PICK UP HERE (fresh chat):**
 1. **Prod smoke the resilience fixes** (deploy `dccqvap7f`, b646e04): (a) kiosk video call → agent answers → **kill the kiosk tab** mid-call → agent returns to ready AND the `calls` row finalizes (no longer leaks; verify in DB / owner call history); (b) mid-call, drop the kiosk's WiFi briefly → "Reconnecting…" overlay → restore → call continues; drop it hard → apology → home; (c) owner portal → property → **View** playbook → opens (no silent block); (d) confirm the reaper closed `bfe29f15` after 20:00 UTC.
 2. **§5 emergency (933)** — still the last original smoke item; sequence unchanged (flip `EMERGENCY_DIAL_NUMBER=911→933` + redeploy only when kiosk+agent are ready, test the conference, restore `911` + verify). Prod emergency is still **`911`** (untouched).
+
+---
+
+## 2026-06-07 (session 7) — readiness-audit remediation SHIPPED (10 PRs merged) + emergency flipped to 933 for testing
+
+The fix phase for the 2026-06-06 pre-launch readiness audit (`docs/audits/2026-06-06-readiness-audit.md` + `…-triage.md`). Worked the triage **BUG bucket + cheap freebies**, batched as PRs (HIGH isolated, MED/LOW themed), each TDD'd and verified `lint + typecheck + test + build`. **All 10 PRs merged to `main` (squash) + prod auto-deployed green** (final commit `21bfc3a`, prod `dpl_3m11ZZxkmz6…` READY on `lobby-connect-portal.vercel.app`).
+
+**Merged (GitHub #):**
+- **#1** atomic 911 trigger + dispatch-failure handling + REST timeouts (audit HIGH #2/#3/#8) — `lib/util/timeout.ts`.
+- **#2** retry the 911 re-join read so a transient blip can't strand the guest (HIGH #1) — `lib/db/read-with-retry.ts`.
+- **#3** reject OWNER on the 4 live-video routes + time-bound the incoming-video RINGING query (HIGH #4-A, MED #14-query). (Agent-scope tightening #4-B deferred to v2.)
+- **#4** write the `user.deleted` audit row only AFTER a successful delete + graceful "deactivate instead" (HIGH #5-A). FK block stays (5-B intentional).
+- **#5** call-finalization correctness: status webhook (#19/#20/#21), reaper duration + answered_at?:created_at staleness (#22/#23), cron **fail-closed** (#9-routes), kiosk one-call dedup (#12).
+- **#6** presence: don't downgrade `ON_CALL`→`AVAILABLE` during a live video call (MED #15), server-side.
+- **#7** low-risk cleanup: emergency/control state guard (#16), owner call-list order-by created_at (#28), AutoRefresh focus debounce (#30), bundle hygiene + drop `next-themes` (#31), broaden Sentry scrub regex both apps (#27).
+- **#8** voice-webhook timeout via opt-in `createAdminClient({timeoutMs})` + `timeoutFetch` (#7), boot config validation in `instrumentation.ts` (#10). (Extracted `lib/kiosk/config-secret.ts` so instrumentation avoids a `node:crypto` webpack error.)
+- **#9** migrations **0013 + 0014** (security/perf advisor hardening) — **APPLIED to prod + verified** (see below).
+- **#10** dropped the cosmetic Added/Created columns from admin users + properties tables (Kumar's UI nit; `created_at` kept for ORDER BY).
+
+**DB migrations 0013/0014 — applied to prod (`ztunzdpmazwwwkxcpyfp`) + verified via `get_advisors`:**
+- 0013: 5 covering indexes for unindexed FKs; pinned `set_updated_at` search_path.
+- 0014: revoked helper-function `EXECUTE` from PUBLIC/anon, re-granted to `authenticated` + `service_role` (0013's revoke-from-anon was a no-op — the vars were `sensitive` type / PUBLIC-granted). Verified anon=false, authenticated/service_role=true on all 7 SECURITY DEFINER helpers. No RLS policy targets anon.
+- **Deferred to v2** (broad, forward-scale): `auth_rls_initplan` `(select auth.uid())` rewrite, multiple-permissive-policy consolidation, unused-index drops.
+
+**Deferred per triage (NOT done):** INTENTIONAL-TRADEOFF (#5-B, #14-cron), DEFER-V2 (#4-B, #17, #18, #25, tails of #6/#11/#13), expensive ACCEPT-RISK (#6 E911 auto-validate, #11 kiosk-token revocation, #13 server uid, #24 terminal-state trigger, #32 SDK types).
+
+**⚠️ EMERGENCY IS CURRENTLY 933 (NOT 911) — see [[TEMP-emergency-933]] (~/.claude memory).** Kumar asked to flip prod `EMERGENCY_DIAL_NUMBER`→`933` to test the emergency flow live. The original prod var was `sensitive` (value masks as '' on read); replaced with a `plain` var `933` + redeployed (`dpl_…itxdm4r7v`, aliased to the prod domain). **MUST be reverted to `911` before the pilot fields real calls** — set via Vercel REST API (the v52 CLI `env add` stdin pipe does NOT capture the value), then redeploy + verify. (How: token at `~/Library/Application Support/com.vercel.cli/auth.json`; `DELETE` then `POST /v10/projects/prj_SwRzM2yQQ58iCqj0Js9HZ5XTpBAJ/env?teamId=team_SS9GSqbP7VOjZRPyQK6vCATN` `{key,value:"911",type:"plain",target:["production"]}`.)
+
+**Known cosmetic:** Vercel **Preview** builds are red for the portal — env vars are **Production-scoped only**, so previews die at `lib/env.ts`'s eager `required()`. Not a regression (hits even no-code-change PRs); prod is fine. Kumar chose to leave previews red for the pilot. Details in [[prod-infra-access]].
+
+**NEXT MAJOR PHASE — UI/UX polish (do in a FRESH chat):** the app is still the barebones shadcn skeleton. Staged plan written: **`docs/plans/2026-06-07-ui-ux-polish-stages.md`** — Stage 0 = lock design direction (brainstorm first), Stage 1 = tokens + shadcn primitives (parallel-safe), Stage 2 = per-surface polish prioritized **Kiosk > Owner portal > Agent/Admin**, Stage 3 = states/motion/a11y/copy. Don't gate the pilot on it; don't start painting before the direction is locked.
+
+**PICK UP HERE (fresh chat):**
+1. **Revert emergency to 911** once Kumar finishes the 933 testing (see the TEMP memory) — and ASK him whether testing is done before assuming.
+2. **Continue smoke / triage** any new issues Kumar surfaces from testing.
+3. **When ready, start UI/UX polish in a fresh chat** per `docs/plans/2026-06-07-ui-ux-polish-stages.md` (Stage 0 brainstorm first).
