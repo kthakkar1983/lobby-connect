@@ -46,14 +46,26 @@ export function presenceLabel(status: ProfileStatus): string {
 }
 
 const PRESENCE_DOTS: Record<ProfileStatus, string> = {
-  AVAILABLE: "bg-emerald-500",
-  ON_CALL: "bg-blue-500",
-  AWAY: "bg-amber-500",
-  OFFLINE: "bg-zinc-300",
+  AVAILABLE: "bg-live",
+  ON_CALL: "bg-accent",
+  AWAY: "bg-muted-foreground",
+  OFFLINE: "bg-border",
 };
 
 export function presenceDotClass(status: ProfileStatus): string {
   return PRESENCE_DOTS[status];
+}
+
+export function isLivePresence(status: ProfileStatus): boolean {
+  return status === "AVAILABLE" || status === "ON_CALL";
+}
+
+export function formatTimeOnly(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 export function formatDuration(seconds: number | null): string {
