@@ -22,6 +22,7 @@ export type ActorType = "USER" | "SYSTEM";
 export type IncidentSeverity = "HIGH";
 export type IncidentKind = "EMERGENCY_911";
 export type IncidentStatus = "OPEN" | "RESOLVED";
+export type KioskCtaStyle = "warm" | "accent" | "classic";
 
 // =============================================================================
 // Generic JSON helper (mirrors what gen types emits)
@@ -132,6 +133,7 @@ export type Database = {
           kiosk_wifi_network: string | null;
           kiosk_wifi_password: string | null;
           kiosk_breakfast_hours: string | null;
+          kiosk_cta_style: KioskCtaStyle;
           geocoded_lat: number | null;
           geocoded_long: number | null;
           active: boolean;
@@ -158,6 +160,7 @@ export type Database = {
           kiosk_wifi_network?: string | null;
           kiosk_wifi_password?: string | null;
           kiosk_breakfast_hours?: string | null;
+          kiosk_cta_style?: KioskCtaStyle;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;
@@ -184,6 +187,7 @@ export type Database = {
           kiosk_wifi_network?: string | null;
           kiosk_wifi_password?: string | null;
           kiosk_breakfast_hours?: string | null;
+          kiosk_cta_style?: KioskCtaStyle;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;

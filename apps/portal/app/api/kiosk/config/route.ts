@@ -16,7 +16,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const { data: p } = await admin
     .from("properties")
     .select(
-      "id, name, active, logo_url, kiosk_welcome_heading, kiosk_welcome_message, kiosk_checkin_time, kiosk_checkout_time, kiosk_wifi_network, kiosk_wifi_password, kiosk_breakfast_hours, kiosk_apology_message, property_phone_number",
+      "id, name, active, logo_url, kiosk_welcome_heading, kiosk_welcome_message, kiosk_checkin_time, kiosk_checkout_time, kiosk_wifi_network, kiosk_wifi_password, kiosk_breakfast_hours, kiosk_apology_message, kiosk_cta_style, property_phone_number",
     )
     .eq("id", verified.propertyId)
     .maybeSingle();
@@ -36,6 +36,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     wifiPassword: p.kiosk_wifi_password,
     breakfastHours: p.kiosk_breakfast_hours,
     apologyMessage: p.kiosk_apology_message,
+    ctaStyle: p.kiosk_cta_style,
     phoneNumber: p.property_phone_number,
   });
 }

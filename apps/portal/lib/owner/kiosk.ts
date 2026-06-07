@@ -34,3 +34,12 @@ export function validateKioskFields(input: KioskContentInput): string | null {
     validateKioskMessage(input.kiosk_apology_message)
   );
 }
+
+export const KIOSK_CTA_STYLES = ["warm", "accent", "classic"] as const;
+export type KioskCtaStyle = (typeof KIOSK_CTA_STYLES)[number];
+
+export function validateCtaStyle(value: string): string | null {
+  return (KIOSK_CTA_STYLES as readonly string[]).includes(value)
+    ? null
+    : "Choose a valid kiosk appearance.";
+}

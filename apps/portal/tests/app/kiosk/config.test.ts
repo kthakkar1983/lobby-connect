@@ -37,6 +37,7 @@ beforeEach(() => {
     kiosk_wifi_password: null,
     kiosk_breakfast_hours: null,
     kiosk_apology_message: "Sorry, nobody is available.",
+    kiosk_cta_style: "accent",
     property_phone_number: "+14055551234",
   };
 });
@@ -64,5 +65,11 @@ describe("GET /api/kiosk/config", () => {
     propertyRow = null;
     const token = signKioskToken("prop-1", SECRET);
     expect((await GET(req(token))).status).toBe(404);
+  });
+
+  it("returns the kiosk cta style", async () => {
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await GET(req(token));
+    expect((await res.json()).ctaStyle).toBe("accent");
   });
 });

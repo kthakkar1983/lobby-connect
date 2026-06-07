@@ -1,15 +1,42 @@
-export function RecordingNotice({ onOk }: { onOk: () => void }) {
+import { ShieldCheck, X } from "lucide-react";
+import { SeamTop } from "../components/brand";
+
+export function RecordingNotice({
+  onOk, onClose,
+}: {
+  onOk: () => void;
+  onClose: () => void;
+}) {
   return (
-    <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", padding: 32 }}>
-      <div style={{ background: "var(--color-surface)", borderRadius: 16, padding: 40, maxWidth: 560, textAlign: "center" }}>
-        <p style={{ fontSize: 24, marginTop: 0 }}>Calls may be recorded for training purposes.</p>
-        <button
-          type="button"
-          onClick={onOk}
-          style={{ marginTop: 16, padding: "16px 40px", border: "none", borderRadius: 12, background: "var(--color-primary)", color: "var(--color-primary-foreground)", fontSize: 22, fontWeight: 700, cursor: "pointer" }}
-        >
-          OK
-        </button>
+    <div className="relative h-full">
+      <SeamTop />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-4 z-20 grid size-14 place-items-center rounded-pill border border-border bg-card text-muted-foreground shadow-sm transition-transform active:scale-95"
+      >
+        <X className="size-5" />
+      </button>
+
+      <div className="flex h-full items-center justify-center p-9">
+        <div className="max-w-[78%] rounded-card border border-border bg-card p-11 text-center shadow-md">
+          <ShieldCheck className="mx-auto mb-4 size-10 text-accent-strong" strokeWidth={1.6} />
+          <h1 className="font-display text-2xl leading-snug text-foreground">
+            Before we connect you
+          </h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+            Your call with the front desk may be recorded for training and quality. Tap continue
+            when you're ready.
+          </p>
+          <button
+            type="button"
+            onClick={onOk}
+            className="mt-6 rounded-button bg-accent-strong px-11 py-4 text-lg font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+          >
+            Continue
+          </button>
+        </div>
       </div>
     </div>
   );

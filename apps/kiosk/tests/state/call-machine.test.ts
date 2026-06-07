@@ -54,4 +54,16 @@ describe("kiosk call machine", () => {
     s = reduce(s, { type: "ERROR" });
     expect(s.screen).toBe("apology");
   });
+
+  it("disclosure → home on close", () => {
+    let s = reduce(initialState(), { type: "TAP_CALL" });
+    expect(s.screen).toBe("disclosure");
+    s = reduce(s, { type: "CLOSE_DISCLOSURE" });
+    expect(s.screen).toBe("home");
+  });
+
+  it("CLOSE_DISCLOSURE is a no-op off the disclosure screen", () => {
+    const s: KioskState = { screen: "ringing", callId: "c1", channelName: "call_abc" };
+    expect(reduce(s, { type: "CLOSE_DISCLOSURE" }).screen).toBe("ringing");
+  });
 });

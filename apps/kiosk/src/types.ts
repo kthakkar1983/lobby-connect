@@ -10,6 +10,7 @@ export interface KioskConfig {
   breakfastHours: string | null;
   apologyMessage: string | null;
   phoneNumber: string | null;
+  ctaStyle: "warm" | "accent" | "classic";
 }
 
 export interface CallStartResult {
