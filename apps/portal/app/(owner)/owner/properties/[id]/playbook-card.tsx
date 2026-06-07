@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { validatePlaybookFile } from "@/lib/owner/playbook";
 
@@ -71,9 +72,9 @@ export function PlaybookCard({ propertyId, version }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
+    <Card className="gap-3 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium text-foreground">Playbook</h2>
+        <h2 className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">Playbook</h2>
         <span className="text-sm text-text-muted">
           {version ? `v${version}` : "No playbook yet"}
         </span>
@@ -93,6 +94,6 @@ export function PlaybookCard({ propertyId, version }: Props) {
           onChange={onPick}
         />
       </div>
-    </section>
+    </Card>
   );
 }
