@@ -5,6 +5,7 @@ const SECRET = "unit-secret";
 vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
 
 let propertyRow: { id: string; operator_id: string; active: boolean } | null = null;
+let existingActiveRow: Record<string, unknown> | null = null;
 const insertSpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -19,6 +20,16 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       // calls
       return {
+        // dedup check: select().eq().eq().in().limit().maybeSingle()
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              in: () => ({
+                limit: () => ({ maybeSingle: () => Promise.resolve({ data: existingActiveRow }) }),
+              }),
+            }),
+          }),
+        }),
         insert: (v: Record<string, unknown>) => {
           insertSpy(v);
           return {
@@ -44,6 +55,7 @@ function req(token?: string) {
 beforeEach(() => {
   insertSpy.mockClear();
   propertyRow = { id: "prop-1", operator_id: "op-1", active: true };
+  existingActiveRow = null;
 });
 
 describe("POST /api/kiosk/call-started", () => {
@@ -73,5 +85,13 @@ describe("POST /api/kiosk/call-started", () => {
     propertyRow = { id: "prop-1", operator_id: "op-1", active: false };
     const token = signKioskToken("prop-1", SECRET);
     expect((await POST(req(token))).status).toBe(404);
+  });
+
+  it("409 when a VIDEO call is already active for the property (one kiosk = one call)", async () => {
+    existingActiveRow = { id: "live-call" };
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req(token));
+    expect(res.status).toBe(409);
+    expect(insertSpy).not.toHaveBeenCalled();
   });
 });

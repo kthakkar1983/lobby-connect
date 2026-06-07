@@ -47,10 +47,10 @@ describe("GET /api/cron/mark-stale-offline", () => {
     );
   });
 
-  it("runs without auth when CRON_SECRET is unset (local/dev)", async () => {
+  it("401 when CRON_SECRET is unset (fails closed)", async () => {
     vi.stubEnv("CRON_SECRET", "");
     const res = await GET(req());
-    expect(res.status).toBe(200);
-    expect(updateSpy).toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });

@@ -64,15 +64,27 @@ describe("POST /api/twilio/voice/status", () => {
     expect(res.status).toBe(403);
   });
 
-  it("finalizes a non-terminal call with state + duration", async () => {
+  it("promotes an already-answered (IN_PROGRESS) call to COMPLETED, without writing answered_at", async () => {
+    currentState = "IN_PROGRESS";
+    const res = await POST(
+      makeRequest({ CallSid: "CA1", CallStatus: "completed", CallDuration: "30" }),
+    );
+    expect(res.status).toBe(204);
+    const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
+    expect(vals).toMatchObject({ state: "COMPLETED", duration_seconds: 30 });
+    expect(vals).not.toHaveProperty("answered_at");
+  });
+
+  it("does NOT promote a never-answered RINGING call to COMPLETED (dial-result owns that)", async () => {
     currentState = "RINGING";
     const res = await POST(
       makeRequest({ CallSid: "CA1", CallStatus: "completed", CallDuration: "30" }),
     );
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ state: "COMPLETED", duration_seconds: 30, answered_at: expect.any(String) }),
-    );
+    const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
+    expect(vals).not.toHaveProperty("state");
+    expect(vals).not.toHaveProperty("answered_at");
+    expect(vals).toMatchObject({ duration_seconds: 30, ended_at: expect.any(String) });
   });
 
   it("does not overwrite an already-terminal state but still records duration", async () => {
@@ -83,5 +95,15 @@ describe("POST /api/twilio/voice/status", () => {
     const vals = (updateSpy.mock.calls[0] as unknown as [Record<string, unknown>])?.[0];
     expect(vals).not.toHaveProperty("state");
     expect(vals).toMatchObject({ duration_seconds: 5 });
+  });
+
+  it("returns 204 (not 500) on an internal error so Twilio does not retry", async () => {
+    validateTwilioSignature.mockImplementation(() => {
+      throw new Error("boom");
+    });
+    const res = await POST(
+      makeRequest({ CallSid: "CA1", CallStatus: "completed", CallDuration: "5" }),
+    );
+    expect(res.status).toBe(204);
   });
 });

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
-import { reapCutoffs } from "@/lib/calls/reaper";
+import {
+  reapCutoffs,
+  inProgressIsStale,
+  reapDurationSeconds,
+} from "@/lib/calls/reaper";
 
 export const runtime = "nodejs";
 
@@ -15,37 +19,50 @@ export const runtime = "nodejs";
  * touched here.
  */
 export async function GET(request: Request): Promise<NextResponse> {
+  // Fail closed: the cron must present the secret. An unset secret is a
+  // misconfiguration, not an invitation to run unauthenticated.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const auth = request.headers.get("authorization");
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = Date.now();
-  const { inProgressBefore, ringingBefore } = reapCutoffs(now);
+  const { ringingBefore } = reapCutoffs(now);
   const endedAt = new Date(now).toISOString();
   const admin = createAdminClient();
 
   // Video calls still IN_PROGRESS long past any plausible front-desk length →
-  // the kiosk that owns finalization died mid-call. Keyed on created_at (always
-  // set) rather than answered_at (which a partial write could leave NULL), so
-  // the backstop has no blind spot. Close as FAILED and flag for review.
-  await admin
+  // the kiosk that owns finalization died mid-call. Fetch candidates and close
+  // each that is stale by its effective start (answered_at ?? created_at),
+  // computing a real duration. The per-row update is conditional on still being
+  // IN_PROGRESS so the reaper-vs-realtime finalize race stays first-writer-wins.
+  const { data: inProgressRows } = await admin
     .from("calls")
-    .update({
-      state: "FAILED",
-      ended_at: endedAt,
-      flagged_for_review: true,
-      notes: "Auto-closed by reaper: kiosk disconnected mid-call.",
-    })
+    .select("id, created_at, answered_at")
     .eq("channel", "VIDEO")
-    .eq("state", "IN_PROGRESS")
-    .lt("created_at", inProgressBefore);
+    .eq("state", "IN_PROGRESS");
+  for (const row of (inProgressRows ?? []) as Array<{
+    id: string;
+    created_at: string;
+    answered_at: string | null;
+  }>) {
+    if (!inProgressIsStale(row, now)) continue;
+    await admin
+      .from("calls")
+      .update({
+        state: "FAILED",
+        ended_at: endedAt,
+        duration_seconds: reapDurationSeconds(row.answered_at, now),
+        flagged_for_review: true,
+        notes: "Auto-closed by reaper: kiosk disconnected mid-call.",
+      })
+      .eq("id", row.id)
+      .eq("state", "IN_PROGRESS");
+  }
 
   // Video calls stuck ringing far past the 120s window → kiosk died before the
-  // agent answered. Close as NO_ANSWER.
+  // agent answered. Close as NO_ANSWER (no duration: never connected).
   await admin
     .from("calls")
     .update({ state: "NO_ANSWER", ended_at: endedAt })
