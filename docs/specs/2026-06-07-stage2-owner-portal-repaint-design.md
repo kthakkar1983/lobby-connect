@@ -68,9 +68,11 @@ Three small, single-purpose, independently-testable components. All use brand to
   uppercase micro-label; `alert` turns the number `text-accent-strong` (coral). Used in the Home card stat
   row.
 - **`StatusPill`** — `{ kind: "call"|"incident", status: string }`. Single source of truth mapping status →
-  `{ label, classes }`:
-  - Call: `COMPLETED`→green-ish (mint-tinted), `IN_PROGRESS`→mint/live, `NO_ANSWER`/`FAILED`→coral-tinted.
-  - Incident: `OPEN`→coral-tinted, `RESOLVED`→neutral grey.
+  `{ label, classes }`, backed by a pure `lib/owner/status-pill.ts` (unit-tested):
+  - Call: `COMPLETED`/`IN_PROGRESS`→mint-tinted (`bg-live/15 text-live-foreground`), `RINGING`→neutral
+    (`bg-muted text-muted-foreground`), `NO_ANSWER`/`FAILED`→coral-tinted (`bg-accent/15 text-accent-strong`).
+  - Incident: `OPEN`→**destructive red** (`bg-destructive/10 text-destructive` — incidents are 911, which
+    Stage 0 reserves the red token for, distinct from coral), `RESOLVED`→neutral grey (`bg-muted text-muted-foreground`).
   - Uses existing semantic tokens; **no hardcoded hex.** Pure mapping unit-tested.
 - **`SectionCard`** — `{ title: string, action?: ReactNode, children }`. Wraps the Stage 1 `Card` with an
   uppercase section header (`font-label`) and an optional right-aligned action slot (e.g. the kiosk-content
@@ -87,8 +89,15 @@ on mount (avoids SSR/client tz mismatch). Used only on Home.
 - Seam hairline (`--gradient-seam`) under the shell header.
 - Mint **left-edge accent** on a Home property card when its assigned agent presence is "live"
   (`AVAILABLE`/`ON_CALL`).
-- Coral **left-edge accent** on a Home card with an open incident, and on open-incident list rows.
+- **Destructive-red** left-edge accent on a Home card with an open incident, and on open-incident list rows
+  (911 = red token; red wins over the mint live-edge when both apply).
+- Coral stays the brand accent — active nav, links, CTAs — never used for incident severity.
 - (No large seam fills — line/ring work only.)
+
+**Presence dots** (`presenceDotClass` in `lib/owner/format.ts`) are remapped from raw Tailwind palette
+colors (`bg-emerald-500`/`bg-blue-500`/…) to brand tokens: `AVAILABLE`→`bg-live`, `ON_CALL`→`bg-accent`,
+`AWAY`→`bg-muted-foreground`, `OFFLINE`→`bg-border`. A pure `isLivePresence(status)` helper
+(`AVAILABLE`/`ON_CALL` → true) drives the mint seam edge.
 
 ---
 
@@ -109,7 +118,8 @@ on mount (avoids SSR/client tz mismatch). Used only on Home.
   - Agent line: presence dot (`presenceDotClass`) + `full_name · presenceLabel`, or "No agent assigned".
   - **StatTile row** (3 tiles): **Calls today** · **Open** (alert when >0) · **Last call** (time in the
     property tz, or "—").
-  - **Left-edge accent:** mint when agent presence is live; coral when `openCount > 0` (coral wins if both).
+  - **Left-edge accent:** mint when agent presence is live; **destructive-red** when `openCount > 0` (red
+    wins if both).
 - Empty state restyled (icon + calm copy), unchanged copy intent.
 - **New derived stat — "Last call":** computed from the `recentCalls` rows already fetched (max
   `ring_started_at` per property), formatted with the existing tz-aware formatter in `lib/owner/format.ts`.
@@ -132,8 +142,9 @@ on mount (avoids SSR/client tz mismatch). Used only on Home.
   `recording_url` is non-null; behavior unchanged).
 
 ### 4.5 Incidents list — `app/(owner)/owner/incidents/page.tsx` (+ `loading.tsx`)
-- Same card-row idiom. Open rows: coral left-edge + coral `StatusPill`; resolved: neutral.
-- Row: alert/check icon chip, primary = incident kind/title + `StatusPill`, secondary = time · property.
+- Same card-row idiom. Open rows: **destructive-red** left-edge + red `StatusPill`; resolved: neutral.
+- Row: siren icon chip, primary = **"911 Emergency"** (incidents have no title field) + `StatusPill`,
+  secondary = property · time · "dispatched to {dispatched_to}".
 - `loading.tsx` repainted to match.
 
 ### 4.6 Incident detail — `app/(owner)/owner/incidents/[id]/page.tsx` (+ `resolve-incident.tsx`)
