@@ -64,6 +64,13 @@ describe("GET /api/agora/token", () => {
     expect((await res.json()).token.startsWith("007")).toBe(true);
   });
 
+  it("agent path: 403 when the caller is an OWNER (read-only role)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    profileRow = { ...profileRow!, role: "OWNER" };
+    const res = await GET(req({ channel: "call_abc", uid: "222" }));
+    expect(res.status).toBe(403);
+  });
+
   it("401 with neither kiosk token nor session", async () => {
     expect((await GET(req({ channel: "call_abc", uid: "1" }))).status).toBe(401);
   });
