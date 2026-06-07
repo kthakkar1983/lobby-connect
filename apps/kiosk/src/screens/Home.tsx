@@ -44,7 +44,7 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
         </div>
 
         <h1 className={`mt-7 font-display text-5xl leading-[1.04] ${s.greet}`}>
-          {config.welcomeHeading}
+          Good evening.
         </h1>
         {config.welcomeMessage ? (
           <p className="mt-4 max-w-[92%] text-lg leading-relaxed text-muted-foreground">
