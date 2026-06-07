@@ -132,6 +132,7 @@ export type Database = {
           kiosk_wifi_network: string | null;
           kiosk_wifi_password: string | null;
           kiosk_breakfast_hours: string | null;
+          kiosk_cta_style: string;
           geocoded_lat: number | null;
           geocoded_long: number | null;
           active: boolean;
@@ -158,6 +159,7 @@ export type Database = {
           kiosk_wifi_network?: string | null;
           kiosk_wifi_password?: string | null;
           kiosk_breakfast_hours?: string | null;
+          kiosk_cta_style?: string;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;
@@ -184,6 +186,7 @@ export type Database = {
           kiosk_wifi_network?: string | null;
           kiosk_wifi_password?: string | null;
           kiosk_breakfast_hours?: string | null;
+          kiosk_cta_style?: string;
           geocoded_lat?: number | null;
           geocoded_long?: number | null;
           active?: boolean;
