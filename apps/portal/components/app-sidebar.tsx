@@ -12,6 +12,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { NavItem } from "@/components/nav-item";
+import { Wordmark } from "@/components/brand/wordmark";
 
 const NAV_ITEMS = [
   { href: "/admin/users", label: "Users", icon: Users },
@@ -26,14 +27,9 @@ export function AppSidebar() {
       <SidebarHeader>
         <Link
           href="/admin"
-          className="flex h-10 items-center gap-2 px-2 font-semibold text-foreground"
+          className="flex h-10 items-center px-2"
         >
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground text-xs">
-            LC
-          </span>
-          <span className="group-data-[collapsible=icon]:hidden">
-            Lobby Connect
-          </span>
+          <Wordmark hideTextWhenCollapsed />
         </Link>
       </SidebarHeader>
       <SidebarContent>

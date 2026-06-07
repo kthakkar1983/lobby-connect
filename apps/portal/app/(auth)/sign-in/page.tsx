@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { signInAction, type SignInState } from "./actions";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Wordmark } from "@/components/brand/wordmark";
 
 const initialState: SignInState = { error: null };
 
@@ -12,7 +13,7 @@ export default function SignInPage() {
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">Lobby Connect</h1>
+        <Wordmark className="mb-1" />
         <p className="text-sm text-text-muted">Sign in to your account.</p>
       </header>
 

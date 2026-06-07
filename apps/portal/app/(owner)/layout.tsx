@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/user-menu";
 import { OwnerTopNav, OwnerBottomNav } from "@/components/owner/owner-nav";
+import { Wordmark } from "@/components/brand/wordmark";
 
 export default async function OwnerLayout({
   children,
@@ -22,8 +23,8 @@ export default async function OwnerLayout({
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-card px-4">
         <div className="flex items-center gap-6">
-          <Link href="/owner" className="text-base font-semibold text-foreground">
-            Lobby Connect
+          <Link href="/owner">
+            <Wordmark />
           </Link>
           <OwnerTopNav />
         </div>
