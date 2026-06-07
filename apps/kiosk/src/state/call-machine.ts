@@ -13,6 +13,7 @@ export interface KioskState {
 
 export type KioskAction =
   | { type: "TAP_CALL" }
+  | { type: "CLOSE_DISCLOSURE" }
   | { type: "ACCEPT_DISCLOSURE"; callId: string; channelName: string }
   | { type: "AGENT_JOINED" }
   | { type: "RING_TIMEOUT" }
@@ -33,6 +34,8 @@ export function reduce(state: KioskState, action: KioskAction): KioskState {
   switch (action.type) {
     case "TAP_CALL":
       return state.screen === "home" ? { ...state, screen: "disclosure" } : state;
+    case "CLOSE_DISCLOSURE":
+      return state.screen === "disclosure" ? home() : state;
     case "ACCEPT_DISCLOSURE":
       return {
         screen: "ringing",
