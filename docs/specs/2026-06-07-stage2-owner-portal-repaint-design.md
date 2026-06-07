@@ -55,8 +55,8 @@ compose** onto the owner screens.
 ### 3.1 `greetingForHour` (pure, shared)
 
 `packages/shared/src/greeting.ts` — `export function greetingForHour(hour: number): string`:
-- `5–11` → `"Good morning"`, `12–16` → `"Good afternoon"`, else → `"Good evening"`.
-- Pure + unit-tested (boundary hours 4/5/11/12/16/17/23/0). Exported from the package barrel.
+- `0–10` → `"Good morning"`, `11–16` → `"Good afternoon"`, `17–23` → `"Good evening"`.
+- Pure + unit-tested (boundary hours 0/10/11/16/17/23). Exported from the package barrel.
 - **Consumers compute the hour client-side** from `new Date().getHours()` (browser-local), then call the
   helper. No timezone library, no server time.
 
