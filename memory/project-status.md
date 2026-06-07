@@ -612,9 +612,43 @@ index.css vars the Stage 0 spec §7 called out ARE gone.
 confirm fonts/wordmark-seam/sidebar render on the prod deploy. Foundation is token-level so risk is low and
 all gates passed.
 
+**Stage 1 PICK UP HERE (now superseded — Stage 2 kiosk done below):**
+1. ~~Visually confirm Stage 1 on prod.~~ 2. ~~Start Stage 2 kiosk.~~ — both addressed in session 9.
+
+---
+
+## UI/UX Stage 2 — Kiosk (surface 1 of 3) — DONE, PR open (session 9)
+
+**Branch `feat/ui-ux-stage2-kiosk` → PR #14 (open, NOT merged to main).** Spec:
+`docs/specs/2026-06-07-stage2-kiosk-repaint-design.md` · Plan: `docs/plans/2026-06-07-stage2-kiosk-repaint.md`.
+Built subagent-driven (5 implementer units, each spec+quality reviewed; final whole-branch review =
+READY TO MERGE). Full gate green (350 tests), zero stray hex in `apps/kiosk/src`, all nine states
+eyeballed via a throwaway harness.
+
+**What shipped:**
+- Every kiosk screen repainted: Home (concierge split 55/45, static "Good evening." display greeting +
+  hotel name as the small Vonique label), recording notice (coral Continue + top-right X), Ringing/
+  Connected (seam **ring→frame** motif, shared `CallControls`, coral End/Cancel — **no red on kiosk**),
+  Apology (apology-only copy, no phone, visible mono countdown), repainted Loading + Reconnecting.
+- New `--color-call: #14202F` deep-navy video token; `CLOSE_DISCLOSURE` state transition; the deferred
+  `Connected`/`Ringing` hardcoded hex (the §7 cleanup) is now GONE.
+- **Owner-selectable Home style `kiosk_cta_style`** (`warm` default / `accent` / `classic`) end-to-end:
+  migration **0015** (column text+CHECK+default + extends the 0010 owner column-guard whitelist) +
+  owner-portal Appearance picker (in the existing kiosk-content card, same Edit/Save txn, audited) +
+  config API (`ctaStyle`) + kiosk `Home` rendering. Enum identical across all 10 layers.
+
+**⚠️ Prod state asymmetry (important):**
+- **Migration 0015 IS APPLIED + verified on prod** (`ztunzdpmazwwwkxcpyfp`; existing property defaulted to
+  `warm`). Safe ahead of code — additive, old app ignores the column.
+- **App code is NOT live on prod** — it's on PR #14, not merged. Vercel prod deploys from `main` only.
+
+**Intentional deviations (documented in spec):** Connected shows "Front desk" (kiosk has no agent name);
+`accent` preset uses base coral (`text-accent`) for AA on navy.
+
 **PICK UP HERE (fresh chat):**
-1. **Visually confirm Stage 1 on prod** (fonts load, wordmark seam hairline, sidebar renders, primitives on-brand).
-2. **Start Stage 2 — per-surface polish** per `docs/plans/2026-06-07-ui-ux-polish-stages.md`, audience order
-   **Kiosk > Owner > Agent/Admin**. Kiosk repaint absorbs the deferred `Connected`/`Ringing` hex cleanup.
-   Gate Stage 2 behind the page set freezing (don't repaint pages testing is still changing).
-3. Emergency is still **933** (TEMP, unrelated to this work) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
+1. **Merge PR #14** to `main` (Vercel auto-deploys kiosk+portal prod) once reviewed. Migration already live.
+2. **Stage 2 surface 2 — Owner portal repaint** (mobile-first; the Appearance picker control already landed
+   in this PR and will slot in). Then surface 3 — Agent/Admin. Parent plan:
+   `docs/plans/2026-06-07-ui-ux-polish-stages.md`. Each its own fresh-chat PR.
+3. Then **Stage 3** — states/motion/a11y/copy pass.
+4. Emergency is still **933** (TEMP, unrelated) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
