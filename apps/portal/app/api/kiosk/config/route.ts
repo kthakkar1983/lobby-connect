@@ -36,7 +36,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     wifiPassword: p.kiosk_wifi_password,
     breakfastHours: p.kiosk_breakfast_hours,
     apologyMessage: p.kiosk_apology_message,
-    ctaStyle: (p.kiosk_cta_style as "warm" | "accent" | "classic" | null) ?? "warm",
+    ctaStyle: p.kiosk_cta_style,
     phoneNumber: p.property_phone_number,
   });
 }

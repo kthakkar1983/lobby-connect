@@ -67,13 +67,9 @@ describe("GET /api/kiosk/config", () => {
     expect((await GET(req(token))).status).toBe(404);
   });
 
-  it("returns the kiosk cta style, defaulting to warm when null", async () => {
+  it("returns the kiosk cta style", async () => {
     const token = signKioskToken("prop-1", SECRET);
-    let res = await GET(req(token));
+    const res = await GET(req(token));
     expect((await res.json()).ctaStyle).toBe("accent");
-
-    propertyRow!.kiosk_cta_style = null;
-    res = await GET(req(token));
-    expect((await res.json()).ctaStyle).toBe("warm");
   });
 });
