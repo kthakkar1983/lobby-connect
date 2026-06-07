@@ -1,7 +1,9 @@
 # UI/UX Polish — Staged Plan (start in a fresh chat)
 
-**Created:** 2026-06-07 (session 7). **Status:** NOT STARTED — this is the plan to pick up
-once smoke testing settles. Start it in a **fresh, low-context chat**.
+**Created:** 2026-06-07 (session 7). **Status:** IN PROGRESS — **Stage 0 LOCKED** (session 8).
+Design direction decided + written to `docs/specs/2026-06-07-ui-ux-stage0-design-direction.md`
+(branch `docs/ui-ux-stage0-design`). **Next: Stage 1 (Foundation)** — run `writing-plans` off that branch.
+Start each stage in a **fresh, low-context chat**.
 
 ## Context
 
@@ -34,7 +36,7 @@ front-desk; tone should read calm, trustworthy, professional; kiosk should feel 
 
 ## Stages
 
-### Stage 0 — Direction & brand (decision, little/no code)
+### Stage 0 — Direction & brand (decision, little/no code) — ✅ DONE (session 8 → `docs/specs/2026-06-07-ui-ux-stage0-design-direction.md`)
 - Brand feel, color palette, type pairing, spacing/radius/shadow scale, motion stance, UX voice.
 - Per-surface art direction: kiosk (guest), owner portal (client, mobile-first), agent/admin (operational).
 - Output: a short design-direction doc + token values to apply in Stage 1.

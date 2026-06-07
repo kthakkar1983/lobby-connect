@@ -42,3 +42,6 @@ supabase/.temp/
 
 # Brainstorming visual companion (local mockups)
 .superpowers/
+
+# Vercel
+.vercel

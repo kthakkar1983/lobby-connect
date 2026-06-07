@@ -537,3 +537,31 @@ The fix phase for the 2026-06-06 pre-launch readiness audit (`docs/audits/2026-0
 1. **Revert emergency to 911** once Kumar finishes the 933 testing (see the TEMP memory) — and ASK him whether testing is done before assuming.
 2. **Continue smoke / triage** any new issues Kumar surfaces from testing.
 3. **When ready, start UI/UX polish in a fresh chat** per `docs/plans/2026-06-07-ui-ux-polish-stages.md` (Stage 0 brainstorm first).
+
+---
+
+## 2026-06-07 (session 8) — UI/UX Stage 0 design direction LOCKED (brainstorm only, no code)
+
+Ran the Stage 0 brainstorm from `docs/plans/2026-06-07-ui-ux-polish-stages.md` using the visual companion
+(mockups in `.superpowers/brainstorm/`, gitignored). **Output committed:**
+`docs/specs/2026-06-07-ui-ux-stage0-design-direction.md` on branch **`docs/ui-ux-stage0-design`** (off `main`).
+
+**Locked decisions:**
+- **Brand thesis:** "a real person reached through a screen" — warm hospitality ⇄ cool automation, joined at *the seam*. Tone stays calm/trustworthy/professional.
+- **Signature motif — the seam:** navy→mint→coral gradient used as line/ring work only (hairline under wordmark, ring around a connected caller, active-call edge). = the "Connected" shorthand.
+- **Color:** ink `#2C425C` · coral `#F0795B` base / `#E05A39` deep-for-fills (AA) · mint live `#06D6A0` · emergency `#C81E1E` · cool neutrals (`#F6F8FA` page / `#EAEEF2` muted fill / `#E1E7EC` border / `#64748B` muted text). (Started from Kumar's "B+" trio; vermilion → coral; kept ink+mint.)
+- **Type:** **Solitude** display serif (Envato, self-host, display-only) · **Outfit** sans for all UI/body (≈ Google Sans) · **JetBrains Mono** for data · **Vonique 43** all-caps labels. Rule: section headers ≤~20px use Outfit semibold, not Solitude (its hairlines break small).
+- **Shape:** "Balanced" — card 12 / btn 9 / input 8 (kiosk softer); navy-tinted shadows. Motion: restrained, 150–250ms, transform/opacity, reduced-motion honored; mint pulse + seam drift only.
+- **Per-surface:** Kiosk (warm/large-touch) > Owner (premium/mobile) > Agent-Admin (dense/operational). UX voice: calm, warm, plain-spoken.
+
+**Open items carried into Stage 1 (in the spec §8):**
+1. **Envato license check** — confirm Solitude + Vonique 43 permit web embedding / self-hosting BEFORE shipping them (proxies otherwise: Playfair Display / Jost).
+2. Decide if Vonique 43 label tier is worth a 3rd self-hosted font for v1, or defer labels to Outfit all-caps.
+3. Final token names to match shadcn's CSS-var contract during the primitive re-skin.
+
+**Stage 1 prep notes (in spec §7):** Tailwind v4 CSS-first `@theme`; mirror tokens in `apps/portal/app/globals.css` + `apps/kiosk/src/index.css`; **delete the stray `--kiosk-navy: #0f1f3d` / `--kiosk-cream` "Jazz Club" hex** in kiosk `index.css` (leftover from the *Back of House* project); replace the generic shadcn-blue `--color-primary` + unused `--sidebar-*`/`.dark` block; re-skin shadcn primitives at the token layer, don't fork.
+
+**PICK UP HERE (fresh chat):**
+1. **Review/approve the Stage 0 spec** if not already, then run the **writing-plans** skill to produce the Stage 1 (Foundation) implementation plan off `docs/ui-ux-stage0-design`.
+2. **Resolve open item #1 (Envato license)** before Stage 1 wires the real fonts.
+3. Emergency is still **933** (TEMP) — unrelated to this branch, but revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
