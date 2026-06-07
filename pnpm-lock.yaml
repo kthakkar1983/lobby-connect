@@ -41,6 +41,9 @@ importers:
       agora-rtc-sdk-ng:
         specifier: ^4.24.4
         version: 4.24.4
+      lucide-react:
+        specifier: ^1.16.0
+        version: 1.16.0(react@19.2.6)
       react:
         specifier: ^19.0.0
         version: 19.2.6
