@@ -21,24 +21,12 @@ export type PropertyListRow = {
   timezone: string;
   routing_did: string | null;
   active: boolean;
-  created_at: string;
   owner_name: string;
 };
 
 type Props = {
   readonly properties: PropertyListRow[];
 };
-
-function relative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "today";
-  if (days === 1) return "1 day ago";
-  if (days < 30) return `${days} days ago`;
-  const months = Math.floor(days / 30);
-  if (months === 1) return "1 month ago";
-  return `${months} months ago`;
-}
 
 export function PropertiesTable({ properties }: Props) {
   const [query, setQuery] = useState("");
@@ -85,7 +73,6 @@ export function PropertiesTable({ properties }: Props) {
                 <TableHead>Timezone</TableHead>
                 <TableHead>Routing #</TableHead>
                 <TableHead>Active</TableHead>
-                <TableHead>Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -112,9 +99,6 @@ export function PropertiesTable({ properties }: Props) {
                     <Badge variant={p.active ? "secondary" : "outline"}>
                       {p.active ? "Active" : "Inactive"}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-text-muted">
-                    {relative(p.created_at)}
                   </TableCell>
                 </TableRow>
               ))}

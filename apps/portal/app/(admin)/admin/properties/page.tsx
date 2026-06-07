@@ -39,7 +39,6 @@ export default async function PropertiesPage() {
     timezone: p.timezone,
     routing_did: p.routing_did,
     active: p.active,
-    created_at: p.created_at,
     owner_name: p.owner_user_id
       ? (ownerNames.get(p.owner_user_id) ?? "—")
       : "—",
