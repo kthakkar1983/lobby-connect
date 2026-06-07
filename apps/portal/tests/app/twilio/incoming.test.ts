@@ -20,6 +20,9 @@ type Canned = {
   agent?: unknown;
   availRows?: unknown[];
   admins?: unknown[];
+  // When set, the first Supabase query rejects — simulates a hung/aborted
+  // dependency (e.g. the AbortSignal.timeout fired on the admin client).
+  throwOnQuery?: boolean;
 };
 let canned: Canned = {};
 const insertSpy = vi.fn<() => Promise<{ error: null }>>(
@@ -45,6 +48,11 @@ function makeAdminClient() {
         };
       };
       builder.maybeSingle = () => {
+        if (canned.throwOnQuery) {
+          return Promise.reject(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        }
         if (table === "properties") return Promise.resolve({ data: canned.property ?? null });
         if (table === "calls") return Promise.resolve({ data: canned.existingCall ?? null });
         if (table === "property_assignments") return Promise.resolve({ data: canned.assignment ?? null });
@@ -157,5 +165,15 @@ describe("POST /api/twilio/voice/incoming", () => {
     const xml = await res.text();
     expect(xml).toContain("<Identity>lc_a1</Identity>");
     expect(xml).toContain("<Identity>lc_x1</Identity>");
+  });
+
+  it("returns apology TwiML (200) when a Supabase query throws (e.g. timeout)", async () => {
+    canned.throwOnQuery = true;
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA9" }));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Say");
+    expect(xml).toContain("<Hangup/>");
+    expect(xml).not.toContain("<Dial");
   });
 });

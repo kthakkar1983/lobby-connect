@@ -14,6 +14,11 @@ import {
 } from "@/lib/voice/twiml";
 
 export const runtime = "nodejs";
+export const maxDuration = 20;
+
+// Bound each Supabase query so a hung dependency aborts (→ apology TwiML in the
+// catch below) well inside Twilio's webhook patience, instead of dead air.
+const SUPABASE_TIMEOUT_MS = 2500;
 
 const GREETING = "Connecting you to the front desk, one moment.";
 const APOLOGY =
@@ -43,7 +48,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const from = params.From ?? "";
     const callSid = params.CallSid ?? "";
 
-    const admin = createAdminClient();
+    const admin = createAdminClient({ timeoutMs: SUPABASE_TIMEOUT_MS });
 
     // 1. Property by routing_did (active only).
     const { data: property } = await admin

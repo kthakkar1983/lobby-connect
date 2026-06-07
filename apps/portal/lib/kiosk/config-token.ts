@@ -1,6 +1,11 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+// Re-exported for back-compat: callers historically import getKioskConfigSecret
+// from here. It now lives in a crypto-free sibling so instrumentation.ts can
+// import it without pulling node:crypto. See config-secret.ts.
+export { getKioskConfigSecret } from "@/lib/kiosk/config-secret";
+
 interface Payload {
   p: string; // property_id
   t: number; // issued-at (epoch seconds)
@@ -38,15 +43,4 @@ export function verifyKioskToken(
   } catch {
     return null;
   }
-}
-
-/** Reads KIOSK_CONFIG_SECRET at call-time (so vi.stubEnv works in tests). */
-export function getKioskConfigSecret(): string {
-  const s = process.env.KIOSK_CONFIG_SECRET;
-  if (!s) {
-    throw new Error(
-      "Missing KIOSK_CONFIG_SECRET env var. Set it in apps/portal/.env.local (see .env.example).",
-    );
-  }
-  return s;
 }
