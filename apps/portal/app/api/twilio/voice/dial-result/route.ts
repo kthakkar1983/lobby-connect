@@ -15,11 +15,16 @@ import {
   shouldRouteToEmergencyConference,
   buildConferenceTwiml,
 } from "@/lib/emergency/conference";
+import { readWithRetry } from "@/lib/db/read-with-retry";
 
 export const runtime = "nodejs";
 
 const APOLOGY =
   "We're sorry, no one is available right now. Please try again or call us directly.";
+
+// This read decides whether the guest's parent leg joins the emergency
+// conference, so retry a transient blip instead of falling through to a hangup.
+const READ_RETRY = { attempts: 3, delayMs: 150 } as const;
 
 function twimlResponse(xml: string, status = 200): NextResponse {
   return new NextResponse(xml, {
@@ -46,16 +51,30 @@ export async function POST(request: Request): Promise<NextResponse> {
     const admin = createAdminClient();
 
     // Terminal-state guard: don't overwrite a state that's already terminal.
-    const { data: existing } = await admin
-      .from("calls")
-      .select("state, emergency_conference_name")
-      .eq("twilio_call_sid", callSid)
-      .maybeSingle();
+    // Retry on a transient error — see READ_RETRY above.
+    const { data: existing, error: readError } = await readWithRetry(
+      () =>
+        admin
+          .from("calls")
+          .select("state, emergency_conference_name")
+          .eq("twilio_call_sid", callSid)
+          .maybeSingle(),
+      READ_RETRY,
+    );
 
     // Emergency: the agent leg was redirected into a conference, so this parent
     // (guest) leg must join the same conference instead of hanging up.
     if (existing && shouldRouteToEmergencyConference(existing)) {
       return twimlResponse(buildConferenceTwiml(existing.emergency_conference_name as string));
+    }
+
+    // Still unreadable after retries: we cannot tell whether this call is
+    // mid-911, so DON'T write a terminal state — clobbering an active emergency
+    // would be catastrophic. /status + the reaper finalize a genuinely-ended
+    // normal call. Play the safe default audio only.
+    if (readError) {
+      console.error("[voice/dial-result] read failed after retries:", readError);
+      return twimlResponse(hangup ? buildHangupTwiml() : buildApologyTwiml(APOLOGY));
     }
 
     const currentTerminal = existing
