@@ -130,7 +130,7 @@ export function App() {
       case "home":
         return <Home config={config} onCall={() => dispatch({ type: "TAP_CALL" })} />;
       case "disclosure":
-        return <RecordingNotice onOk={onAccept} />;
+        return <RecordingNotice onOk={onAccept} onClose={() => dispatch({ type: "CLOSE_DISCLOSURE" })} />;
       case "ringing":
         return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
       case "connected":
