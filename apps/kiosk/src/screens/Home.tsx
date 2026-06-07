@@ -1,6 +1,7 @@
 import { Video } from "lucide-react";
 import type { KioskConfig } from "../types";
 import { SeamTop, LogoMark } from "../components/brand";
+import { greetingForHour } from "@lc/shared";
 
 const CTA_STYLES = {
   warm:    { panel: "bg-accent-strong", text: "text-white",  sub: "text-white/80", greet: "text-foreground" },
@@ -44,7 +45,7 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
         </div>
 
         <h1 className={`mt-7 font-display text-5xl leading-[1.04] ${s.greet}`}>
-          Good evening.
+          {greetingForHour(new Date().getHours())}.
         </h1>
         {config.welcomeMessage ? (
           <p className="mt-4 max-w-[92%] text-lg leading-relaxed text-muted-foreground">
