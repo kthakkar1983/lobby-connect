@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   callStateLabel,
-  callStateBadgeVariant,
   incidentStatusLabel,
-  incidentStatusBadgeVariant,
   presenceLabel,
   presenceDotClass,
   isLivePresence,
@@ -22,22 +20,10 @@ describe("callStateLabel", () => {
   });
 });
 
-describe("callStateBadgeVariant", () => {
-  it("uses destructive for missed/failed, default for answered", () => {
-    expect(callStateBadgeVariant("COMPLETED")).toBe("default");
-    expect(callStateBadgeVariant("IN_PROGRESS")).toBe("default");
-    expect(callStateBadgeVariant("RINGING")).toBe("secondary");
-    expect(callStateBadgeVariant("NO_ANSWER")).toBe("destructive");
-    expect(callStateBadgeVariant("FAILED")).toBe("destructive");
-  });
-});
-
 describe("incident mappers", () => {
-  it("labels and colors OPEN vs RESOLVED", () => {
+  it("labels OPEN vs RESOLVED", () => {
     expect(incidentStatusLabel("OPEN")).toBe("Open");
     expect(incidentStatusLabel("RESOLVED")).toBe("Resolved");
-    expect(incidentStatusBadgeVariant("OPEN")).toBe("destructive");
-    expect(incidentStatusBadgeVariant("RESOLVED")).toBe("secondary");
   });
 });
 

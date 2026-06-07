@@ -1,7 +1,5 @@
 import type { CallState, IncidentStatus, ProfileStatus } from "@lc/shared";
 
-export type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
 const CALL_STATE_LABELS: Record<CallState, string> = {
   RINGING: "Ringing",
   IN_PROGRESS: "In progress",
@@ -14,24 +12,8 @@ export function callStateLabel(state: CallState): string {
   return CALL_STATE_LABELS[state];
 }
 
-const CALL_STATE_VARIANTS: Record<CallState, BadgeVariant> = {
-  RINGING: "secondary",
-  IN_PROGRESS: "default",
-  COMPLETED: "default",
-  NO_ANSWER: "destructive",
-  FAILED: "destructive",
-};
-
-export function callStateBadgeVariant(state: CallState): BadgeVariant {
-  return CALL_STATE_VARIANTS[state];
-}
-
 export function incidentStatusLabel(status: IncidentStatus): string {
   return status === "RESOLVED" ? "Resolved" : "Open";
-}
-
-export function incidentStatusBadgeVariant(status: IncidentStatus): BadgeVariant {
-  return status === "RESOLVED" ? "secondary" : "destructive";
 }
 
 const PRESENCE_LABELS: Record<ProfileStatus, string> = {

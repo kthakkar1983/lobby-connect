@@ -24,7 +24,12 @@ export function IncidentRow({ incident }: { readonly incident: IncidentRowData }
         open && "border-l-2 border-l-destructive",
       )}
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-input bg-destructive/10 text-destructive">
+      <span
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-input",
+          open ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground",
+        )}
+      >
         <Siren className="size-4" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
