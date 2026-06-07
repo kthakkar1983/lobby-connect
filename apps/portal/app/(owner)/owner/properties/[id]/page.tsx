@@ -11,7 +11,7 @@ import {
 } from "@/lib/owner/format";
 import { KioskContentCard } from "./kiosk-content-card";
 import { PlaybookCard } from "./playbook-card";
-import { KIOSK_FIELDS, type KioskContentInput } from "@/lib/owner/kiosk";
+import { KIOSK_FIELDS, type KioskContentInput, type KioskCtaStyle } from "@/lib/owner/kiosk";
 
 function Field({
   label,
@@ -44,7 +44,7 @@ export default async function OwnerPropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, name, timezone, property_phone_number, after_hours_support_phone, playbook_version, kiosk_welcome_heading, kiosk_welcome_message, kiosk_checkin_time, kiosk_checkout_time, kiosk_wifi_network, kiosk_wifi_password, kiosk_breakfast_hours, kiosk_apology_message",
+      "id, name, timezone, property_phone_number, after_hours_support_phone, playbook_version, kiosk_welcome_heading, kiosk_welcome_message, kiosk_checkin_time, kiosk_checkout_time, kiosk_wifi_network, kiosk_wifi_password, kiosk_breakfast_hours, kiosk_apology_message, kiosk_cta_style",
     )
     .eq("id", id)
     .maybeSingle();
@@ -80,7 +80,11 @@ export default async function OwnerPropertyDetailPage({
 
       <PlaybookCard propertyId={property.id} version={property.playbook_version} />
 
-      <KioskContentCard propertyId={property.id} initial={kioskInitial} />
+      <KioskContentCard
+        propertyId={property.id}
+        initial={kioskInitial}
+        initialStyle={(property.kiosk_cta_style ?? "warm") as KioskCtaStyle}
+      />
 
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between">
