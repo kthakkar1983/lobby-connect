@@ -27,6 +27,7 @@ export function AppSidebar() {
       <SidebarHeader>
         <Link
           href="/admin"
+          aria-label="Lobby Connect home"
           className="flex h-10 items-center px-2"
         >
           <Wordmark hideTextWhenCollapsed />

@@ -60,6 +60,17 @@
   --shadow-sm: 0 1px 2px rgba(44, 66, 92, 0.06);
   --shadow-md: 0 12px 26px -14px rgba(44, 66, 92, 0.16);
   --shadow-lg: 0 18px 40px -16px rgba(44, 66, 92, 0.20);
+
+  /* Sidebar — aliases to brand tokens so the shadcn sidebar primitive resolves.
+     Neutral surface for foundation; Stage 2 admin polish may choose a navy rail. */
+  --color-sidebar: var(--color-card);
+  --color-sidebar-foreground: var(--color-foreground);
+  --color-sidebar-primary: var(--color-primary);
+  --color-sidebar-primary-foreground: var(--color-primary-foreground);
+  --color-sidebar-accent: var(--color-muted);
+  --color-sidebar-accent-foreground: var(--color-foreground);
+  --color-sidebar-border: var(--color-border);
+  --color-sidebar-ring: var(--color-ring);
 }
 
 html,
