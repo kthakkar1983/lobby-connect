@@ -231,7 +231,23 @@ export async function hardDeleteUserAction(input: {
     };
   }
 
-  // Audit BEFORE delete so the actor's profile + the target snapshot exist.
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(input.targetUserId);
+
+  if (error) {
+    // Hard-delete RESTRICTs on a user with history (handled calls, owned
+    // property, prior incidents) are intentional — they must be deactivated, not
+    // deleted. Fail gracefully and write NO audit row (auditing before the delete
+    // left a phantom user.deleted entry whenever the delete then failed).
+    return {
+      ok: false,
+      error:
+        "This user has activity on record (calls, incidents, or property ownership) and can't be hard-deleted. Deactivate them instead.",
+    };
+  }
+
+  // Audit only AFTER a successful delete. The actor (admin) still exists and the
+  // target snapshot was captured above, so the row is complete and truthful.
   await logAuditEvent({
     actorUserId: actor.id,
     action: "user.deleted",
@@ -239,13 +255,6 @@ export async function hardDeleteUserAction(input: {
     entityId: target.id,
     details: { email: target.email, full_name: target.full_name },
   });
-
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.deleteUser(input.targetUserId);
-
-  if (error) {
-    return { ok: false, error: `Failed to delete user: ${error.message}` };
-  }
 
   revalidatePath("/admin/users");
   return { ok: true };
