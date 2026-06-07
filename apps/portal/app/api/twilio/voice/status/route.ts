@@ -42,7 +42,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       ended_at: string;
       duration_seconds?: number;
       state?: CallState;
-      answered_at?: string;
     } = { ended_at: new Date().toISOString() };
 
     if (duration !== null) updates.duration_seconds = duration;
@@ -52,15 +51,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       ? isTerminalState(existing.state as CallState)
       : false;
     if (mapped && !currentTerminal) {
-      updates.state = mapped;
-      if (mapped === "COMPLETED") updates.answered_at = new Date().toISOString();
+      if (mapped === "COMPLETED") {
+        // Only promote an already-answered (IN_PROGRESS) call to COMPLETED;
+        // /dial-result owns the answered-vs-not decision for a call that never
+        // bridged, so this webhook must not fabricate a completion (#20). And it
+        // never writes answered_at — /answered owns that (#19).
+        if (existing?.state === "IN_PROGRESS") updates.state = "COMPLETED";
+      } else {
+        updates.state = mapped;
+      }
     }
 
     await admin.from("calls").update(updates).eq("twilio_call_sid", callSid);
 
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    // Return 2xx so Twilio does not retry (a retry would re-stamp ended_at). The
+    // terminal-state guard + reaper cover anything we failed to write here (#21).
     console.error("[voice/status] unhandled error:", err);
-    return new NextResponse("Internal server error", { status: 500 });
+    return new NextResponse(null, { status: 204 });
   }
 }

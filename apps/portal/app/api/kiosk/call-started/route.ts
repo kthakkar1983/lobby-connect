@@ -24,6 +24,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
+  // One kiosk = one live call. Reject if the property already has an active
+  // VIDEO call so a leaked token (or a reload storm) can't mint unlimited
+  // RINGING rows and ring-spam the agent's softphone.
+  const { data: existingActive } = await admin
+    .from("calls")
+    .select("id")
+    .eq("property_id", property.id)
+    .eq("channel", "VIDEO")
+    .in("state", ["RINGING", "IN_PROGRESS"])
+    .limit(1)
+    .maybeSingle();
+  if (existingActive) {
+    return NextResponse.json(
+      { error: "A call is already active for this property" },
+      { status: 409 },
+    );
+  }
+
   const channelName = `call_${randomUUID().replace(/-/g, "")}`;
 
   const { data: inserted } = await admin

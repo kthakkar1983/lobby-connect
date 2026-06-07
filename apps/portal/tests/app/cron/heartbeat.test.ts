@@ -25,8 +25,12 @@ beforeEach(() => upsertSpy.mockClear());
 
 describe("cron mark-stale-offline heartbeat", () => {
   it("records a cron heartbeat per operator after the sweep", async () => {
-    delete process.env.CRON_SECRET; // no auth gate in test
-    const res = await GET(new Request("http://localhost:3000/api/cron/mark-stale-offline"));
+    process.env.CRON_SECRET = "s3cret"; // cron auth fails closed; present the secret
+    const res = await GET(
+      new Request("http://localhost:3000/api/cron/mark-stale-offline", {
+        headers: { authorization: "Bearer s3cret" },
+      }),
+    );
     expect(res.status).toBe(200);
     expect(upsertSpy).toHaveBeenCalledTimes(1);
     const payload = upsertSpy.mock.calls[0]?.[0] as Record<string, unknown>;
