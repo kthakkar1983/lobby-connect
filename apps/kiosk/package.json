@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/outfit": "^5.2.8",
     "@lc/shared": "workspace:*",
     "@sentry/react": "^10.56.0",
     "agora-rtc-sdk-ng": "^4.24.4",

@@ -24,9 +24,9 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
         )}
         <h1 style={{ fontSize: 34, margin: 0 }}>{config.welcomeHeading}</h1>
       </div>
-      {config.welcomeMessage && <p style={{ fontSize: 20, margin: 0, color: "var(--kiosk-muted)" }}>{config.welcomeMessage}</p>}
+      {config.welcomeMessage && <p style={{ fontSize: 20, margin: 0, color: "var(--color-muted-foreground)" }}>{config.welcomeMessage}</p>}
 
-      <div style={{ background: "var(--kiosk-surface)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ background: "var(--color-surface)", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
         <Row label="Check-in" value={config.checkinTime} />
         <Row label="Check-out" value={config.checkoutTime} />
         <Row label="WiFi" value={wifi ?? null} />
@@ -38,7 +38,7 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
         onClick={onCall}
         style={{
           flex: 1, minHeight: 96, border: "none", borderRadius: 16,
-          background: "var(--kiosk-navy)", color: "var(--kiosk-cream)",
+          background: "var(--color-primary)", color: "var(--color-primary-foreground)",
           fontSize: 30, fontWeight: 700, cursor: "pointer",
         }}
       >
