@@ -3,15 +3,14 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
-import {
-  callStateLabel,
-  callStateBadgeVariant,
-  formatCallTime,
-} from "@/lib/owner/format";
+import { SectionCard } from "@/components/owner/section-card";
+import { CallRow, type CallRowData } from "@/components/owner/call-row";
+import { presenceLabel, presenceDotClass } from "@/lib/owner/format";
+import { cn } from "@/lib/utils";
 import { KioskContentCard } from "./kiosk-content-card";
 import { PlaybookCard } from "./playbook-card";
 import { KIOSK_FIELDS, type KioskContentInput, type KioskCtaStyle } from "@/lib/owner/kiosk";
+import type { ProfileStatus } from "@lc/shared";
 
 function Field({
   label,
@@ -22,7 +21,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-text-muted">
+      <span className="font-label text-[10px] uppercase tracking-[0.06em] text-text-muted">
         {label}
       </span>
       <span className="text-sm text-foreground">
@@ -55,6 +54,23 @@ export default async function OwnerPropertyDetailPage({
     KIOSK_FIELDS.map((f) => [f, (property[f] as string | null) ?? ""]),
   ) as KioskContentInput;
 
+  // Assigned agent + presence (2-query pattern).
+  const { data: assignment } = await supabase
+    .from("property_assignments")
+    .select("primary_agent_id")
+    .eq("property_id", id)
+    .is("effective_until", null)
+    .maybeSingle();
+  let agent: { full_name: string; status: ProfileStatus } | null = null;
+  if (assignment?.primary_agent_id) {
+    const { data: a } = await supabase
+      .from("profiles")
+      .select("full_name, status")
+      .eq("id", assignment.primary_agent_id)
+      .maybeSingle();
+    if (a) agent = { full_name: a.full_name, status: a.status };
+  }
+
   const { data: recent } = await supabase
     .from("calls")
     .select("id, channel, state, ring_started_at")
@@ -63,20 +79,34 @@ export default async function OwnerPropertyDetailPage({
     .limit(5);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <Link
         href="/owner"
         className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-foreground"
       >
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Home
+        <ChevronLeft className="size-4" aria-hidden="true" /> Home
       </Link>
-      <h1 className="text-2xl font-semibold text-foreground">{property.name}</h1>
 
-      <section className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-5">
-        <Field label="Guest phone" value={property.property_phone_number} />
-        <Field label="After-hours support" value={property.after_hours_support_phone} />
-        <Field label="Timezone" value={property.timezone} />
-      </section>
+      <div>
+        <h1 className="font-display text-3xl text-foreground">{property.name}</h1>
+        <p className="mt-1 text-sm text-text-muted">{property.timezone}</p>
+        {agent ? (
+          <span className="mt-2 flex items-center gap-2 text-sm text-text-muted">
+            <span className={cn("size-2 rounded-full", presenceDotClass(agent.status))} aria-hidden="true" />
+            {agent.full_name} · {presenceLabel(agent.status)}
+          </span>
+        ) : (
+          <span className="mt-2 block text-sm text-text-muted">No agent assigned</span>
+        )}
+      </div>
+
+      <SectionCard title="Property">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Guest phone" value={property.property_phone_number} />
+          <Field label="After-hours support" value={property.after_hours_support_phone} />
+          <Field label="Timezone" value={property.timezone} />
+        </div>
+      </SectionCard>
 
       <PlaybookCard propertyId={property.id} version={property.playbook_version} />
 
@@ -86,41 +116,33 @@ export default async function OwnerPropertyDetailPage({
         initialStyle={(property.kiosk_cta_style ?? "warm") as KioskCtaStyle}
       />
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-foreground">Recent calls</h2>
-          <Link
-            href={"/owner/calls" as never}
-            className="text-sm text-primary hover:underline"
-          >
+      <SectionCard
+        title="Recent calls"
+        action={
+          <Link href={"/owner/calls" as never} className="text-sm font-medium text-accent-strong hover:underline">
             View all
           </Link>
-        </div>
+        }
+      >
         {(recent ?? []).length === 0 ? (
           <p className="text-sm text-text-muted">No calls yet.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-border">
-            {(recent ?? []).map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/owner/calls/${c.id}` as never}
-                  className="flex items-center justify-between py-2.5 text-sm hover:text-primary"
-                >
-                  <span className="text-foreground">
-                    {formatCallTime(c.ring_started_at, property.timezone)}
-                  </span>
-                  <span className="flex items-center gap-2 text-text-muted">
-                    {c.channel === "VIDEO" ? "Video" : "Audio"}
-                    <Badge variant={callStateBadgeVariant(c.state)}>
-                      {callStateLabel(c.state)}
-                    </Badge>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-col gap-2">
+            {(recent ?? []).map((c) => {
+              const item: CallRowData = {
+                id: c.id,
+                channel: c.channel,
+                state: c.state,
+                ring_started_at: c.ring_started_at,
+                duration_seconds: null,
+                timeZone: property.timezone,
+                secondary: c.channel === "VIDEO" ? "Video" : "Audio",
+              };
+              return <CallRow key={c.id} call={item} />;
+            })}
+          </div>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }
