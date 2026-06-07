@@ -8,6 +8,9 @@ vi.mock("@/lib/supabase/server", () => ({
 let profileRow: Record<string, unknown> | null;
 let callRow: Record<string, unknown> | null;
 let propertyRow: Record<string, unknown> | null;
+// Result of the atomic claim UPDATE (`.is(emergency_conference_name, null).select()`).
+// Default: this request wins the claim (one row returned).
+let claimResult: { data: unknown[] | null; error: unknown };
 const updateCalls: Record<string, unknown>[] = [];
 const insertedIncidents: Record<string, unknown>[] = [];
 
@@ -22,7 +25,15 @@ vi.mock("@/lib/supabase/admin", () => ({
           select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
           update: (vals: Record<string, unknown>) => {
             updateCalls.push(vals);
-            return { eq: () => Promise.resolve({ error: null }) };
+            const builder: Record<string, unknown> = {};
+            builder.eq = () => builder;
+            builder.is = () => builder;
+            // `.update(...).eq(...).is(...).select()` → the atomic claim result.
+            builder.select = () => Promise.resolve(claimResult);
+            // `.update(...).eq(...)` (no select) is awaited directly.
+            (builder as { then: (r: (v: unknown) => void) => void }).then = (resolve) =>
+              resolve({ error: null });
+            return builder;
           },
         };
       }
@@ -74,6 +85,7 @@ beforeEach(() => {
   listMock.mockReset();
   callUpdateMock.mockClear();
   participantsCreateMock.mockReset();
+  claimResult = { data: [{ id: "call-1" }], error: null };
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   profileRow = { id: "u1", operator_id: "op-1" };
   callRow = {
@@ -112,7 +124,7 @@ describe("POST /api/calls/[id]/emergency", () => {
     expect((await call("call-1")).status).toBe(409);
   });
 
-  it("is idempotent when already in emergency", async () => {
+  it("is idempotent when already in emergency (fast-path read)", async () => {
     callRow = { ...(callRow as object), emergency_conference_name: "emg-call-1" };
     const res = await call("call-1");
     expect(res.status).toBe(200);
@@ -120,9 +132,28 @@ describe("POST /api/calls/[id]/emergency", () => {
     expect(participantsCreateMock).not.toHaveBeenCalled();
   });
 
-  it("happy path: stamps, redirects agent leg, adds 933, logs incident + audit", async () => {
+  it("is idempotent under a double-tap: losing the claim race places no second 911", async () => {
+    // Fast-path read saw NULL, but a concurrent request already claimed: the
+    // guarded UPDATE returns zero rows.
+    claimResult = { data: [], error: null };
     const res = await call("call-1");
     expect(res.status).toBe(200);
+    expect((await res.json()).alreadyActive).toBe(true);
+    expect(participantsCreateMock).not.toHaveBeenCalled();
+    expect(callUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("503 when the claim write errors (no dial attempted)", async () => {
+    claimResult = { data: null, error: { message: "db down" } };
+    const res = await call("call-1");
+    expect(res.status).toBe(503);
+    expect(participantsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path: claims, redirects agent leg, adds 933, logs incident + audit", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect((await res.json()).agentRedirected).toBe(true);
     expect(updateCalls[0]).toMatchObject({ emergency_conference_name: "emg-call-1" });
     expect(callUpdateMock).toHaveBeenCalledWith("CAagent", expect.objectContaining({
       twiml: expect.stringContaining("<Conference"),
@@ -155,8 +186,6 @@ describe("POST /api/calls/[id]/emergency", () => {
 
   it("falls back to the guest parent when the agent-leg redirect throws", async () => {
     listMock.mockResolvedValue([{ sid: "CAagent", status: "in-progress" }]);
-    // agent leg is found, but redirecting it throws (e.g. it ended mid-flight);
-    // the subsequent guest-parent redirect must still happen + 933 still added.
     callUpdateMock.mockImplementationOnce(() => Promise.reject(new Error("leg gone")));
     await call("call-1");
     expect(callUpdateMock).toHaveBeenCalledWith("CAparent", expect.objectContaining({
@@ -170,5 +199,34 @@ describe("POST /api/calls/[id]/emergency", () => {
     const res = await call("call-1");
     expect(res.status).toBe(502);
     expect(insertedIncidents[0]).toMatchObject({ emergency_call_sid: null });
+  });
+
+  it("total dispatch failure with no agent leg clears the stamp (guest not stranded)", async () => {
+    listMock.mockResolvedValue([{ sid: "CAagent", status: "completed" }]); // agent already gone
+    participantsCreateMock.mockRejectedValue(new Error("twilio boom"));
+    const res = await call("call-1");
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.guestStranded).toBe(true);
+    expect(body.agentRedirected).toBe(false);
+    // stamp rolled back so /dial-result keeps the guest on the normal bridge
+    expect(updateCalls).toContainEqual(
+      expect.objectContaining({ emergency_conference_name: null }),
+    );
+    expect(String(insertedIncidents[0]?.notes)).toContain("DISPATCH FAILED");
+  });
+
+  it("dispatch failure while the agent is in the conference keeps the bridge intact", async () => {
+    listMock.mockResolvedValue([{ sid: "CAagent", status: "in-progress" }]);
+    participantsCreateMock.mockRejectedValue(new Error("twilio boom"));
+    const res = await call("call-1");
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.agentRedirected).toBe(true);
+    expect(body.guestStranded).toBe(false);
+    // stamp NOT cleared — the agent is on the line and can relay verbally
+    expect(updateCalls).not.toContainEqual(
+      expect.objectContaining({ emergency_conference_name: null }),
+    );
   });
 });
