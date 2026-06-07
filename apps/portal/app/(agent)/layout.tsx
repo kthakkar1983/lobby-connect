@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/require-role";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
+import { Wordmark } from "@/components/brand/wordmark";
 
 export default async function AgentLayout({
   children,
@@ -12,7 +14,9 @@ export default async function AgentLayout({
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b border-border px-6 py-3">
-        <span className="font-semibold text-foreground">Lobby Connect</span>
+        <Link href="/agent">
+          <Wordmark />
+        </Link>
         <form action="/auth/signout" method="post">
           <button
             type="submit"

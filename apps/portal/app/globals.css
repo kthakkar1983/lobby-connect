@@ -1,67 +1,82 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
-
-/* Lobby Connect design tokens. Light mode only. */
+/* ============================================================
+   Lobby Connect — brand tokens (Stage 1 foundation).
+   Light mode only. Source: docs/specs/2026-06-07-ui-ux-stage0-design-direction.md
+   No hardcoded hex in components — everything routes through these.
+   ============================================================ */
 @theme {
-  --color-background: oklch(98% 0.005 240);
-  --color-foreground: oklch(20% 0.02 240);
-  --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(20% 0.02 240);
-  --color-primary: oklch(48% 0.18 256);
-  --color-primary-foreground: oklch(98% 0.005 240);
-  --color-secondary: oklch(95% 0.01 240);
-  --color-secondary-foreground: oklch(20% 0.02 240);
-  --color-muted: oklch(95% 0.01 240);
-  --color-muted-foreground: oklch(45% 0.02 240);
-  --color-accent: oklch(95% 0.01 240);
-  --color-accent-foreground: oklch(20% 0.02 240);
-  --color-destructive: oklch(58% 0.22 25);
-  --color-destructive-foreground: oklch(98% 0.005 240);
-  --color-border: oklch(90% 0.01 240);
-  --color-input: oklch(90% 0.01 240);
-  --color-ring: oklch(48% 0.18 256);
+  /* Color — see spec §2 */
+  --color-background: #F6F8FA;
+  --color-foreground: #2C425C;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #2C425C;
+  --color-surface: #FFFFFF;
 
+  --color-primary: #2C425C;
+  --color-primary-foreground: #FFFFFF;
+
+  --color-secondary: #EAEEF2;
+  --color-secondary-foreground: #2C425C;
+
+  --color-muted: #EAEEF2;
+  --color-muted-foreground: #64748B;
+
+  --color-accent: #F0795B;            /* base coral — tints/rings/hover wash */
+  --color-accent-strong: #E05A39;     /* deep coral — fills/links/coral text */
+  --color-accent-foreground: #FFFFFF;
+
+  --color-live: #06D6A0;              /* connected/success */
+  --color-live-foreground: #048A67;   /* mint as readable text */
+
+  --color-destructive: #C81E1E;       /* 911 / deletes — distinct from coral */
+  --color-destructive-foreground: #FFFFFF;
+
+  --color-border: #E1E7EC;
+  --color-input: #E1E7EC;
+  --color-ring: #E05A39;              /* focus ring — deep coral */
+
+  /* Alias kept for existing call sites using text-text-muted */
   --color-text-muted: var(--color-muted-foreground);
 
-  --radius: 0.5rem;
+  /* Seam gradient — line/ring work only, never a large fill (spec §1) */
+  --gradient-seam: linear-gradient(135deg, #2C425C, #06D6A0, #F0795B);
+
+  /* Typography — families set by next/font in Task 3 via these vars */
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-solitude), Georgia, "Times New Roman", serif;
+  --font-label: var(--font-vonique), var(--font-outfit), system-ui, sans-serif;
+
+  /* Shape — spec §4 (one scale; kiosk rounds a step softer in its own file) */
+  --radius-card: 12px;
+  --radius-button: 9px;
+  --radius-input: 8px;
+  --radius-pill: 9999px;
+  /* shadcn expects --radius; map it to the button scale */
+  --radius: 9px;
+
+  /* Elevation — navy-tinted, never pure black (spec §4) */
+  --shadow-sm: 0 1px 2px rgba(44, 66, 92, 0.06);
+  --shadow-md: 0 12px 26px -14px rgba(44, 66, 92, 0.16);
+  --shadow-lg: 0 18px 40px -16px rgba(44, 66, 92, 0.20);
+
+  /* Sidebar — aliases to brand tokens so the shadcn sidebar primitive resolves.
+     Neutral surface for foundation; Stage 2 admin polish may choose a navy rail. */
+  --color-sidebar: var(--color-card);
+  --color-sidebar-foreground: var(--color-foreground);
+  --color-sidebar-primary: var(--color-primary);
+  --color-sidebar-primary-foreground: var(--color-primary-foreground);
+  --color-sidebar-accent: var(--color-muted);
+  --color-sidebar-accent-foreground: var(--color-foreground);
+  --color-sidebar-border: var(--color-border);
+  --color-sidebar-ring: var(--color-ring);
 }
 
-html, body {
+html,
+body {
   background: var(--color-background);
   color: var(--color-foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-
-:root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
-
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
-
-@theme inline {
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

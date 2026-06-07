@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div>
             <p style={{ fontSize: 26 }}>One moment…</p>
-            <p style={{ fontSize: 20, color: "var(--kiosk-muted)" }}>
+            <p style={{ fontSize: 20, color: "var(--color-muted-foreground)" }}>
               Returning to the welcome screen.
             </p>
           </div>

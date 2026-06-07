@@ -1,19 +1,74 @@
 @import "tailwindcss";
 
-@theme {
-  --color-background: oklch(98% 0.005 240);
-  --color-foreground: oklch(20% 0.02 240);
-  --color-primary: oklch(48% 0.18 256);
-  --color-primary-foreground: oklch(98% 0.005 240);
-  --color-border: oklch(90% 0.01 240);
+/* Brand faces — self-hosted (kiosk has no next/font) */
+@font-face {
+  font-family: "Solitude";
+  src: url("/fonts/Solitude.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vonique 43";
+  src: url("/fonts/Vonique43.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/fonts/Outfit.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono.woff2") format("woff2");
+  font-display: swap;
 }
 
-:root {
-  --kiosk-navy: #0f1f3d;
-  --kiosk-cream: #f4ecd8;
-  --kiosk-ink: #0f1f3d;
-  --kiosk-muted: #7a6e5a;
-  --kiosk-surface: #ffffff;
+/* ============================================================
+   Lobby Connect — brand tokens (kiosk mirror of the portal layer).
+   Source: docs/specs/2026-06-07-ui-ux-stage0-design-direction.md
+   Kiosk shape overrides: radius rounds one step softer for touch.
+   ============================================================ */
+@theme {
+  --color-background: #F6F8FA;
+  --color-foreground: #2C425C;
+  --color-card: #FFFFFF;
+  --color-surface: #FFFFFF;
+
+  --color-primary: #2C425C;
+  --color-primary-foreground: #FFFFFF;
+
+  --color-muted: #EAEEF2;
+  --color-muted-foreground: #64748B;
+
+  --color-accent: #F0795B;
+  --color-accent-strong: #E05A39;
+  --color-accent-foreground: #FFFFFF;
+
+  --color-live: #06D6A0;
+  --color-live-foreground: #048A67;
+
+  --color-destructive: #C81E1E;
+  --color-destructive-foreground: #FFFFFF;
+
+  --color-border: #E1E7EC;
+  --color-ring: #E05A39;
+
+  --gradient-seam: linear-gradient(135deg, #2C425C, #06D6A0, #F0795B);
+
+  --font-sans: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Solitude", Georgia, "Times New Roman", serif;
+  --font-label: "Vonique 43", "Outfit", system-ui, sans-serif;
+
+  /* Kiosk shape — one step softer than portal (spec §4) */
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+  --radius-pill: 9999px;
+  --radius: 12px;
+
+  --shadow-sm: 0 1px 2px rgba(44, 66, 92, 0.06);
+  --shadow-md: 0 12px 26px -14px rgba(44, 66, 92, 0.16);
+  --shadow-lg: 0 18px 40px -16px rgba(44, 66, 92, 0.20);
 }
 
 html, body, #root {
@@ -21,7 +76,8 @@ html, body, #root {
   margin: 0;
   background: var(--color-background);
   color: var(--color-foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
   /* Prevent text selection / long-press menus on tablet. */
   -webkit-user-select: none;
   user-select: none;

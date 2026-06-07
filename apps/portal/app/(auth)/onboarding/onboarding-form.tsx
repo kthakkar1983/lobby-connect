@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { onboardingAction, type OnboardingState } from "./actions";
+import { LogoMark } from "@/components/brand/wordmark";
 
 const initialState: OnboardingState = { error: null };
 
@@ -22,6 +23,7 @@ export default function OnboardingForm({
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <header className="flex flex-col gap-1">
+        <LogoMark className="mb-3" />
         <h1 className="text-xl font-semibold text-foreground">
           Welcome to Lobby Connect
         </h1>

@@ -537,3 +537,84 @@ The fix phase for the 2026-06-06 pre-launch readiness audit (`docs/audits/2026-0
 1. **Revert emergency to 911** once Kumar finishes the 933 testing (see the TEMP memory) — and ASK him whether testing is done before assuming.
 2. **Continue smoke / triage** any new issues Kumar surfaces from testing.
 3. **When ready, start UI/UX polish in a fresh chat** per `docs/plans/2026-06-07-ui-ux-polish-stages.md` (Stage 0 brainstorm first).
+
+---
+
+## 2026-06-07 (session 8) — UI/UX Stage 0 design direction LOCKED (brainstorm only, no code)
+
+Ran the Stage 0 brainstorm from `docs/plans/2026-06-07-ui-ux-polish-stages.md` using the visual companion
+(mockups in `.superpowers/brainstorm/`, gitignored). **Output committed:**
+`docs/specs/2026-06-07-ui-ux-stage0-design-direction.md` on branch **`docs/ui-ux-stage0-design`** (off `main`).
+
+**Locked decisions:**
+- **Brand thesis:** "a real person reached through a screen" — warm hospitality ⇄ cool automation, joined at *the seam*. Tone stays calm/trustworthy/professional.
+- **Signature motif — the seam:** navy→mint→coral gradient used as line/ring work only (hairline under wordmark, ring around a connected caller, active-call edge). = the "Connected" shorthand.
+- **Color:** ink `#2C425C` · coral `#F0795B` base / `#E05A39` deep-for-fills (AA) · mint live `#06D6A0` · emergency `#C81E1E` · cool neutrals (`#F6F8FA` page / `#EAEEF2` muted fill / `#E1E7EC` border / `#64748B` muted text). (Started from Kumar's "B+" trio; vermilion → coral; kept ink+mint.)
+- **Type:** **Solitude** display serif (Envato, self-host, display-only) · **Outfit** sans for all UI/body (≈ Google Sans) · **JetBrains Mono** for data · **Vonique 43** all-caps labels. Rule: section headers ≤~20px use Outfit semibold, not Solitude (its hairlines break small).
+- **Shape:** "Balanced" — card 12 / btn 9 / input 8 (kiosk softer); navy-tinted shadows. Motion: restrained, 150–250ms, transform/opacity, reduced-motion honored; mint pulse + seam drift only.
+- **Per-surface:** Kiosk (warm/large-touch) > Owner (premium/mobile) > Agent-Admin (dense/operational). UX voice: calm, warm, plain-spoken.
+
+**Open items carried into Stage 1 (in the spec §8):**
+1. **Envato license check** — confirm Solitude + Vonique 43 permit web embedding / self-hosting BEFORE shipping them (proxies otherwise: Playfair Display / Jost).
+2. Decide if Vonique 43 label tier is worth a 3rd self-hosted font for v1, or defer labels to Outfit all-caps.
+3. Final token names to match shadcn's CSS-var contract during the primitive re-skin.
+
+**Stage 1 prep notes (in spec §7):** Tailwind v4 CSS-first `@theme`; mirror tokens in `apps/portal/app/globals.css` + `apps/kiosk/src/index.css`; **delete the stray `--kiosk-navy: #0f1f3d` / `--kiosk-cream` "Jazz Club" hex** in kiosk `index.css` (leftover from the *Back of House* project); replace the generic shadcn-blue `--color-primary` + unused `--sidebar-*`/`.dark` block; re-skin shadcn primitives at the token layer, don't fork.
+
+**PICK UP HERE (fresh chat):**
+1. **Review/approve the Stage 0 spec** if not already, then run the **writing-plans** skill to produce the Stage 1 (Foundation) implementation plan off `docs/ui-ux-stage0-design`.
+2. **Resolve open item #1 (Envato license)** before Stage 1 wires the real fonts.
+3. Emergency is still **933** (TEMP) — unrelated to this branch, but revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
+
+---
+
+## 2026-06-07 (session 9) — UI/UX Stage 1 (Foundation) SHIPPED + merged to main + prod
+
+Executed Stage 1 of the UI/UX polish via **subagent-driven development** (fresh implementer per task +
+two-stage spec/quality review). Branch `feat/ui-ux-stage1-foundation` → **PR [#13](https://github.com/kthakkar1983/lobby-connect/pull/13)
+merged to `main` + prod auto-deployed**. The locked Stage 0 design-direction doc rode along in the same PR.
+**326 tests green**, typecheck + lint + both builds clean.
+
+**Open item #1 (Envato license) RESOLVED:** Kumar confirmed the license → Stage 1 **self-hosts the real
+Solitude + Vonique 43** (no proxies). Solitude shipped only `.ttf` → converted to `.woff2` via `fonttools`.
+
+**What shipped (7 commits + 1 review-fix commit):**
+- **Brand token layer** (Tailwind v4 `@theme`) in `apps/portal/app/globals.css` + mirrored in
+  `apps/kiosk/src/index.css`: navy/coral/mint palette + cool neutrals (exact hex from the Stage 0 spec §2),
+  navy-tinted shadow scale, radius scale (kiosk one step softer), coral focus ring, `--gradient-seam`,
+  and `--font-sans/mono/display/label` slots. Removed the generic shadcn oklch palette + dead `.dark` block
+  + `--sidebar-*` + `@custom-variant dark` (light mode only).
+- **Fonts self-hosted:** portal via `next/font` (`app/fonts.ts` — Outfit + JetBrains Mono google; Solitude +
+  Vonique 43 local woff2 in `app/fonts/`), attached to `<html>` via `fontVars`. Kiosk via `@font-face`
+  (`public/fonts/`, all four). Dropped the transient `@fontsource` kiosk deps after copying the woff2 out.
+- **shadcn primitive re-skin** (token layer, NOT forked): button, input, textarea, badge, table, dialog,
+  alert-dialog, dropdown-menu, select, sheet, tooltip, sonner, skeleton, switch, separator — radius/shadow/
+  color/focus-ring. New **`card.tsx`** primitive. New `accent` (deep-coral CTA) + `live` (mint) variants.
+  Brand 2px+offset focus ring + tactile `active:translate-y-[1px]`.
+- **Shared `Wordmark`/`LogoMark`** (`components/brand/wordmark.tsx`) with the navy→mint→coral seam hairline;
+  wired into admin sidebar, owner + agent headers, sign-in, onboarding. Logo = home preserved everywhere.
+- **Removed Back-of-House "Jazz Club" `--kiosk-*` hex** from kiosk index.css; repointed the 4 affected
+  kiosk screens' inline styles to brand tokens.
+
+**Final cross-cutting review caught a real regression (fixed before merge):** Task 2 deleted the
+`--sidebar-*` tokens as "cruft," but `sidebar.tsx` actually uses ~20 `bg-sidebar*`/`border-sidebar*`
+classes → admin sidebar rendered with no background/highlight (build still passed — classes resolved to
+transparent). **Fix:** restored `--color-sidebar-*` aliased to brand tokens in globals.css. Also fixed a
+coral flash on the dialog close button (`bg-accent`→`bg-muted`) + added a sidebar home-link `aria-label`.
+
+**Deliberately DEFERRED to Stage 2** (background-task chip filed): kiosk **video screens**
+`Connected.tsx` + `Ringing.tsx` still carry hardcoded hex (dark video letterbox backdrops `#000`/`#27272a`,
+glassy `rgba(...)` controls, old Jazz Club navy `#0f1f3d`, red `#b91c1c`). They are the most repaint-heavy
+screens; half-tokenizing them now would be worse than the clean Stage 2 kiosk repaint. The named `--kiosk-*`
+index.css vars the Stage 0 spec §7 called out ARE gone.
+
+**Visual verification note:** authed surfaces (admin sidebar, owner/agent) weren't eyeballed locally —
+confirm fonts/wordmark-seam/sidebar render on the prod deploy. Foundation is token-level so risk is low and
+all gates passed.
+
+**PICK UP HERE (fresh chat):**
+1. **Visually confirm Stage 1 on prod** (fonts load, wordmark seam hairline, sidebar renders, primitives on-brand).
+2. **Start Stage 2 — per-surface polish** per `docs/plans/2026-06-07-ui-ux-polish-stages.md`, audience order
+   **Kiosk > Owner > Agent/Admin**. Kiosk repaint absorbs the deferred `Connected`/`Ringing` hex cleanup.
+   Gate Stage 2 behind the page set freezing (don't repaint pages testing is still changing).
+3. Emergency is still **933** (TEMP, unrelated to this work) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
