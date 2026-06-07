@@ -218,6 +218,7 @@ workflow. Final `grep` for stray hex in `apps/kiosk/src` returns only `index.css
 ## 10. Open items carried to the plan
 
 1. Exact lucide icon choices for mic/mic-off, camera/camera-off, phone/phone-off, shield, X.
-2. Whether the owner "Appearance" picker is inside the same Edit/Save toggle as the text fields or an
-   always-live inline pick (lean: same Edit/Save transaction, one audit row).
+2. **DECIDED** — the owner "Appearance" picker lives inside the **same Edit/Save toggle** as the text
+   fields: one transaction, one audit row. (The picker is read-only display until Edit is pressed,
+   selectable while editing, persisted on Save with the text fields.)
 3. Final default greeting/welcome copy per preset (kiosk render defaults; owner override unchanged).
