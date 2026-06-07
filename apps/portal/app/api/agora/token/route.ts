@@ -52,11 +52,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
     const { data: me } = await admin
       .from("profiles")
-      .select("id, operator_id")
+      .select("id, operator_id, role")
       .eq("id", user.id)
       .maybeSingle();
     if (!me || me.operator_id !== call.operator_id) {
       return NextResponse.json({ error: "Channel not in operator" }, { status: 403 });
+    }
+    // Owners are read-only (07a spec): a publisher token would let them join a
+    // live guest video call. Reject the owner role on the session branch.
+    if (me.role === "OWNER") {
+      return NextResponse.json({ error: "Owners cannot join live calls" }, { status: 403 });
     }
   }
 

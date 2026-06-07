@@ -5,9 +5,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
-let profileRow: { id: string; operator_id: string } | null = null;
+let profileRow: Record<string, unknown> | null = null;
 let callRows: Array<Record<string, unknown>> = [];
 let propertyRows: Array<{ id: string; name: string }> = [];
+const gteSpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -18,9 +19,13 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (table === "properties") {
         return { select: () => ({ in: () => Promise.resolve({ data: propertyRows }) }) };
       }
-      // calls: select().eq().eq().eq().order()
+      // calls: select().eq().eq().eq().gte().order()
       const chain = {
         eq: () => chain,
+        gte: (col: string, val: string) => {
+          gteSpy(col, val);
+          return chain;
+        },
         order: () => Promise.resolve({ data: callRows }),
       };
       return { select: () => chain };
@@ -34,6 +39,7 @@ const request = new Request("http://localhost:3000/api/calls/incoming-video");
 
 beforeEach(() => {
   getUser.mockReset();
+  gteSpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   profileRow = { id: "u1", operator_id: "op-1" };
   callRows = [
@@ -64,5 +70,19 @@ describe("GET /api/calls/incoming-video", () => {
     callRows = [];
     const body = await (await GET(request)).json();
     expect(body.calls).toEqual([]);
+  });
+
+  it("403 when the caller is an OWNER (read-only role)", async () => {
+    profileRow = { id: "u1", operator_id: "op-1", role: "OWNER" };
+    expect((await GET(request)).status).toBe(403);
+  });
+
+  it("time-bounds the RINGING query so a phantom ring from a dead kiosk is dropped", async () => {
+    await GET(request);
+    expect(gteSpy).toHaveBeenCalledWith("ring_started_at", expect.any(String));
+    const cutoffAgeMs = Date.now() - new Date(String(gteSpy.mock.calls[0]?.[1])).getTime();
+    // ~10 min cutoff: well past the 120s ring window, well within the last hour.
+    expect(cutoffAgeMs).toBeGreaterThan(5 * 60_000);
+    expect(cutoffAgeMs).toBeLessThan(60 * 60_000);
   });
 });

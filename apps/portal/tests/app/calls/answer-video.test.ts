@@ -8,7 +8,11 @@ vi.mock("@/lib/supabase/server", () => ({
 let callRow: Record<string, unknown> | null = null;
 const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
-const profileFetch = vi.fn(async () => ({ data: { id: "u1", operator_id: "op-1" } }));
+const profileFetch = vi.fn(
+  async (): Promise<{ data: Record<string, unknown> }> => ({
+    data: { id: "u1", operator_id: "op-1" },
+  }),
+);
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -65,5 +69,11 @@ describe("POST /api/calls/[id]/answer-video", () => {
   it("404 across operators", async () => {
     callRow = { ...callRow!, operator_id: "OTHER" };
     expect((await call("call-1")).status).toBe(404);
+  });
+
+  it("403 when the caller is an OWNER (read-only role)", async () => {
+    profileFetch.mockResolvedValueOnce({ data: { id: "u1", operator_id: "op-1", role: "OWNER" } });
+    expect((await call("call-1")).status).toBe(403);
+    expect(callUpdateSpy).not.toHaveBeenCalled();
   });
 });

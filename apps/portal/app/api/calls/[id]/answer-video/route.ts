@@ -23,11 +23,16 @@ export async function POST(
   const admin = createAdminClient();
   const { data: me } = await admin
     .from("profiles")
-    .select("id, operator_id")
+    .select("id, operator_id, role")
     .eq("id", user.id)
     .maybeSingle();
   if (!me) {
     return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
+  }
+  // Owners are read-only (07a spec): a publisher token would let them appear,
+  // with A/V, inside a guest's live call. Reject before touching the call.
+  if (me.role === "OWNER") {
+    return NextResponse.json({ error: "Owners cannot join live calls" }, { status: 403 });
   }
 
   const { data: call } = await admin
