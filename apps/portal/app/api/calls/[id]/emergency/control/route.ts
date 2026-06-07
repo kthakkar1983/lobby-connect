@@ -40,7 +40,7 @@ export async function POST(
 
   const { data: callRow } = await admin
     .from("calls")
-    .select("id, operator_id, handled_by_user_id, emergency_conference_name, emergency_agent_call_sid")
+    .select("id, operator_id, state, handled_by_user_id, emergency_conference_name, emergency_agent_call_sid")
     .eq("id", id)
     .maybeSingle();
   if (!callRow || callRow.operator_id !== me.operator_id) {
@@ -48,6 +48,11 @@ export async function POST(
   }
   if (callRow.handled_by_user_id !== user.id) {
     return NextResponse.json({ error: "Not the handling agent" }, { status: 403 });
+  }
+  // Only a live call can be conference-controlled. A finalized call's agent leg
+  // is already gone, so mutating it is a wasted (and possibly stale) Twilio call.
+  if (callRow.state !== "IN_PROGRESS") {
+    return NextResponse.json({ error: "Call is not in progress" }, { status: 409 });
   }
   if (!callRow.emergency_conference_name) {
     return NextResponse.json({ error: "Call is not in an emergency conference" }, { status: 409 });

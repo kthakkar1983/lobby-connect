@@ -11,6 +11,25 @@ describe("scrubPii", () => {
     expect(out.extra.room).toBe("204");
   });
 
+  it("drops keys matched by the sensitive-name regex (case-insensitive)", () => {
+    const out = scrubPii({
+      extra: {
+        Authorization: "Bearer abc",
+        password: "hunter2",
+        api_token: "tok_123",
+        x_signature: "sig",
+        sessionCookie: "c",
+        room: "204",
+      },
+    }) as { extra: Record<string, unknown> };
+    expect(out.extra).not.toHaveProperty("Authorization");
+    expect(out.extra).not.toHaveProperty("password");
+    expect(out.extra).not.toHaveProperty("api_token");
+    expect(out.extra).not.toHaveProperty("x_signature");
+    expect(out.extra).not.toHaveProperty("sessionCookie");
+    expect(out.extra.room).toBe("204");
+  });
+
   it("redacts phone-shaped substrings in free text", () => {
     expect(scrubPii("call from +1 (415) 555-1234 now")).toBe("call from [redacted] now");
   });
