@@ -1,16 +1,28 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { SeamTop } from "../components/brand";
 
-export function Apology({ message, phone, onDone }: { message: string | null; phone: string | null; onDone: () => void }) {
+export function Apology({ message, onDone }: { message: string | null; onDone: () => void }) {
+  const [left, setLeft] = useState(10);
   useEffect(() => {
-    const t = setTimeout(onDone, 10_000);
-    return () => clearTimeout(t);
+    const tick = setInterval(() => setLeft((s) => s - 1), 1000);
+    const done = setTimeout(onDone, 10_000);
+    return () => { clearInterval(tick); clearTimeout(done); };
   }, [onDone]);
 
   return (
-    <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", padding: 32 }}>
-      <div style={{ textAlign: "center", maxWidth: 620 }}>
-        <p style={{ fontSize: 26 }}>{message ?? "We're sorry, no one is available right now."}</p>
-        {phone && <p style={{ fontSize: 22, color: "var(--color-muted-foreground)" }}>Call us directly: {phone}</p>}
+    <div className="relative h-full">
+      <SeamTop />
+      <div className="flex h-full flex-col items-center justify-center px-9 text-center">
+        <h1 className="max-w-[80%] font-display text-3xl leading-tight text-foreground">
+          Sorry to keep you waiting.
+        </h1>
+        <p className="mt-3.5 max-w-[70%] text-base leading-relaxed text-muted-foreground">
+          {message ??
+            "The front desk is helping another guest right now. Please try again in a couple of minutes."}
+        </p>
+        <p className="mt-6 font-mono text-xs text-muted-foreground">
+          Returning to home in {Math.max(0, left)}s…
+        </p>
       </div>
     </div>
   );
