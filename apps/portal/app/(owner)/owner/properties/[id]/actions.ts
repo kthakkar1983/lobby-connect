@@ -8,7 +8,9 @@ import { logAuditEvent } from "@/lib/auth/audit";
 import {
   KIOSK_FIELDS,
   validateKioskFields,
+  validateCtaStyle,
   type KioskContentInput,
+  type KioskCtaStyle,
 } from "@/lib/owner/kiosk";
 
 type PropertyUpdate = Database["public"]["Tables"]["properties"]["Update"];
@@ -23,20 +25,28 @@ function emptyToNull(value: string): string | null {
 export async function updateKioskContentAction(
   propertyId: string,
   input: KioskContentInput,
+  ctaStyle: KioskCtaStyle,
 ): Promise<ActionResult> {
   const actor = await requireRole("OWNER");
 
   const validationError = validateKioskFields(input);
   if (validationError) return { ok: false, error: validationError };
 
+  const styleError = validateCtaStyle(ctaStyle);
+  if (styleError) return { ok: false, error: styleError };
+
   const supabase = await createServerClient();
 
   // RLS scopes this read to the owner's own properties; a foreign id returns no row.
   const { data: current } = await supabase
     .from("properties")
-    .select(KIOSK_FIELDS.join(", "))
+    .select([...KIOSK_FIELDS, "kiosk_cta_style"].join(", "))
     .eq("id", propertyId)
-    .maybeSingle<Record<(typeof KIOSK_FIELDS)[number], string | null>>();
+    .maybeSingle<
+      Record<(typeof KIOSK_FIELDS)[number], string | null> & {
+        kiosk_cta_style: string | null;
+      }
+    >();
 
   if (!current) return { ok: false, error: "Property not found." };
 
@@ -50,6 +60,11 @@ export async function updateKioskContentAction(
       (updates as Record<string, unknown>)[field] = next;
       audits.push({ field, from: current[field], to: next });
     }
+  }
+
+  if (ctaStyle !== current.kiosk_cta_style) {
+    (updates as Record<string, unknown>).kiosk_cta_style = ctaStyle;
+    audits.push({ field: "kiosk_cta_style", from: current.kiosk_cta_style, to: ctaStyle });
   }
 
   if (audits.length === 0) return { ok: true };
