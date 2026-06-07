@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@lc/shared", "@lc/ui"],
   typedRoutes: true,
+  experimental: {
+    optimizePackageImports: ["radix-ui", "lucide-react"],
+  },
   async headers() {
     return [
       { source: "/api/kiosk/:path*", headers: KIOSK_CORS },

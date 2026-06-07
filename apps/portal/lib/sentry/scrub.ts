@@ -1,10 +1,16 @@
-// PII scrubber for Sentry. Wired as each app's `beforeSend`. Removes the two
-// known-sensitive keys anywhere in the payload and redacts phone-shaped runs
-// from any free text (messages, breadcrumbs). The phone pattern requires a long
-// run of digits + phone separators only, so it ignores real (hex) UUIDs and
-// short numbers like room numbers.
+// PII scrubber for Sentry. Wired as each app's `beforeSend`. Drops any key whose
+// name looks sensitive (case-insensitive) plus the two known-sensitive keys, and
+// redacts phone-shaped runs from any free text (messages, breadcrumbs). The phone
+// pattern requires a long run of digits + phone separators only, so it ignores
+// real (hex) UUIDs and short numbers like room numbers.
 
 const SENSITIVE_KEYS = new Set(["caller_number", "recording_url"]);
+const SENSITIVE_KEY_RE = /token|secret|auth|signature|password|cookie/i;
+
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEYS.has(key) || SENSITIVE_KEY_RE.test(key);
+}
+
 export const PHONE_RE = /\+?\d[\d\s().-]{8,}\d/g;
 
 export function scrubPii(value: unknown): unknown {
@@ -17,7 +23,7 @@ export function scrubPii(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (SENSITIVE_KEYS.has(k)) continue;
+      if (isSensitiveKey(k)) continue;
       out[k] = scrubPii(v);
     }
     return out;

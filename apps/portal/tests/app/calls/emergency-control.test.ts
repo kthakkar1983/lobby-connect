@@ -50,6 +50,7 @@ beforeEach(() => {
   callRow = {
     id: "call-1",
     operator_id: "op-1",
+    state: "IN_PROGRESS",
     handled_by_user_id: "u1",
     emergency_conference_name: "emg-call-1",
     emergency_agent_call_sid: "CAagent",
@@ -77,6 +78,15 @@ describe("POST /api/calls/[id]/emergency/control", () => {
   it("403 when the caller is not the handling agent", async () => {
     callRow = { ...(callRow as object), handled_by_user_id: "other" };
     expect((await call("call-1", { action: "mute" })).status).toBe(403);
+  });
+
+  it("409 with no Twilio action when the call is not IN_PROGRESS", async () => {
+    callRow = { ...(callRow as object), state: "COMPLETED" };
+    const res = await call("call-1", { action: "mute" });
+    expect(res.status).toBe(409);
+    expect(participantsAccessor).not.toHaveBeenCalled();
+    expect(participantUpdateMock).not.toHaveBeenCalled();
+    expect(participantRemoveMock).not.toHaveBeenCalled();
   });
 
   it("409 when the call is not in an emergency conference", async () => {

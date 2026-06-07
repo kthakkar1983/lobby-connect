@@ -47,7 +47,8 @@ export default async function OwnerCallsPage({
     .select(
       "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number",
     )
-    .order("ring_started_at", { ascending: false })
+    // created_at is index-backed and monotonic with ring_started_at at insert.
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (activeProperty) {
