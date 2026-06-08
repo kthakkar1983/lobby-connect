@@ -17,6 +17,7 @@ import {
 
 import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
+import { useLineStatus } from "@/lib/dashboard/line-status";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -73,6 +74,12 @@ export function Softphone({ role }: SoftphoneProps) {
     if (phase === "in-call") return "ON_CALL";
     return readyRef.current ? "AVAILABLE" : "AWAY";
   }, [phase]);
+
+  // Beacon: report line phase to the LineStatusContext so the greeting widget
+  // can reflect live status. The default context is a no-op, so this is safe
+  // in layouts that don't mount a provider (admin layout).
+  const { report } = useLineStatus();
+  useEffect(() => { report(phase); }, [phase, report]);
 
   // Register the Twilio Device once.
   useEffect(() => {
@@ -266,13 +273,25 @@ export function Softphone({ role }: SoftphoneProps) {
       </div>
 
       {role === "AGENT" && phase !== "in-call" && phase !== "incoming" && (
-        <button
-          type="button"
-          onClick={toggleReady}
-          className="mt-3 w-full rounded-md border border-border px-3 py-2 text-foreground"
-        >
-          {ready ? "Ready — accepting calls" : "Away — not accepting"}
-        </button>
+        <>
+          {/* Idle glow ring — decorative anchor, not a status indicator */}
+          <div className="relative mx-auto mt-2 h-16 w-16">
+            <span
+              aria-hidden="true"
+              className="absolute -inset-1 rounded-full bg-[image:var(--gradient-seam)] opacity-40 blur-md animate-[spin_6s_linear_infinite] motion-reduce:animate-none"
+            />
+            <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-border bg-card">
+              <Phone size={20} className="text-primary" />
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleReady}
+            className="mt-3 w-full rounded-button border border-border px-3 py-2 text-foreground"
+          >
+            {ready ? "Ready — accepting calls" : "Away — not accepting"}
+          </button>
+        </>
       )}
 
       {phase === "incoming" && (
@@ -284,14 +303,14 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void acceptCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-primary-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 text-live-foreground"
             >
               <Phone size={16} /> Accept
             </button>
             <button
               type="button"
               onClick={declineCall}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
             >
               <PhoneOff size={16} /> Decline
             </button>
@@ -301,60 +320,33 @@ export function Softphone({ role }: SoftphoneProps) {
 
       {phase === "in-call" && (
         <div className="mt-3 space-y-3">
+          {/* Seam hairline — "connected" cue */}
+          <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={toggleMute}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
             >
               {muted ? <MicOff size={16} /> : <Mic size={16} />}
               {muted ? "Unmute" : "Mute"}
             </button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  type="button"
-                  disabled={emergencyActive}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-700 disabled:opacity-50"
-                >
-                  <AlertTriangle size={16} /> {emergencyActive ? "911 active" : "Emergency"}
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Trigger 911 emergency response?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This conferences emergency services into the live call (guest + you + 911).
-                    Use only for a genuine emergency.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => void triggerEmergency()}
-                    className="bg-destructive text-destructive-foreground"
-                  >
-                    Yes — trigger 911
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
             <button
               type="button"
               onClick={() => void endCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-destructive px-3 py-2 text-destructive-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-accent-foreground"
             >
               <PhoneOff size={16} /> Hang up
             </button>
           </div>
           {emergencyActive && !emergencyFailed && (
-            <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-700">
+            <p className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               Emergency active — 911 is being conferenced in. Stay on the line and relay the
               property address and room number.
             </p>
           )}
           {emergencyFailed && (
-            <p className="rounded-md border border-red-500 bg-red-100 px-3 py-2 font-medium text-red-800">
+            <p className="rounded-input border border-destructive bg-destructive/15 px-3 py-2 text-sm font-medium text-destructive">
               911 dispatch failed. Relay the property address and room number verbally, and have
               the guest hang up and dial 911 directly.
             </p>
@@ -363,15 +355,50 @@ export function Softphone({ role }: SoftphoneProps) {
             value={roomNumber}
             onChange={(e) => setRoomNumber(e.target.value)}
             placeholder="Room #"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+            className="w-full rounded-input border border-border bg-background px-3 py-2 text-foreground"
           />
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Call notes"
             rows={3}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+            className="w-full rounded-input border border-border bg-background px-3 py-2 text-foreground"
           />
+          <hr className="my-3 border-border" />
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                disabled={emergencyActive}
+                className="flex w-full items-center justify-center gap-2 rounded-button bg-destructive px-3 py-2 font-medium text-destructive-foreground disabled:opacity-50"
+              >
+                <AlertTriangle size={16} /> {emergencyActive ? "911 active" : "Call 911 — emergency"}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
+              </div>
+              {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
+                  "also alerts the admin, owner, and property GM" line above. Don't render it until the
+                  backend actually sends those alerts. */}
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => void triggerEmergency()}
+                  className="bg-destructive text-destructive-foreground"
+                >
+                  Yes — call 911
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
@@ -389,7 +416,7 @@ function ConnectionDot({ phase }: { readonly phase: Phase }) {
   return (
     <span
       className={`inline-block h-2.5 w-2.5 rounded-full ${
-        ok ? "bg-primary" : "bg-muted"
+        ok ? "bg-live" : "bg-muted-foreground/40"
       }`}
       aria-label={ok ? "connected" : "disconnected"}
     />
