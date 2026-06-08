@@ -708,3 +708,56 @@ Spec: `docs/specs/2026-06-08-stage2-agent-admin-repaint-design.md` · Plan: `doc
 2. **UI/UX Stage 3** — states/motion/a11y/copy pass (the last UI/UX phase; all 3 surface repaints now done). Fresh chat; parent plan `docs/plans/2026-06-07-ui-ux-polish-stages.md`.
 3. **Solitude-W** font decision (own task) — swap the display serif or accept.
 4. Emergency is still **933** (TEMP, unrelated) — revert to **911** before pilot calls (see [[TEMP-emergency-933]]).
+
+---
+
+## 2026-06-08 (session 12) — UI/UX Stage 3 (states/motion/a11y/copy) DONE → merged to main. **All UI/UX phases complete.**
+
+The final UI/UX phase. **Logic-orthogonal** (no migrations/routes/RLS/API/call-logic). Merged via
+PR [#16](https://github.com/kthakkar1983/lobby-connect/pull/16) (`21906d0`), tag
+`plan-stage3-states-motion-a11y-copy-complete`. Spec/plan/audit:
+`docs/specs/2026-06-08-stage3-states-motion-a11y-copy-design.md` ·
+`docs/plans/2026-06-08-stage3-states-motion-a11y-copy.md` ·
+`docs/audits/2026-06-08-wcag-2.1-aa-audit.md`.
+
+**What shipped (4 tracks):**
+- **Motion:** `--ease-out`/`--ease-in-out`/`--duration-fast|standard|slow` tokens mirrored portal⇄kiosk;
+  the Stage 0 **seam drift** finally built (`@property --seam-angle`, 8s, **active-call surfaces only** —
+  kiosk Connected ring, softphone in-call edge + idle ring); brand `Skeleton` shimmer (`.lc-skeleton`);
+  `Button` `transition-all`→explicit props + token timing; **universal `prefers-reduced-motion` net** in
+  both apps' CSS.
+- **States:** new `EmptyState` + `ErrorState` primitives (`components/ui/`) wired into all **9** zero-item
+  sites; on-brand `global-error` + new segment `error.tsx` (agent/admin/owner); kiosk first-load +
+  reconnecting given `role=status aria-live`.
+- **A11y — formal WCAG 2.1 AA audit + remediation.** Structural layer already mostly passed. Fixes:
+  contrast `muted-foreground #64748B→#5E6E85`, `live-foreground #048A67→#048765`, **new
+  `--color-accent-text #BE4B2F`** for coral text/links (7 sites), mint **Accept**→navy text;
+  **D1** (locked) keep coral `#E05A39`, white-on-coral CTA labels bumped to WCAG **large text**
+  (≥18.66px bold: Hang up/End/Continue); **D2** (locked) `--color-input→#919598` (form controls only,
+  `--color-border` unchanged); **skip-to-content** links + `<main id="main">` (2.4.1) in all 3 authed
+  layouts; `sr-only` h1 on agent/owner home (2.4.6).
+- **Copy:** light shared `lib/copy.ts` (+ kiosk `src/lib/copy.ts`); sign-in errors migrated (strings
+  unchanged, test still asserts); Stage 0 voice pass. **No i18n framework.** 911 confirm stays inline
+  (safety-critical, more thorough than the module draft).
+
+**Process:** spec+plan → formal WCAG audit (paused for Kumar's D1/D2 calls) → build → whole-branch review
+(2 important + 5 minor; both important — portal seam-drift was dead code, 6 coral-text sites missed via a
+bad grep — fixed; minors addressed/documented). 347 tests green; portal typecheck+lint+build + kiosk
+typecheck+build green.
+
+**Repo hygiene:** caught + removed an accidental 15M-line `graphify-out/` commit (over-broad `git add -A`);
+`graphify-out/` + `supabase/snippets/` now gitignored.
+
+**Open follow-ups (non-blocking):**
+1. **Live in-browser pass** (do during smoke): visual confirm of empty/error/loading states, the seam-drift,
+   skeleton shimmer; screen-reader run on the kiosk flow + a portal form; focus-order; reduced-motion
+   emulation. Stage 3 **contrast is math-verified, not eyeballed** — eyeball the enlarged coral
+   Hang up/End buttons + seam drift in particular.
+2. Kiosk CTA-picker `radiogroup` upgrade (current `aria-pressed` buttons are a valid pattern; deferred).
+3. **Solitude capital-W** font fix (own task, unchanged).
+4. Emergency still **933** (TEMP) — revert to **911** before pilot calls ([[TEMP-emergency-933]]).
+
+**Bigger picture — all four UI/UX phases now shipped** (Stage 1 foundation + 3 Stage 2 repaints + Stage 3).
+The remaining product work is the **pilot launch**: finish the §5 emergency (933) smoke item, the live
+UI/UX visual pass above, flip emergency to 911, then go-live. See the PILOT LAUNCH section above + the smoke
+checklist.
