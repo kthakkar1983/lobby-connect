@@ -180,12 +180,23 @@ parallel with Tasks 2–6, which don't depend on it).
 **Files:** per the Task 1 Fail list + spec §5.2 seed list (kiosk screens/CallControls, sonner
 `Toaster`, sign-in form labels, contrast token usages, focus-ring-on-fills).
 
-- [ ] **Step 1:** Implement every Level A/AA Fail from the Task 1 report. Seed fixes (spec §5.2):
-  kiosk `aria-label`s on all controls; `sr-only` context ("Opens in new tab", page `h1` where the
-  title is a logo); toast `aria-live` announcement; contrast fixes per the measured numbers
-  (e.g. coral body-link size/weight bump or darker text token; verify muted-foreground; focus ring
-  visible on coral/navy fills via offset/contrasting ring); normalize sign-in form labels to
-  `htmlFor`/`id`.
+- [ ] **Step 1:** Implement every Level A/AA Fail from the Task 1 report (`docs/audits/2026-06-08-
+  wcag-2.1-aa-audit.md` §5). The contrast token changes are **locked (audit §6)**:
+  - **D1 (coral CTA):** keep `--color-accent-strong #E05A39`. Make every white-on-coral CTA label
+    **≥18.66px (1.1667rem) + bold (≥700)** (or ≥24px) so 3.69:1 passes as large text — primary
+    `Button` coral variant, softphone **Hang up**, video **End**, kiosk **Continue**. Any coral
+    button that can't be that large (e.g. `size="sm"` table-row action) → switch to **navy** fill.
+  - **D2 (input borders):** set `--color-input` → `#919598` (form controls only); leave
+    `--color-border #E1E7EC`. Verify inputs use `border-input`, decorative dividers don't.
+  - Mechanical contrast: `--color-muted-foreground #64748B → #5E6E85`; `--color-live-foreground
+    #048A67 → #048765`; add `--color-accent-text #C85033` and apply to the ≈13 coral text/link
+    sites; mint **Accept** button → navy `#2C425C` text on mint.
+  - Mechanical structural: **skip-to-content** link in `(agent)`/`(admin)`/`(owner)` layouts (+
+    `<main id="main">`); `sr-only`/visible `<h1>` on agent dashboard + owner home; kiosk
+    "Reconnecting…" → `role="status" aria-live="polite"`; `sr-only` "Opens in new tab" on external
+    links; kiosk CTA-style picker → `radiogroup`; confirm kiosk logo `alt` intent; normalize
+    sign-in/forgot labels to `htmlFor`/`id`; **preserve the focus-ring `ring-offset` on the Button
+    refactor** (it's what makes the coral ring pass — audit §0).
 - [ ] **Step 2:** Re-check each fixed criterion; update the Task 1 report Fail→Pass with the fix
   reference.
 - [ ] **Acceptance:** no remaining Level A/AA Fails (or each remaining one has a documented,
