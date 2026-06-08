@@ -74,10 +74,7 @@ export const copy = {
     invalidCredentials: "Invalid email or password.",
   },
 
-  /** Emergency — direct, unmissable (Stage 0 §5). */
-  emergency: {
-    confirmTitle: "Call 911?",
-    confirmBody:
-      "This dials emergency services and joins the guest and you to the call.",
-  },
+  // NOTE: the 911 confirm copy intentionally stays inline in softphone.tsx — it
+  // is safety-critical, carries a specific warning box, and was tuned in Stage 2.
+  // Centralizing it here risked regressing that wording, so it is not duplicated.
 } as const;

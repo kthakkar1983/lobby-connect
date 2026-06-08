@@ -19,4 +19,8 @@ export const copy = {
     title: "Reconnecting…",
     subtitle: "Hold tight — we're getting you back.",
   },
+  error: {
+    heading: "One moment…",
+    body: "Returning to the welcome screen.",
+  },
 } as const;

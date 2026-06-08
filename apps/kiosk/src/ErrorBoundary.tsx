@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
+import { copy } from "./lib/copy";
 
 /** After a render crash, auto-recover the unattended kiosk to a fresh state. */
 const RELOAD_AFTER_MS = 8_000;
@@ -50,9 +51,9 @@ export class ErrorBoundary extends Component<Props, State> {
           }}
         >
           <div>
-            <p style={{ fontSize: 26 }}>One moment…</p>
+            <p style={{ fontSize: 26 }}>{copy.error.heading}</p>
             <p style={{ fontSize: 20, color: "var(--color-muted-foreground)" }}>
-              Returning to the welcome screen.
+              {copy.error.body}
             </p>
           </div>
         </div>

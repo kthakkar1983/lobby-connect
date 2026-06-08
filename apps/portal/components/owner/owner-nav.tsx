@@ -26,7 +26,7 @@ export function OwnerTopNav() {
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
             active === tab
-              ? "bg-accent/10 text-accent-strong"
+              ? "bg-accent/10 text-accent-text"
               : "text-text-muted hover:text-foreground",
           )}
         >
