@@ -67,15 +67,12 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
   const call = calls[0];
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 text-sm">
+    <div className="rounded-card border border-border bg-card p-4 text-sm">
       <div className="flex items-center gap-2 font-medium text-foreground">
-        <Video size={16} /> Incoming video call · {call!.propertyName}
+        <span className="inline-block h-2 w-2 rounded-full bg-live animate-pulse motion-reduce:animate-none" />
+        <Video size={16} /> Incoming video · {call!.propertyName}
       </div>
-      <button
-        type="button"
-        onClick={() => onAccept(call!)}
-        className="mt-3 w-full rounded-md bg-primary px-3 py-2 text-primary-foreground"
-      >
+      <button type="button" onClick={() => onAccept(call!)} className="mt-3 w-full rounded-button bg-live px-3 py-2 text-live-foreground">
         Accept video call
       </button>
     </div>

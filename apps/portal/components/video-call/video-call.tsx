@@ -133,13 +133,21 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
+      {/* Header strip */}
+      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
+        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_rgba(6,214,160,0.18)]" />
+          On video
+        </span>
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
-        {/* 40% guest video (left) */}
-        <div className="relative basis-2/5 bg-neutral-900">
+        {/* 40% guest video (left) — deep-navy video stage */}
+        <div className="relative basis-2/5 bg-[var(--color-call)]">
           <div ref={remoteRef} className="absolute inset-0" />
           <div
             ref={localRef}
-            className="absolute bottom-4 right-4 h-28 w-40 overflow-hidden rounded-md border border-white/40"
+            className="absolute bottom-4 right-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
           />
         </div>
         <PlaybookPanel callId={callId} />
@@ -151,18 +159,18 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
           value={roomNumber}
           onChange={(e) => setRoomNumber(e.target.value)}
           placeholder="Room #"
-          className="w-24 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
         />
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes…"
-          className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="flex-1 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
         />
         <button
           type="button"
           onClick={toggleMute}
-          className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm"
+          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
         >
           {muted ? <MicOff size={16} /> : <Mic size={16} />}
           {muted ? "Unmute" : "Mute"}
@@ -170,7 +178,7 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
         <button
           type="button"
           onClick={toggleCamera}
-          className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm"
+          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
         >
           {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
           {cameraOff ? "Cam on" : "Cam off"}
@@ -179,7 +187,7 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
           type="button"
           disabled
           title="Coming soon"
-          className="rounded-md border border-border px-3 py-2 text-sm opacity-40"
+          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
         >
           Hold
         </button>
@@ -187,14 +195,14 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
           type="button"
           disabled
           title="Coming soon"
-          className="rounded-md border border-border px-3 py-2 text-sm opacity-40"
+          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
         >
           Swap
         </button>
         <button
           type="button"
           onClick={() => void handleEnd()}
-          className="flex items-center gap-1 rounded-md bg-destructive px-3 py-2 text-sm text-destructive-foreground"
+          className="flex items-center gap-1 rounded-button bg-accent-strong px-3 py-2 text-sm text-accent-foreground"
         >
           <PhoneOff size={16} /> End
         </button>

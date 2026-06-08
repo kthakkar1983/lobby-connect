@@ -29,6 +29,8 @@
   --color-live: #06D6A0;              /* connected/success */
   --color-live-foreground: #048A67;   /* mint as readable text */
 
+  --color-call: #14202F;              /* deep-navy video stage background */
+
   --color-destructive: #C81E1E;       /* 911 / deletes — distinct from coral */
   --color-destructive-foreground: #FFFFFF;
 
