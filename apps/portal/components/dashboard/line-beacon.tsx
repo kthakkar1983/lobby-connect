@@ -13,7 +13,7 @@ export function LineBeacon() {
       className={cn(
         "inline-block h-3 w-3 rounded-full",
         up
-          ? "bg-live shadow-[0_0_0_3px_rgba(6,214,160,0.18)]"
+          ? "bg-live shadow-[0_0_0_3px_var(--color-live-glow)]"
           : "bg-destructive animate-pulse motion-reduce:animate-none",
       )}
     />

@@ -15,6 +15,7 @@ import { AvailabilityToggle } from "./availability-cards";
 import { countToday } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { presenceDotClass, presenceLabel } from "@/lib/owner/format";
+import { isStale } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
 import type { ProfileStatus } from "@lc/shared";
 
@@ -72,12 +73,12 @@ export default async function AdminOverviewPage() {
   ]);
 
   const agentIds = [...new Set((assigns ?? []).map((a) => a.primary_agent_id))];
-  let agentProfiles: { id: string; full_name: string; status: ProfileStatus }[] =
+  let agentProfiles: { id: string; full_name: string; status: ProfileStatus; last_seen_at: string | null }[] =
     [];
   if (agentIds.length > 0) {
     const { data } = await supabase
       .from("profiles")
-      .select("id, full_name, status")
+      .select("id, full_name, status, last_seen_at")
       .in("id", agentIds);
     agentProfiles = (data ?? []) as typeof agentProfiles;
   }
@@ -160,16 +161,23 @@ export default async function AdminOverviewPage() {
                   <TableCell>
                     {agent ? (
                       <span className="inline-flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-block h-2 w-2 rounded-full",
-                            presenceDotClass(agent.status),
-                          )}
-                        />
-                        {agent.full_name}
-                        <span className="text-xs text-text-muted">
-                          {presenceLabel(agent.status)}
-                        </span>
+                        {(() => {
+                          const effective: ProfileStatus = isStale(agent.last_seen_at, now.getTime()) ? "OFFLINE" : agent.status;
+                          return (
+                            <>
+                              <span
+                                className={cn(
+                                  "inline-block h-2 w-2 rounded-full",
+                                  presenceDotClass(effective),
+                                )}
+                              />
+                              {agent.full_name}
+                              <span className="text-xs text-text-muted">
+                                {presenceLabel(effective)}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </span>
                     ) : (
                       <span className="text-text-muted">Unassigned</span>

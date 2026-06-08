@@ -28,6 +28,7 @@
 
   --color-live: #06D6A0;              /* connected/success */
   --color-live-foreground: #048A67;   /* mint as readable text */
+  --color-live-glow: rgb(6 214 160 / 0.18); /* mint at 18% alpha — focus/glow ring */
 
   --color-call: #14202F;              /* deep-navy video stage background */
 

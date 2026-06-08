@@ -16,7 +16,7 @@ export function VideoCallHost() {
   return (
     <>
       {!active && <IncomingVideoBanner onAccept={setActive} />}
-      {active && <VideoCall callId={active.id} onClose={() => setActive(null)} />}
+      {active && <VideoCall callId={active.id} onClose={() => setActive(null)} propertyName={active.propertyName} />}
     </>
   );
 }

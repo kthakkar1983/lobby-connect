@@ -11,7 +11,7 @@ import type {
 } from "agora-rtc-sdk-ng";
 import { PlaybookPanel } from "./playbook-panel";
 
-export function VideoCall({ callId, onClose }: { callId: string; onClose: () => void }) {
+export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
@@ -136,8 +136,8 @@ export function VideoCall({ callId, onClose }: { callId: string; onClose: () => 
       {/* Header strip */}
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_rgba(6,214,160,0.18)]" />
-          On video
+          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
+          On video · {propertyName}
         </span>
       </div>
 

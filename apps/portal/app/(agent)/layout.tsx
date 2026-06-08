@@ -29,14 +29,14 @@ export default async function AgentLayout({
     .is("effective_until", null);
 
   const ids = (assignments ?? []).map((a) => a.property_id);
-  let coverage: string[] = [];
+  let coverage: { id: string; name: string }[] = [];
   if (ids.length > 0) {
     const { data: props } = await supabase
       .from("properties")
-      .select("name")
+      .select("id, name")
       .in("id", ids)
       .order("name");
-    coverage = (props ?? []).map((p) => p.name);
+    coverage = (props ?? []) as typeof coverage;
   }
 
   return (
@@ -68,9 +68,9 @@ export default async function AgentLayout({
                 <p className="text-sm text-text-muted">No properties assigned.</p>
               ) : (
                 <ul className="flex flex-col">
-                  {coverage.map((name) => (
+                  {coverage.map(({ id, name }) => (
                     <li
-                      key={name}
+                      key={id}
                       className="border-b border-border py-2 text-sm text-foreground last:border-0"
                     >
                       {name}
