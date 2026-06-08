@@ -39,8 +39,11 @@ export function PlaybookPanel({ callId }: { callId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
-        Loading playbook…
+      <div className="flex basis-3/5 flex-col gap-2 bg-background p-4 border-l border-border">
+        <div className="h-3.5 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+        {[100, 95, 88, 70, 100, 80].map((w, i) => (
+          <div key={i} className="h-3 animate-pulse rounded bg-muted motion-reduce:animate-none" style={{ width: `${w}%` }} />
+        ))}
       </div>
     );
   }

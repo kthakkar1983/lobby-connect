@@ -78,23 +78,23 @@ export function AuditTable({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-border py-16 text-center text-sm text-text-muted">
-          No audit events.
-        </p>
+        <div className="rounded-card border border-dashed border-border p-8 text-center text-sm text-text-muted">
+          No audit events yet.
+        </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Actor</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Entity</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Time</TableHead>
+              <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Actor</TableHead>
+              <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Action</TableHead>
+              <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Entity</TableHead>
+              <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Details</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
-              <TableRow key={r.id}>
+              <TableRow key={r.id} className="even:bg-muted/40">
                 <TableCell
                   className="whitespace-nowrap text-text-muted"
                   title={new Date(r.created_at).toLocaleString()}

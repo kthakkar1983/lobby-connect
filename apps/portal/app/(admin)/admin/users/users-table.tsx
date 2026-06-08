@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { UserRound, UserPlus, MoreHorizontal, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -507,7 +506,7 @@ export function UsersTable({ users, actorId }: Props) {
       </div>
 
       {users.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-card p-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-card p-12 text-center">
           <UserRound className="h-10 w-10 text-text-muted/40" />
           <p className="text-sm font-medium text-foreground">No users yet</p>
           <p className="text-xs text-text-muted">
@@ -519,46 +518,42 @@ export function UsersTable({ users, actorId }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Name</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Email</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Role</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Status</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Presence</TableHead>
+                <TableHead className="text-right font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-foreground">
-                    <span className="inline-flex items-center gap-2">
-                      {u.full_name}
-                      {u.must_change_password ? (
-                        <Badge variant="outline" className="text-xs font-normal text-text-muted">
-                          Pending setup
-                        </Badge>
-                      ) : null}
-                    </span>
+                    {u.full_name}
                   </TableCell>
                   <TableCell className="text-text-muted">{u.email}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{u.role}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-2 text-xs">
-                      <span
-                        className={
-                          u.status === "AVAILABLE"
-                            ? "h-2 w-2 rounded-full bg-green-500"
-                            : u.status === "ON_CALL"
-                              ? "h-2 w-2 rounded-full bg-amber-500"
-                              : "h-2 w-2 rounded-full bg-gray-300"
-                        }
-                      />
-                      {u.status}
+                    <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                      {u.role}
                     </span>
                   </TableCell>
-                  <TableCell>{u.active ? "Yes" : "No"}</TableCell>
+                  <TableCell>
+                    {!u.active ? (
+                      <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Deactivated
+                      </span>
+                    ) : u.must_change_password ? (
+                      <span className="inline-flex items-center rounded-pill bg-accent/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-strong">
+                        Pending setup
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-pill bg-live/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-live-foreground">
+                        Active
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-text-muted text-xs">{u.status}</TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />
                   </TableCell>
