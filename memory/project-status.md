@@ -761,3 +761,21 @@ typecheck+build green.
 The remaining product work is the **pilot launch**: finish the §5 emergency (933) smoke item, the live
 UI/UX visual pass above, flip emergency to 911, then go-live. See the PILOT LAUNCH section above + the smoke
 checklist.
+
+### NEXT (fresh chat) — page-by-page final-polish pass (requested 2026-06-08, session 12)
+
+Kumar's call after reviewing Stage 3: the staged work is done, but he wants a **manual, page-by-page
+walkthrough of the whole app to add a final layer of polish** — this is hands-on/iterative, not another
+staged plan. Specifically requested:
+- **Subtle shadows** and **bounce animations**, **at least on the kiosk** (guest-facing, warm/friendly —
+  the right surface for a little delight; keep the operational agent/admin dashboards crisp, no bounce).
+- Go **one page/screen at a time**, eyeball it, polish.
+
+Craft notes for that pass (Emil lens): bounce stays **subtle** (`spring` bounce ~0.1–0.3, or a small
+overshoot) and only on **occasional/playful** interactions — the kiosk CTA tap, the "Connected" moment,
+screen entrances — never on things seen 100×/day. Shadows use the existing navy-tinted
+`--shadow-sm/md/lg` tokens (don't invent black shadows). Honor `prefers-reduced-motion` (the global net is
+already in place — bounce/spring must be gated). Kiosk already has `lc-pulse`/`lc-spin`/`lc-seam-drift`
+keyframes to build on. No `framer-motion` dep yet — decide CSS spring/`@keyframes` vs adding Motion if a
+real spring is wanted (CSS keyframes can't truly spring; a small `cubic-bezier` overshoot can fake it).
+Best paired with the live in-browser visual pass (run the kiosk + portal, polish what you see).
