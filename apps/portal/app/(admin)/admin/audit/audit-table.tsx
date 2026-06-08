@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { ScrollText } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -17,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 
 export type AuditTableRow = {
   id: string;
@@ -78,8 +81,12 @@ export function AuditTable({
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-card border border-dashed border-border p-8 text-center text-sm text-text-muted">
-          No audit events yet.
+        <div className="rounded-card border border-dashed border-border">
+          <EmptyState
+            icon={ScrollText}
+            title={copy.empty.adminAudit.title}
+            description={copy.empty.adminAudit.description}
+          />
         </div>
       ) : (
         <Table>

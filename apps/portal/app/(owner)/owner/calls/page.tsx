@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { CallRow, type CallRowData } from "@/components/owner/call-row";
 import { dayGroupLabel } from "@/lib/owner/summary";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
 
@@ -122,7 +124,7 @@ export default async function OwnerCallsPage({
             href={"/owner/calls" as never}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
-              !activeProperty ? "border-accent-strong bg-accent/10 text-accent-strong" : "border-border text-text-muted",
+              !activeProperty ? "border-accent-strong bg-accent/10 text-accent-text" : "border-border text-text-muted",
             )}
           >
             All
@@ -134,7 +136,7 @@ export default async function OwnerCallsPage({
               className={cn(
                 "rounded-pill border px-3 py-1 text-sm",
                 activeProperty === p.id
-                  ? "border-accent-strong bg-accent/10 text-accent-strong"
+                  ? "border-accent-strong bg-accent/10 text-accent-text"
                   : "border-border text-text-muted",
               )}
             >
@@ -145,9 +147,12 @@ export default async function OwnerCallsPage({
       )}
 
       {rows.length === 0 ? (
-        <Card className="items-center gap-2 p-16 text-center">
-          <Phone className="size-10 text-text-muted/20" aria-hidden="true" />
-          <p className="text-sm text-text-muted">No calls yet.</p>
+        <Card className="p-0">
+          <EmptyState
+            icon={Phone}
+            title={copy.empty.ownerCalls.title}
+            description={copy.empty.ownerCalls.description}
+          />
         </Card>
       ) : (
         <div className="flex flex-col gap-4">

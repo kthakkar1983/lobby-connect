@@ -33,7 +33,7 @@ export function Connected({
   return (
     <div className="relative h-full overflow-hidden bg-call">
       <div ref={remoteRef} className="absolute inset-0" />
-      <div className="seam-ring pointer-events-none absolute inset-0 p-[2px]" aria-hidden />
+      <div className="seam-ring lc-seam-drift pointer-events-none absolute inset-0 p-[2px]" aria-hidden />
 
       <div className="absolute left-4 top-4 flex items-center gap-2.5 rounded-pill border border-white/10 bg-call/60 py-1.5 pl-2.5 pr-3.5">
         <span className="lc-anim-pulse size-2.5 rounded-pill bg-live" aria-hidden />

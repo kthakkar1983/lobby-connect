@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { UserRound, UserPlus, MoreHorizontal, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import {
   Dialog,
   DialogContent,
@@ -506,12 +508,13 @@ export function UsersTable({ users, actorId }: Props) {
       </div>
 
       {users.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-card p-12 text-center">
-          <UserRound className="h-10 w-10 text-text-muted/40" />
-          <p className="text-sm font-medium text-foreground">No users yet</p>
-          <p className="text-xs text-text-muted">
-            Add your first user to get started.
-          </p>
+        <div className="rounded-card border border-dashed border-border bg-card">
+          <EmptyState
+            icon={UserRound}
+            title={copy.empty.adminUsers.title}
+            description={copy.empty.adminUsers.description}
+            action={<CreateUserDialog />}
+          />
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card">
@@ -544,7 +547,7 @@ export function UsersTable({ users, actorId }: Props) {
                         Deactivated
                       </span>
                     ) : u.must_change_password ? (
-                      <span className="inline-flex items-center rounded-pill bg-accent/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-strong">
+                      <span className="inline-flex items-center rounded-pill bg-accent/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-text">
                         Pending setup
                       </span>
                     ) : (

@@ -7,6 +7,7 @@ import { joinChannel, type KioskAgoraSession } from "./lib/agora";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
 import { LogoMark, SeamShimmer } from "./components/brand";
+import { copy } from "./lib/copy";
 import { Home } from "./screens/Home";
 import { RecordingNotice } from "./screens/RecordingNotice";
 import { Ringing } from "./screens/Ringing";
@@ -124,9 +125,14 @@ export function App() {
 
   if (!config) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-5">
+      <div
+        className="flex h-full flex-col items-center justify-center gap-5"
+        role="status"
+        aria-live="polite"
+      >
         <LogoMark className="size-12" />
         <SeamShimmer />
+        <p className="text-sm text-muted-foreground">{copy.loading}</p>
       </div>
     );
   }
@@ -157,10 +163,14 @@ export function App() {
 /** Shown over the live call while the Agora SDK retries a dropped connection. */
 function ReconnectingOverlay() {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3.5 bg-call/[0.66] text-white">
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3.5 bg-call/[0.66] text-white"
+      role="status"
+      aria-live="polite"
+    >
       <div className="seam-ring lc-anim-spin-fast size-14 rounded-pill p-[3px]" aria-hidden />
-      <div className="text-lg font-semibold">Reconnecting…</div>
-      <div className="text-sm text-white/70">Hold tight — we're getting you back</div>
+      <div className="text-lg font-semibold">{copy.reconnecting.title}</div>
+      <div className="text-sm text-white/70">{copy.reconnecting.subtitle}</div>
     </div>
   );
 }

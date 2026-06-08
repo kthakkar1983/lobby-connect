@@ -55,6 +55,12 @@ everything routes through tokens (CLAUDE.md rule).
   **deep** coral `#E05A39` (passes AA at button/large scale). Base coral is for tints/rings.
 - Color is never the sole signal — pair the mint live-state with the word "Connected" + a
   dot; pair emergency red with an icon + label.
+- **Stage 3 WCAG refinement (2026-06-08):** the formal AA audit measured these proposals and
+  darkened a few for 1.4.3/1.4.11 — `muted-foreground #64748B→#5E6E85`, `live-foreground
+  #048A67→#048765`, input borders `#E1E7EC→#919598` (form controls only) — and added
+  `--color-accent-text #BE4B2F` for coral text/links (coral fills keep `#E05A39`, with CTA labels
+  set to WCAG large text). Authoritative values now live in the token layer + the audit:
+  `docs/audits/2026-06-08-wcag-2.1-aa-audit.md`.
 
 ---
 

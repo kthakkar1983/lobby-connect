@@ -278,7 +278,7 @@ export function Softphone({ role }: SoftphoneProps) {
           <div className="relative mx-auto mt-2 h-16 w-16">
             <span
               aria-hidden="true"
-              className="absolute -inset-1 rounded-full bg-[image:var(--gradient-seam)] opacity-40 blur-md animate-[spin_6s_linear_infinite] motion-reduce:animate-none"
+              className="lc-seam-drift absolute -inset-1 rounded-full opacity-40 blur-md"
             />
             <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-border bg-card">
               <Phone size={20} className="text-primary" />
@@ -303,7 +303,7 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void acceptCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 text-live-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 font-medium text-primary"
             >
               <Phone size={16} /> Accept
             </button>
@@ -320,8 +320,8 @@ export function Softphone({ role }: SoftphoneProps) {
 
       {phase === "in-call" && (
         <div className="mt-3 space-y-3">
-          {/* Seam hairline — "connected" cue */}
-          <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />
+          {/* Seam hairline — "connected" cue (drifting gradient angle) */}
+          <div className="lc-seam-drift h-px w-full" aria-hidden="true" />
           <div className="flex gap-2">
             <button
               type="button"
@@ -334,9 +334,9 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void endCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-accent-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-[1.1875rem] font-bold leading-none text-accent-foreground"
             >
-              <PhoneOff size={16} /> Hang up
+              <PhoneOff size={18} /> Hang up
             </button>
           </div>
           {emergencyActive && !emergencyFailed && (

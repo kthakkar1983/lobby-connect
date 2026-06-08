@@ -7,12 +7,14 @@
 // Forward-compat (spec): to later split "no account" vs "wrong password", add a
 // profile-existence pre-check in signInAction and extend this mapper — no UI
 // changes required.
+import { copy } from "@/lib/copy";
+
 export function mapSignInError(e: { code?: string; status?: number }): string {
   if (e.status === 429 || e.code === "over_request_rate_limit") {
-    return "Too many attempts. Please wait a few minutes and try again.";
+    return copy.auth.rateLimit;
   }
   if (e.code === "email_not_confirmed") {
-    return "Your account isn't fully set up yet. Please contact your administrator.";
+    return copy.auth.notConfirmed;
   }
-  return "Invalid email or password.";
+  return copy.auth.invalidCredentials;
 }

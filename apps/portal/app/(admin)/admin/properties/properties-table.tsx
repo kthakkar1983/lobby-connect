@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -53,14 +55,20 @@ export function PropertiesTable({ properties }: Props) {
       </div>
 
       {properties.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-card p-12 text-center">
-          <Building2 className="h-10 w-10 text-text-muted/40" />
-          <p className="text-sm font-medium text-foreground">
-            No properties yet
-          </p>
-          <p className="text-xs text-text-muted">
-            Add your first property to get started.
-          </p>
+        <div className="rounded-card border border-dashed border-border bg-card">
+          <EmptyState
+            icon={Building2}
+            title={copy.empty.adminProperties.title}
+            description={copy.empty.adminProperties.description}
+            action={
+              <Button asChild>
+                <Link href={"/admin/properties/new" as never}>
+                  <Plus className="size-4" />
+                  New property
+                </Link>
+              </Button>
+            }
+          />
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card">

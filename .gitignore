@@ -45,3 +45,7 @@ supabase/.temp/
 
 # Vercel
 .vercel
+
+# Local tooling artifacts (knowledge-graph cache + Studio query exports)
+graphify-out/
+supabase/snippets/

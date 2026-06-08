@@ -37,14 +37,15 @@
   --color-primary-foreground: #FFFFFF;
 
   --color-muted: #EAEEF2;
-  --color-muted-foreground: #64748B;
+  --color-muted-foreground: #5E6E85;  /* WCAG 1.4.3 (mirror of portal) */
 
   --color-accent: #F0795B;
   --color-accent-strong: #E05A39;
+  --color-accent-text: #BE4B2F;       /* AA-safe coral text on light (mirror) */
   --color-accent-foreground: #FFFFFF;
 
   --color-live: #06D6A0;
-  --color-live-foreground: #048A67;
+  --color-live-foreground: #048765;   /* WCAG 1.4.3 (mirror) */
 
   --color-destructive: #C81E1E;
   --color-destructive-foreground: #FFFFFF;
@@ -71,6 +72,13 @@
   --shadow-lg: 0 18px 40px -16px rgba(44, 66, 92, 0.20);
 
   --color-call: #14202F;   /* deep-navy video backdrop (Stage 2). Not charcoal, not #000. */
+
+  /* Motion — Stage 3 (mirror of portal globals.css §3.1). */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --duration-fast: 150ms;
+  --duration-standard: 220ms;
+  --duration-slow: 320ms;
 }
 
 html, body, #root {
@@ -105,6 +113,18 @@ html, body, #root {
 }
 @keyframes lc-shimmer { to { background-position: -150% 0; } }
 
+/* Seam "drift" — animate the gradient angle on the connected caller ring (spec §3.2). */
+@property --seam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 135deg;
+}
+@keyframes lc-seam-drift { to { --seam-angle: 495deg; } }
+.lc-seam-drift {
+  background: linear-gradient(var(--seam-angle), #2c425c, #06d6a0, #f0795b);
+  animation: lc-seam-drift 8s linear infinite;
+}
+
 .lc-anim-spin    { animation: lc-spin 3.2s linear infinite; }
 .lc-anim-spin-fast { animation: lc-spin 1.1s linear infinite; }
 .lc-anim-pulse   { animation: lc-pulse 2s ease-out infinite; }
@@ -115,7 +135,11 @@ html, body, #root {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer {
+  .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer, .lc-seam-drift {
     animation: none !important;
+  }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

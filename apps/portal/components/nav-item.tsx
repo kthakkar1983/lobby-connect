@@ -24,7 +24,7 @@ export function NavItem({ href, label, icon: Icon }: Props) {
         asChild
         isActive={active}
         tooltip={label}
-        className="text-foreground hover:bg-muted data-[active=true]:bg-accent/10 data-[active=true]:text-accent-strong"
+        className="text-foreground hover:bg-muted data-[active=true]:bg-accent/10 data-[active=true]:text-accent-text"
       >
         <Link href={href as never}>
           <Icon />
