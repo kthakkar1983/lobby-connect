@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,7 +53,7 @@ export function PropertiesTable({ properties }: Props) {
       </div>
 
       {properties.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-card p-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-card p-12 text-center">
           <Building2 className="h-10 w-10 text-text-muted/40" />
           <p className="text-sm font-medium text-foreground">
             No properties yet
@@ -68,16 +67,16 @@ export function PropertiesTable({ properties }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Timezone</TableHead>
-                <TableHead>Routing #</TableHead>
-                <TableHead>Active</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Name</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Owner</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Timezone</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Routing #</TableHead>
+                <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow key={p.id} className="even:bg-muted/40">
                   <TableCell className="font-medium text-foreground">
                     <Link
                       href={`/admin/properties/${p.id}` as never}
@@ -96,9 +95,15 @@ export function PropertiesTable({ properties }: Props) {
                     {p.routing_did ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={p.active ? "secondary" : "outline"}>
-                      {p.active ? "Active" : "Inactive"}
-                    </Badge>
+                    {p.active ? (
+                      <span className="inline-flex items-center rounded-pill bg-live/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-live-foreground">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Inactive
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
