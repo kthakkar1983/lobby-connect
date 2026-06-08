@@ -1,97 +1,196 @@
-import Link from "next/link";
-import { ArrowRight, Building2, PhoneCall, Users } from "lucide-react";
-import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
-import { AvailabilityCards, type AvailabilityRow } from "./availability-cards";
+import { createServerClient } from "@/lib/supabase/server";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatTile } from "@/components/owner/stat-tile";
+import { GreetingLine } from "@/components/dashboard/greeting-line";
+import { AvailabilityToggle } from "./availability-cards";
+import { countToday } from "@/lib/dashboard/calls";
+import { countOnlineAgents } from "@/lib/dashboard/presence";
+import { presenceDotClass, presenceLabel } from "@/lib/owner/format";
+import { cn } from "@/lib/utils";
+import type { ProfileStatus } from "@lc/shared";
 
 export default async function AdminOverviewPage() {
   const actor = await requireRole("ADMIN");
   const supabase = await createServerClient();
+  const now = new Date();
+  const since = new Date(now.getTime() - 48 * 3600_000).toISOString();
 
-  const { data: properties } = await supabase
-    .from("properties")
-    .select("id, name")
-    .eq("operator_id", actor.operator_id)
-    .eq("active", true)
-    .order("name");
+  const [
+    { data: me },
+    { data: properties },
+    { data: agents },
+    { data: incidents },
+    { data: avail },
+    { data: assigns },
+    { data: calls },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", actor.id)
+      .maybeSingle(),
+    supabase
+      .from("properties")
+      .select("id, name, timezone")
+      .eq("operator_id", actor.operator_id)
+      .eq("active", true)
+      .order("name"),
+    supabase
+      .from("profiles")
+      .select("status, last_seen_at")
+      .eq("operator_id", actor.operator_id)
+      .eq("role", "AGENT")
+      .eq("active", true),
+    supabase
+      .from("incidents")
+      .select("id")
+      .eq("operator_id", actor.operator_id)
+      .eq("status", "OPEN"),
+    supabase
+      .from("admin_call_availability")
+      .select("property_id, accepting_calls")
+      .eq("profile_id", actor.id),
+    supabase
+      .from("property_assignments")
+      .select("property_id, primary_agent_id")
+      .eq("operator_id", actor.operator_id)
+      .is("effective_until", null),
+    supabase
+      .from("calls")
+      .select("property_id, ring_started_at")
+      .eq("operator_id", actor.operator_id)
+      .gte("ring_started_at", since),
+  ]);
 
-  const { data: availability } = await supabase
-    .from("admin_call_availability")
-    .select("property_id, accepting_calls")
-    .eq("profile_id", actor.id);
+  const agentIds = [...new Set((assigns ?? []).map((a) => a.primary_agent_id))];
+  let agentProfiles: { id: string; full_name: string; status: ProfileStatus }[] =
+    [];
+  if (agentIds.length > 0) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, status")
+      .in("id", agentIds);
+    agentProfiles = (data ?? []) as typeof agentProfiles;
+  }
+  const profileById = new Map(agentProfiles.map((p) => [p.id, p]));
 
-  const acceptingByProperty = new Map(
-    (availability ?? []).map((a) => [a.property_id, a.accepting_calls]),
-  );
-
-  const rows: AvailabilityRow[] = (properties ?? []).map((p) => ({
-    propertyId: p.id,
-    propertyName: p.name,
-    accepting: acceptingByProperty.get(p.id) ?? false,
+  const props = properties ?? [];
+  const tzById = new Map(props.map((p) => [p.id, p.timezone]));
+  const callsWithTz = (calls ?? []).map((c) => ({
+    property_id: c.property_id,
+    ring_started_at: c.ring_started_at,
+    timeZone: tzById.get(c.property_id) ?? "UTC",
   }));
 
+  const onlineAgents = countOnlineAgents(
+    (agents ?? []) as { status: ProfileStatus; last_seen_at: string | null }[],
+    now.getTime(),
+  );
+  const callsToday = countToday(callsWithTz, now);
+  const openIncidents = (incidents ?? []).length;
+  const acceptingMap = new Map(
+    (avail ?? []).map((a) => [a.property_id, a.accepting_calls]),
+  );
+  const acceptingCount = props.filter((p) => acceptingMap.get(p.id)).length;
+  const agentByProperty = new Map(
+    (assigns ?? []).map((a) => [
+      a.property_id,
+      profileById.get(a.primary_agent_id) ?? null,
+    ]),
+  );
+  const todayByProperty = (id: string) =>
+    countToday(
+      callsWithTz.filter((c) => c.property_id === id),
+      now,
+    );
+
+  const firstName = (me?.full_name ?? "Admin").split(/\s+/)[0] ?? "Admin";
+
   return (
-    <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="text-2xl font-semibold text-foreground">
-          Admin overview
-        </h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Manage users, properties, and assignments for your operator.
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-1">
+        <GreetingLine firstName={firstName} />
+        <p className="text-sm text-text-muted">
+          Admin overview — users, properties, and call coverage for your
+          operator.
         </p>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <Link
-          href={"/admin/users" as never}
-          className="group flex items-start justify-between rounded-lg border border-border bg-card p-5 transition hover:border-primary"
-        >
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">Users</span>
-            </div>
-            <p className="text-xs text-text-muted">
-              Invite admins, agents, and owners. Edit roles. Deactivate or
-              remove access.
-            </p>
-          </div>
-          <ArrowRight className="h-4 w-4 text-text-muted transition group-hover:text-primary" />
-        </Link>
+      <div className="flex gap-3">
+        <StatTile value={onlineAgents} label="Agents online" />
+        <StatTile value={callsToday} label="Calls today" />
+        <StatTile
+          value={openIncidents}
+          label="Open incidents"
+          alert={openIncidents > 0}
+        />
+        <StatTile value={`${acceptingCount}/${props.length}`} label="Accepting" />
+      </div>
 
-        <Link
-          href={"/admin/properties" as never}
-          className="group flex items-start justify-between rounded-lg border border-border bg-card p-5 transition hover:border-primary"
-        >
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">
-                Properties
-              </span>
-            </div>
-            <p className="text-xs text-text-muted">
-              Add and edit the hotels and venues you serve — routing numbers,
-              owners, and kiosk messaging.
-            </p>
-          </div>
-          <ArrowRight className="h-4 w-4 text-text-muted transition group-hover:text-primary" />
-        </Link>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <PhoneCall className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-medium text-foreground">
-            Your call availability
-          </h2>
-        </div>
-        <p className="text-xs text-text-muted">
-          Turn this on for each property you&apos;re covering. When on, you&apos;re
-          added to the dial alongside the primary agent when a guest calls.
-        </p>
-        <AvailabilityCards rows={rows} />
-      </section>
+      <Card className="gap-3 p-5">
+        <h2 className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+          Properties
+        </h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Property</TableHead>
+              <TableHead>Primary agent</TableHead>
+              <TableHead>Calls today</TableHead>
+              <TableHead>Covering</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {props.map((p) => {
+              const agent = agentByProperty.get(p.id);
+              return (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium text-foreground">
+                    {p.name}
+                  </TableCell>
+                  <TableCell>
+                    {agent ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-block h-2 w-2 rounded-full",
+                            presenceDotClass(agent.status),
+                          )}
+                        />
+                        {agent.full_name}
+                        <span className="text-xs text-text-muted">
+                          {presenceLabel(agent.status)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">Unassigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono">
+                    {todayByProperty(p.id)}
+                  </TableCell>
+                  <TableCell>
+                    <AvailabilityToggle
+                      propertyId={p.id}
+                      propertyName={p.name}
+                      initial={acceptingMap.get(p.id) ?? false}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

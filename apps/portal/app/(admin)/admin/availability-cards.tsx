@@ -64,3 +64,35 @@ export function AvailabilityCards({ rows }: { rows: AvailabilityRow[] }) {
     </div>
   );
 }
+
+export function AvailabilityToggle({
+  propertyId,
+  propertyName,
+  initial,
+}: {
+  readonly propertyId: string;
+  readonly propertyName: string;
+  readonly initial: boolean;
+}) {
+  const [on, setOn] = useState(initial);
+  const [, startTransition] = useTransition();
+
+  function toggle(next: boolean) {
+    setOn(next);
+    startTransition(async () => {
+      const result = await setCallAvailabilityAction(propertyId, next);
+      if (!result.ok) {
+        setOn(!next);
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <Switch
+      checked={on}
+      onCheckedChange={toggle}
+      aria-label={`Accept calls for ${propertyName}`}
+    />
+  );
+}
