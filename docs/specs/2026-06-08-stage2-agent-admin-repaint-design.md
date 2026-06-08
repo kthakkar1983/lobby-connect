@@ -118,20 +118,26 @@ only).
 - **Stat strip** — `StatTile`s: **Agents online · Calls today · Open incidents · Accepting (n/total)**.
   Open incidents is a **glance number only** (no admin drill-down route exists; do not link it).
 - **Properties ops table** (`Card` + `Table`): one row per active property —
-  **Property · Primary agent (+presence dot) · Kiosk (online dot) · Calls today · Covering
-  (toggle)**. The "Covering" toggle is the existing `admin_call_availability` write
-  (`AvailabilityCards` logic), now inline in the table — *the one write on this surface, unchanged.*
+  **Property · Primary agent (+presence dot) · Calls today · Covering (toggle)**. The "Covering"
+  toggle is the existing `admin_call_availability` write (`AvailabilityCards` logic), now inline in
+  the table — *the one write on this surface, unchanged.* **No Kiosk column** — see the resolved
+  data risk below.
 
 **Reads (operator-scoped, RLS):**
-1. Agents online — agent profiles whose presence is `AVAILABLE`/`ON_CALL` with fresh `last_seen_at` → count.
-2. Calls today — operator-wide call count for the tz day.
+1. Agents online — agent profiles whose presence is `AVAILABLE`/`ON_CALL` with fresh `last_seen_at`
+   (within `STALE_AFTER_MS = 90s`) → count.
+2. Calls today — operator-wide; each call judged "today" in **its own property's timezone**
+   (per-call `isToday(ring_started_at, property.timezone, now)`), so multi-tz operators stay
+   correct. (Same approach on the agent dashboard.)
 3. Open incidents — `incidents` count where `status = OPEN`.
-4. Per property: active primary assignment + that agent's presence; **kiosk-online** (from the
-   kiosk heartbeat); calls-today count; the admin's own `accepting_calls`.
+4. Per property: active primary assignment + that agent's presence (`presenceDotClass` /
+   `presenceLabel`); calls-today count; the admin's own `accepting_calls`.
 
-**Data risk — kiosk-online:** confirm the kiosk heartbeat (`/api/kiosk/heartbeat`) persists a
-queryable `last_seen` per property. If it does not (and surfacing it would require a write), drop
-the Kiosk column for v1 rather than violate the no-write rule. Flag during planning.
+**Data risk — kiosk-online — RESOLVED: dropped.** Investigation confirmed `/api/kiosk/heartbeat`
+is a **no-op** (auth-check → `204`; the code comment notes "a kiosks.last_seen_at write slots in
+here later"). Per-property kiosk liveness is **not queryable** today, and surfacing it would require
+a write — out of scope. The Kiosk column is **omitted for v1**; it slots in once heartbeat
+persistence lands.
 
 ---
 
@@ -273,11 +279,13 @@ untouched** (Agora join/publish/teardown, finalization, StrictMode guards) — c
 
 ## 12. Open items (carry into the plan)
 
-1. **kiosk-online read** — verify the kiosk heartbeat persists a queryable per-property timestamp;
-   if not, drop the admin Kiosk column (no writes). (§4)
-2. **Agent "Missed"** — confirm clean derivation from existing columns; else simplify or drop. (§3)
-3. **Softphone phase sharing** — pick the lightest mechanism (context vs store) to surface line
-   status to the greeting beacon without touching softphone logic. (§5)
+1. **kiosk-online read** — ✅ RESOLVED during planning: `/api/kiosk/heartbeat` is a no-op (no
+   queryable per-property timestamp), so the admin **Kiosk column is dropped** for v1. (§4)
+2. **Agent "Missed"** — ✅ RESOLVED: scoped to **covered-property `NO_ANSWER` calls today**
+   (per-property tz), since `NO_ANSWER` calls carry no agent attribution. (§3, plan Task 5)
+3. **Softphone phase sharing** — ✅ RESOLVED: a tiny **React context** (`lib/dashboard/line-status`)
+   with a no-op default; the softphone reports its existing `phase`, the greeting beacon reads it.
+   No call logic touched. (§5, plan Tasks 3–4, 7)
 4. **Owner-component dependency** — ensure PR #15 (owner repaint) is merged before/under this work. (§1)
 5. **Emergency-notify seam** — define the extension point shape so the admin/owner/GM alert drops
    in later without rework. (§5)
