@@ -20,7 +20,12 @@ export function NavItem({ href, label, icon: Icon }: Props) {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+      <SidebarMenuButton
+        asChild
+        isActive={active}
+        tooltip={label}
+        className="text-foreground hover:bg-muted data-[active=true]:bg-accent/10 data-[active=true]:text-accent-strong"
+      >
         <Link href={href as never}>
           <Icon />
           <span>{label}</span>

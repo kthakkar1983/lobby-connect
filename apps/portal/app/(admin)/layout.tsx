@@ -31,13 +31,16 @@ export default async function AdminLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4">
-          <SidebarTrigger />
-          <UserMenu
-            fullName={identity?.full_name ?? ""}
-            email={identity?.email ?? ""}
-            role={profile.role as "ADMIN"}
-          />
+        <header className="border-b border-border bg-card">
+          <div className="flex h-14 items-center justify-between px-4">
+            <SidebarTrigger />
+            <UserMenu
+              fullName={identity?.full_name ?? ""}
+              email={identity?.email ?? ""}
+              role={profile.role as "ADMIN"}
+            />
+          </div>
+          <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />
         </header>
         <div className="border-b border-border px-4 pb-4 pt-3">
           <Softphone role="ADMIN" />
