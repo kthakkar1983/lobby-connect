@@ -83,7 +83,8 @@ during a **video** call the full-screen overlay (§6) takes over. The dashboard 
   the softphone's connection phase (client state lifted/shared — see §5); under
   `prefers-reduced-motion` the red stays **solid** (no flash).
 - **Stat strip** — three `StatTile`s: **Today** (calls you handled today), **Avg pickup**
-  (mean answer latency), **Missed**. Mono numerals.
+  (mean answer latency), **Talk time** (total time on handled calls today). Mono numerals.
+  (*"Missed" was replaced during implementation — see read #3.*)
 - **Recent calls** (`Card`): compact list of the agent's recently handled calls — `Room/label ·
   property` left, mono time right, hairline dividers.
 - **Softphone card** (rail): anchored by the **seam ring** with a **soft rotating glow**
@@ -96,10 +97,11 @@ during a **video** call the full-screen overlay (§6) takes over. The dashboard 
 1. Active primary assignments for this agent → property names + count ("Covering N").
 2. Calls handled by this agent today (tz-aware day window) → Today count + Avg pickup
    (`answered_at − created_at` mean).
-3. Missed: calls to the agent's covered properties that ended unanswered today
-   (`state = NO_ANSWER`). *Implementation note:* per-agent "missed" attribution is fuzzy; if it
-   can't be derived cleanly from existing columns, scope Missed to covered-property NO_ANSWER
-   counts, or drop the tile rather than add a write.
+3. ~~Missed~~ → **Talk time** (replaced during implementation). The agent `calls_select` RLS only
+   exposes calls where `handled_by_user_id = auth.uid()`, so `NO_ANSWER` calls (no handler) are
+   unreadable by an agent without service-role or a policy change — both out of scope. The third
+   tile is therefore **Talk time today** = sum of `duration_seconds` over the agent's handled calls
+   that are "today" (per-property tz), rendered with `formatDuration`. Fully agent-readable.
 4. Recent handled calls (last ~5) for the list.
 
 ---
@@ -281,8 +283,9 @@ untouched** (Agora join/publish/teardown, finalization, StrictMode guards) — c
 
 1. **kiosk-online read** — ✅ RESOLVED during planning: `/api/kiosk/heartbeat` is a no-op (no
    queryable per-property timestamp), so the admin **Kiosk column is dropped** for v1. (§4)
-2. **Agent "Missed"** — ✅ RESOLVED: scoped to **covered-property `NO_ANSWER` calls today**
-   (per-property tz), since `NO_ANSWER` calls carry no agent attribution. (§3, plan Task 5)
+2. **Agent "Missed"** — ✅ RESOLVED → **replaced with "Talk time"**: agent RLS can't read
+   `NO_ANSWER` (unhandled) calls, so Missed isn't derivable read-only. Third tile is now Talk time
+   today (sum `duration_seconds` over handled calls). (§3, plan Task 5)
 3. **Softphone phase sharing** — ✅ RESOLVED: a tiny **React context** (`lib/dashboard/line-status`)
    with a no-op default; the softphone reports its existing `phase`, the greeting beacon reads it.
    No call logic touched. (§5, plan Tasks 3–4, 7)
