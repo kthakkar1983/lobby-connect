@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   callStateLabel,
-  callStateBadgeVariant,
   incidentStatusLabel,
-  incidentStatusBadgeVariant,
   presenceLabel,
   presenceDotClass,
+  isLivePresence,
+  formatTimeOnly,
   formatDuration,
   formatCallTime,
 } from "@/lib/owner/format";
@@ -20,33 +20,44 @@ describe("callStateLabel", () => {
   });
 });
 
-describe("callStateBadgeVariant", () => {
-  it("uses destructive for missed/failed, default for answered", () => {
-    expect(callStateBadgeVariant("COMPLETED")).toBe("default");
-    expect(callStateBadgeVariant("IN_PROGRESS")).toBe("default");
-    expect(callStateBadgeVariant("RINGING")).toBe("secondary");
-    expect(callStateBadgeVariant("NO_ANSWER")).toBe("destructive");
-    expect(callStateBadgeVariant("FAILED")).toBe("destructive");
-  });
-});
-
 describe("incident mappers", () => {
-  it("labels and colors OPEN vs RESOLVED", () => {
+  it("labels OPEN vs RESOLVED", () => {
     expect(incidentStatusLabel("OPEN")).toBe("Open");
     expect(incidentStatusLabel("RESOLVED")).toBe("Resolved");
-    expect(incidentStatusBadgeVariant("OPEN")).toBe("destructive");
-    expect(incidentStatusBadgeVariant("RESOLVED")).toBe("secondary");
   });
 });
 
-describe("presence", () => {
-  it("labels and dot-colors each ProfileStatus", () => {
+describe("presence labels", () => {
+  it("labels each ProfileStatus", () => {
     expect(presenceLabel("AVAILABLE")).toBe("Available");
     expect(presenceLabel("ON_CALL")).toBe("On call");
     expect(presenceLabel("AWAY")).toBe("Away");
     expect(presenceLabel("OFFLINE")).toBe("Offline");
-    expect(presenceDotClass("AVAILABLE")).toBe("bg-emerald-500");
-    expect(presenceDotClass("OFFLINE")).toBe("bg-zinc-300");
+  });
+});
+
+describe("presenceDotClass (brand tokens)", () => {
+  it("maps to brand tokens", () => {
+    expect(presenceDotClass("AVAILABLE")).toBe("bg-live");
+    expect(presenceDotClass("ON_CALL")).toBe("bg-accent");
+    expect(presenceDotClass("AWAY")).toBe("bg-muted-foreground");
+    expect(presenceDotClass("OFFLINE")).toBe("bg-border");
+  });
+});
+
+describe("isLivePresence", () => {
+  it("true only for AVAILABLE/ON_CALL", () => {
+    expect(isLivePresence("AVAILABLE")).toBe(true);
+    expect(isLivePresence("ON_CALL")).toBe(true);
+    expect(isLivePresence("AWAY")).toBe(false);
+    expect(isLivePresence("OFFLINE")).toBe(false);
+  });
+});
+
+describe("formatTimeOnly", () => {
+  it("formats hour:minute in tz", () => {
+    // 2026-06-07T02:42:00Z == 21:42 (9:42 PM) the prior day in America/Chicago
+    expect(formatTimeOnly("2026-06-07T02:42:00Z", "America/Chicago")).toMatch(/9:42\s?PM/);
   });
 });
 

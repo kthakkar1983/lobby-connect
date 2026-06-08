@@ -4,6 +4,8 @@ import {
   countTodayCalls,
   isOpenIncident,
   countOpenIncidents,
+  dayGroupLabel,
+  latestCallTime,
 } from "@/lib/owner/summary";
 
 const NOW = new Date("2026-06-02T16:00:00Z"); // 12:00 PM in New York (UTC-4)
@@ -43,5 +45,25 @@ describe("incident counting", () => {
     expect(
       countOpenIncidents([{ status: "OPEN" }, { status: "RESOLVED" }, { status: "OPEN" }]),
     ).toBe(2);
+  });
+});
+
+describe("dayGroupLabel", () => {
+  const now = new Date("2026-06-07T18:00:00Z"); // 1:00 PM America/Chicago
+  it("Today / Yesterday / date", () => {
+    expect(dayGroupLabel("2026-06-07T17:00:00Z", "America/Chicago", now)).toBe("Today");
+    expect(dayGroupLabel("2026-06-06T17:00:00Z", "America/Chicago", now)).toBe("Yesterday");
+    expect(dayGroupLabel("2026-06-01T17:00:00Z", "America/Chicago", now)).toMatch(/Jun 1/);
+  });
+});
+
+describe("latestCallTime", () => {
+  it("returns the max ring_started_at formatted (time only), or null", () => {
+    expect(latestCallTime([], "America/Chicago")).toBeNull();
+    const out = latestCallTime(
+      [{ ring_started_at: "2026-06-07T02:00:00Z" }, { ring_started_at: "2026-06-07T02:42:00Z" }],
+      "America/Chicago",
+    );
+    expect(out).toMatch(/9:42\s?PM/);
   });
 });

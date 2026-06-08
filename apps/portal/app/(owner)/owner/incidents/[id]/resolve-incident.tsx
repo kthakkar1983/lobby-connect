@@ -33,7 +33,7 @@ export function ResolveIncident({ incidentId, status }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
+    <section className="flex flex-col gap-3 rounded-card border border-border bg-card p-5">
       {open ? (
         <>
           <Label htmlFor="resolution_note">Resolution note (optional)</Label>

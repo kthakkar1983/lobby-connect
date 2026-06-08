@@ -3,18 +3,14 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Siren } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
-import {
-  callStateLabel,
-  callStateBadgeVariant,
-  formatCallTime,
-  formatDuration,
-} from "@/lib/owner/format";
+import { StatusPill } from "@/components/owner/status-pill";
+import { SectionCard } from "@/components/owner/section-card";
+import { formatCallTime, formatDuration } from "@/lib/owner/format";
 
 function Field({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-text-muted">{label}</span>
+      <span className="font-label text-[10px] uppercase tracking-[0.06em] text-text-muted">{label}</span>
       <span className="text-sm text-foreground">{value}</span>
     </div>
   );
@@ -63,54 +59,54 @@ export default async function OwnerCallDetailPage({
     .maybeSingle();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <Link
         href="/owner/calls"
         className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-foreground"
       >
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Calls
+        <ChevronLeft className="size-4" aria-hidden="true" /> Calls
       </Link>
 
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold text-foreground">
+        <h1 className="font-display text-3xl text-foreground">
           {call.channel === "VIDEO" ? "Video call" : "Phone call"}
         </h1>
-        <Badge variant={callStateBadgeVariant(call.state)}>{callStateLabel(call.state)}</Badge>
+        <StatusPill kind="call" status={call.state} />
       </div>
 
       {incident && (
         <Link
           href={`/owner/incidents/${incident.id}` as never}
-          className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm font-medium text-destructive hover:bg-destructive/10"
+          className="flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/5 p-4 text-sm font-medium text-destructive hover:bg-destructive/10"
         >
-          <Siren className="h-4 w-4" aria-hidden="true" /> Emergency — view incident
+          <Siren className="size-4" aria-hidden="true" /> Emergency — view incident
         </Link>
       )}
 
-      <section className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-5">
-        <Field label="Property" value={property?.name ?? "—"} />
-        <Field label="Handled by" value={handler} />
-        <Field label="Started" value={formatCallTime(call.ring_started_at, tz)} />
-        <Field label="Duration" value={formatDuration(call.duration_seconds)} />
-        <Field label="Caller" value={call.caller_number ?? "—"} />
-        <Field label="Room" value={call.room_number ?? "—"} />
-      </section>
+      <SectionCard title="Call">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Property" value={property?.name ?? "—"} />
+          <Field label="Handled by" value={handler} />
+          <Field label="Started" value={formatCallTime(call.ring_started_at, tz)} />
+          <Field label="Duration" value={formatDuration(call.duration_seconds)} />
+          <Field label="Caller" value={call.caller_number ?? "—"} />
+          <Field label="Room" value={call.room_number ?? "—"} />
+        </div>
+      </SectionCard>
 
       {call.notes && (
-        <section className="flex flex-col gap-2 rounded-lg border border-border bg-card p-5">
-          <h2 className="text-lg font-medium text-foreground">Notes</h2>
+        <SectionCard title="Notes">
           <p className="whitespace-pre-wrap text-sm text-foreground">{call.notes}</p>
-        </section>
+        </SectionCard>
       )}
 
       {/* Recording seam: dark until call recording ships. No code change needed when recording is enabled. */}
       {call.recording_url && (
-        <section className="flex flex-col gap-2 rounded-lg border border-border bg-card p-5">
-          <h2 className="text-lg font-medium text-foreground">Recording</h2>
+        <SectionCard title="Recording">
           <audio controls src={call.recording_url} className="w-full">
             <track kind="captions" />
           </audio>
-        </section>
+        </SectionCard>
       )}
     </div>
   );

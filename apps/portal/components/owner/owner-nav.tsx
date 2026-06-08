@@ -25,7 +25,9 @@ export function OwnerTopNav() {
           aria-current={active === tab ? "page" : undefined}
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            active === tab ? "bg-primary/10 text-primary" : "text-text-muted hover:text-foreground",
+            active === tab
+              ? "bg-accent/10 text-accent-strong"
+              : "text-text-muted hover:text-foreground",
           )}
         >
           {label}
@@ -48,8 +50,8 @@ export function OwnerBottomNav() {
           href={href as never}
           aria-current={active === tab ? "page" : undefined}
           className={cn(
-            "flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium",
-            active === tab ? "text-primary" : "text-text-muted",
+            "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium",
+            active === tab ? "text-accent-strong" : "text-text-muted",
           )}
         >
           <Icon className="h-5 w-5" aria-hidden="true" />

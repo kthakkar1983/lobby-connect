@@ -652,3 +652,25 @@ eyeballed via a throwaway harness.
    `docs/plans/2026-06-07-ui-ux-polish-stages.md`. Each its own fresh-chat PR.
 3. Then **Stage 3** — states/motion/a11y/copy pass.
 4. Emergency is still **933** (TEMP, unrelated) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
+
+---
+
+## UI/UX Stage 2 — Kiosk MERGED + Owner portal (surface 2 of 3) DONE, PR open (session 10)
+
+**Kiosk surface:** **PR #14 merged to `main`** (squash `73bb722`) — Vercel auto-deploys kiosk+portal prod. Migration 0015 was already live. Stage 2 surface 1 complete + shipped.
+
+**Owner portal surface:** **Branch `feat/ui-ux-stage2-owner` → PR [#15](https://github.com/kthakkar1983/lobby-connect/pull/15) (open, NOT merged).** Spec `docs/specs/2026-06-07-stage2-owner-portal-repaint-design.md` · Plan `docs/plans/2026-06-07-stage2-owner-portal-repaint.md`. Brainstormed via the visual companion (mockups in `.superpowers/brainstorm/`, gitignored): chose Home layout **C** (rich cards only), list rows **A** (card rows), detail header **A** (identity header). Built **subagent-driven** (17 tasks, fresh implementer per task + per-task spec+quality review + a final whole-branch review). Full gate green: portal 337 + kiosk 21 + shared 6 tests, lint + typecheck + both builds.
+
+**What shipped (token/composition layer only — ZERO route/data-fetching/RLS/API/migration changes):**
+- **Shared `greetingForHour`** (`packages/shared`) — time-of-day greeting from viewer-local hour (boundaries 0–10 morning / 11–16 afternoon / 17–23 evening). Wired into a hydration-safe owner `Greeting` island AND the **kiosk Home** (replaced the hardcoded "Good evening.").
+- **New owner components:** `StatTile`, `StatusPill` (+ pure `lib/owner/status-pill.ts` mapping), `SectionCard`, `CallRow`, `IncidentRow`, `Greeting`.
+- **`lib/owner` helpers:** brand-token presence dots + `isLivePresence` + `formatTimeOnly` (format.ts); `dayGroupLabel` + `latestCallTime` (summary.ts). Removed now-dead `BadgeVariant`/`callStateBadgeVariant`/`incidentStatusBadgeVariant`.
+- **Screens repainted:** shell (seam hairline under header + coral active nav), Home (rich property cards: greeting + agent presence dot + Calls-today/Open/Last-call StatTiles + **mint** live-edge / **red** open-incident edge), Calls list (day-grouped card rows + filter chips), Call detail (identity header + SectionCards), Incidents list (card rows, "911 Emergency"), Incident detail (status-colored header), Property detail (identity header + agent presence + SectionCards + CallRow recent), kiosk-content + playbook cards (SectionCard chrome), on-brand loading skeletons.
+- **Brand semantics enforced:** incidents/911 → `destructive` (red); coral (`accent`/`accent-strong`) = brand accent only (active nav, links, StatTile alert); mint (`live`) = live presence / completed calls.
+
+**Final whole-branch review found + FIXED 3 (commit `1a4c4c5`):** StatTile alert was red → changed to coral per spec §3.2; removed dead `*BadgeVariant` helpers + their tests; IncidentRow siren chip now neutral when resolved (was always red).
+
+**PICK UP HERE (fresh chat):**
+1. **Review/merge PR #15** to `main` (Vercel auto-deploys portal+kiosk prod; **zero migrations** — nothing to apply). Optional: visually eyeball owner screens on the deploy (mobile + md+) + the kiosk time-aware greeting, per plan Task 17 §2.
+2. **Stage 2 surface 3 — Agent/Admin repaint** (operational, desktop; function over flair). Then **Stage 3** — states/motion/a11y/copy. Parent plan `docs/plans/2026-06-07-ui-ux-polish-stages.md`; each its own fresh-chat PR.
+3. Emergency is still **933** (TEMP, unrelated) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).

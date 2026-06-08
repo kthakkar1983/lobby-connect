@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,9 +66,9 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+    <Card className="gap-4 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium text-foreground">
+        <h2 className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
           Guest-facing kiosk content
         </h2>
         {editing ? null : (
@@ -154,6 +155,6 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
           </Button>
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }
