@@ -91,6 +91,7 @@ export default async function OwnerHomePage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <AutoRefresh />
+      <h1 className="sr-only">Your properties</h1>
       <div>
         <Greeting />
         <p className="mt-1 text-sm text-text-muted">Your properties</p>

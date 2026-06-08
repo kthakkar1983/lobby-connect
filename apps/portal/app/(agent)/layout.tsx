@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Building2 } from "lucide-react";
+import { SkipLink } from "@/components/skip-link";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { Softphone } from "@/components/softphone/softphone";
@@ -45,6 +46,7 @@ export default async function AgentLayout({
   return (
     <LineStatusProvider>
       <div className="min-h-screen bg-background">
+        <SkipLink />
         <header className="sticky top-0 z-20 border-b border-border bg-card">
           <div className="flex h-14 items-center justify-between px-6">
             <Link href="/agent" aria-label="Lobby Connect home">
@@ -59,7 +61,7 @@ export default async function AgentLayout({
           <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />
         </header>
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
-          <main>{children}</main>
+          <main id="main">{children}</main>
           <aside className="flex flex-col gap-3">
             <Softphone role="AGENT" />
             <VideoCallHost />

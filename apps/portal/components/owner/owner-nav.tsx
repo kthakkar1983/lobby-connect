@@ -51,7 +51,7 @@ export function OwnerBottomNav() {
           aria-current={active === tab ? "page" : undefined}
           className={cn(
             "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium",
-            active === tab ? "text-accent-strong" : "text-text-muted",
+            active === tab ? "text-accent-text" : "text-text-muted",
           )}
         >
           <Icon className="h-5 w-5" aria-hidden="true" />

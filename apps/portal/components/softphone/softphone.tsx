@@ -303,7 +303,7 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void acceptCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 text-live-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 font-medium text-primary"
             >
               <Phone size={16} /> Accept
             </button>
@@ -334,9 +334,9 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void endCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-accent-foreground"
+              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-[1.1875rem] font-bold leading-none text-accent-foreground"
             >
-              <PhoneOff size={16} /> Hang up
+              <PhoneOff size={18} /> Hang up
             </button>
           </div>
           {emergencyActive && !emergencyFailed && (

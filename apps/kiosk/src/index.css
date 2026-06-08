@@ -37,14 +37,15 @@
   --color-primary-foreground: #FFFFFF;
 
   --color-muted: #EAEEF2;
-  --color-muted-foreground: #64748B;
+  --color-muted-foreground: #5E6E85;  /* WCAG 1.4.3 (mirror of portal) */
 
   --color-accent: #F0795B;
   --color-accent-strong: #E05A39;
+  --color-accent-text: #BE4B2F;       /* AA-safe coral text on light (mirror) */
   --color-accent-foreground: #FFFFFF;
 
   --color-live: #06D6A0;
-  --color-live-foreground: #048A67;
+  --color-live-foreground: #048765;   /* WCAG 1.4.3 (mirror) */
 
   --color-destructive: #C81E1E;
   --color-destructive-foreground: #FFFFFF;

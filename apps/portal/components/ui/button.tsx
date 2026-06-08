@@ -17,9 +17,12 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-muted hover:text-foreground",
+        // White-on-coral is 3.69:1 — only AA at large text. If you use this
+        // variant, give the label large+bold sizing (>=18.66px bold) or pick a
+        // navy/destructive variant instead (WCAG 1.4.3; audit §6 D1).
         accent:
           "bg-accent-strong text-accent-foreground shadow-sm hover:bg-accent-strong/90",
-        link: "text-accent-strong underline-offset-4 hover:underline",
+        link: "text-accent-text underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

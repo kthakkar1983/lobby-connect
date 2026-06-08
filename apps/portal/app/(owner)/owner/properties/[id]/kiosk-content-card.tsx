@@ -27,7 +27,7 @@ const LONG_FIELDS = new Set(["kiosk_welcome_message", "kiosk_apology_message"]);
 const STYLE_META: Record<KioskCtaStyle, { name: string; panel: string; greet: string }> = {
   warm: { name: "Warm", panel: "bg-accent-strong", greet: "text-foreground" },
   accent: { name: "Accent", panel: "bg-primary", greet: "text-foreground" },
-  classic: { name: "Classic", panel: "bg-primary", greet: "text-accent-strong" },
+  classic: { name: "Classic", panel: "bg-primary", greet: "text-accent-text" },
 };
 
 type Props = { propertyId: string; initial: KioskContentInput; initialStyle: KioskCtaStyle };

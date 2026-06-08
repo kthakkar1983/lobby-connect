@@ -202,9 +202,9 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         <button
           type="button"
           onClick={() => void handleEnd()}
-          className="flex items-center gap-1 rounded-button bg-accent-strong px-3 py-2 text-sm text-accent-foreground"
+          className="flex items-center gap-1.5 rounded-button bg-accent-strong px-3 py-2 text-[1.1875rem] font-bold leading-none text-accent-foreground"
         >
-          <PhoneOff size={16} /> End
+          <PhoneOff size={18} /> End
         </button>
       </div>
 

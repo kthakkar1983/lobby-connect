@@ -5,6 +5,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SkipLink } from "@/components/skip-link";
 import { UserMenu } from "@/components/user-menu";
 import { createServerClient } from "@/lib/supabase/server";
 import { Softphone } from "@/components/softphone/softphone";
@@ -31,6 +32,7 @@ export default async function AdminLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <SkipLink />
         <header className="border-b border-border bg-card">
           <div className="flex h-14 items-center justify-between px-4">
             <SidebarTrigger />
@@ -46,7 +48,7 @@ export default async function AdminLayout({
           <Softphone role="ADMIN" />
           <VideoCallHost />
         </div>
-        <div className="p-6">{children}</div>
+        <main id="main" className="p-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

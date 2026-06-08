@@ -71,6 +71,7 @@ export default async function AgentDashboardPage() {
 
   return (
     <div className="flex items-stretch gap-4">
+      <h1 className="sr-only">Agent dashboard</h1>
       <div className="flex flex-1 flex-col gap-3">
         <div className="flex min-h-[13rem] flex-col gap-3">
           <Card className="relative gap-1 p-5">
