@@ -674,3 +674,37 @@ eyeballed via a throwaway harness.
 1. **Review/merge PR #15** to `main` (Vercel auto-deploys portal+kiosk prod; **zero migrations** — nothing to apply). Optional: visually eyeball owner screens on the deploy (mobile + md+) + the kiosk time-aware greeting, per plan Task 17 §2.
 2. **Stage 2 surface 3 — Agent/Admin repaint** (operational, desktop; function over flair). Then **Stage 3** — states/motion/a11y/copy. Parent plan `docs/plans/2026-06-07-ui-ux-polish-stages.md`; each its own fresh-chat PR.
 3. Emergency is still **933** (TEMP, unrelated) — revert to 911 before pilot calls (see [[TEMP-emergency-933]]).
+
+---
+
+## 2026-06-08 (session 11) — UI/UX Stage 2 surface 3 (Agent/Admin repaint) DONE → merged to main + prod-deployed
+
+Brainstormed (visual companion) → spec → plan → **subagent-driven build (12 tasks, fresh implementer + spec-review + quality-review each, final whole-branch review)** → merged to `main` (`--no-ff` merge `a0f7cf6`) → **Vercel prod deploy `dpl_74ACE5…` READY** on `lobby-connect-portal.vercel.app`. Tag `plan-stage2-agent-admin-complete`. Branch deleted. **All three Stage-2 surfaces (kiosk, owner, agent/admin) now shipped.** 347 portal tests green; typecheck + lint + build clean. **Zero migrations, zero new API routes, zero call/Agora/softphone-logic changes.**
+Spec: `docs/specs/2026-06-08-stage2-agent-admin-repaint-design.md` · Plan: `docs/plans/2026-06-08-stage2-agent-admin-repaint.md`.
+
+**Scope decided in brainstorm:** repaint **+ light read-only data** (unlike owner's pure-composition rule) so the agent dashboard + admin overview are genuinely useful. Reads go through the existing user-scoped RLS client.
+
+**What shipped:**
+- **New `lib/dashboard/` pure helpers (TDD):** `countToday` + `avgPickupSeconds` + `sumTodayDurationSeconds` (per-call property-tz "today"), `countOnlineAgents` (reuses `isStale` 90s + `isLivePresence`), `lineStatusFromPhase` + a no-op-default React **`LineStatusContext`**.
+- **New `components/dashboard/`:** `GreetingLine` (hydration-safe serif greeting), `LineBeacon` (mint solid up / red flashing down, reduced-motion → solid), `LineStatusProvider`.
+- **Agent dashboard** (`(agent)/agent/page.tsx` + `layout.tsx`): greeting hero + top-right line beacon, **Today / Avg pickup / Talk time** stat strip, recent-calls list, right rail = softphone (decorative **rotating seam-glow ring**) + coverage list; header gains the shared **UserMenu** + seam hairline; wrapped in `LineStatusProvider` so the softphone reports `phase` → the beacon reads it.
+- **Admin overview** (`(admin)/admin/page.tsx`): **operations board** — Agents-online / Calls-today / Open-incidents (glance, no drill-down) / Accepting stat strip + **properties ops table** (property · primary agent **+ stale-aware presence dot** · calls-today · inline **Covering** toggle = the one existing `accepting_calls` write, extracted to `AvailabilityToggle`). **No Kiosk column** (kiosk `/api/kiosk/heartbeat` is a **no-op** → kiosk-online not readable without a write; dropped).
+- **Softphone** (`components/softphone/softphone.tsx`): chrome-only — mint **Accept**, **coral Hang up**, connection dot → mint/grey, in-call **seam edge**; **Emergency relocated** out of the action row to a divided full-width **solid-red "Call 911"** below the notes; reworded confirm dialog ("Call emergency services (911)?" + non-emergency-number warning + a **forward-compat seam comment** for the cut admin/owner/GM notify); banners tokenized to `destructive`; idle **seam glow ring**. **All call handlers/effects/refs unchanged** (verified) — only added one beacon `useEffect`.
+- **Video overlay** (`components/video-call/*`): chrome-only — header (mint dot + "On video · {hotel}"), **40/60** split on deep-navy **`--color-call`** (new @theme token), **seam-framed** self-view PiP, branded **playbook loading skeleton**, **coral End**, greyed Hold/Swap. **No red anywhere in video.** Incoming banner → mint pulse + mint Accept. Agora/fetch logic untouched; playbook iframe stays **sandbox-less** (Chrome PDF).
+- **Tables/status/detail:** **zebra** on the dense audit table (hairline elsewhere), filled **status pills** (role/user-status/property-active), status-card dots → **mint healthy / coral degraded / red down** (no new amber token — coral serves degraded), **SectionCard** chrome on assignment + kiosk-link cards, property-form already on primitives, **loading.tsx** for users/properties/audit + agent + admin, tokenized empty states.
+- **Shared chrome:** sidebar active item = **coral** (`accent-strong`), admin header seam hairline (mirrors agent/owner), user-menu already on-brand.
+
+**Brand semantics enforced:** **red = 911 / destructive only** (End/Hang up are coral); mint = live/Accept/healthy; coral = accent **and** degraded status. No hardcoded hex outside the globals `@theme` token layer (mint-glow extracted to `--color-live-glow`).
+
+**Notable decisions/finds during the build (reflected in spec/plan):**
+- **"Missed" → "Talk time":** agent `calls_select` RLS only exposes `handled_by_user_id = auth.uid()`, so unanswered (NO_ANSWER, no handler) calls aren't agent-readable → can't do "Missed" read-only. Replaced with **Talk time today** (sum `duration_seconds` over handled calls), fully readable. (Caught by the quality review; spec/plan updated.)
+- **Nested PostgREST selects type as `never`** here (generated types lack Relationships) → used the project's **2-query pattern** everywhere (assignments→property/agent names via `.in()` + Map merge). `requireRole` returns no `full_name`/`email` → separate `profiles` query.
+- Final review verdict: ready to merge; applied a polish pass (tokenized mint glow, **stale-aware admin presence dot**, hotel name in video header, coverage list keyed by id).
+
+**Deferred (intentional):** video **elapsed timer** (v1 omit per plan); `StatusPill` reuse vs inline table pills (cosmetic). **Solitude capital-W** font fix filed as its own task chip (crossed-W reads "V"; no OpenType alternate — decide swap-font vs accept; cross-cutting across all 3 surfaces).
+
+**PICK UP HERE (fresh session):**
+1. (Optional) eyeball the agent/admin surfaces on prod (`lobby-connect-portal.vercel.app`) — authed screens weren't browser-verified locally (token-level + all gates passed, risk low). Check: agent dashboard idle (beacon mint→red when line drops), audio in-call (mint Accept → coral Hang up → divided red 911 + dialog), incoming/active **video** (deep-navy stage, seam PiP, playbook skeleton→PDF, coral End), admin ops board + Covering toggle, audit zebra, status dots, property detail SectionCards, coral active nav; toggle OS reduce-motion to confirm glow/flash/pulse/shimmer stop.
+2. **UI/UX Stage 3** — states/motion/a11y/copy pass (the last UI/UX phase; all 3 surface repaints now done). Fresh chat; parent plan `docs/plans/2026-06-07-ui-ux-polish-stages.md`.
+3. **Solitude-W** font decision (own task) — swap the display serif or accept.
+4. Emergency is still **933** (TEMP, unrelated) — revert to **911** before pilot calls (see [[TEMP-emergency-933]]).
