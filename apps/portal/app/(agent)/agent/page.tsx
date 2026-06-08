@@ -1,6 +1,9 @@
+import { Phone } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { StatTile } from "@/components/owner/stat-tile";
 import { GreetingLine } from "@/components/dashboard/greeting-line";
 import { LineBeacon } from "@/components/dashboard/line-beacon";
@@ -88,7 +91,12 @@ export default async function AgentDashboardPage() {
             Recent calls
           </h2>
           {recent.length === 0 ? (
-            <p className="text-sm text-text-muted">No calls handled yet.</p>
+            <EmptyState
+              icon={Phone}
+              title={copy.empty.agentCalls.title}
+              description={copy.empty.agentCalls.description}
+              className="py-8"
+            />
           ) : (
             <ul className="flex flex-col">
               {recent.map((c) => (

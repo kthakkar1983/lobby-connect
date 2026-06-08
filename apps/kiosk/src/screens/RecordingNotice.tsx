@@ -1,5 +1,6 @@
 import { ShieldCheck, X } from "lucide-react";
 import { SeamTop } from "../components/brand";
+import { copy } from "../lib/copy";
 
 export function RecordingNotice({
   onOk, onClose,
@@ -23,18 +24,17 @@ export function RecordingNotice({
         <div className="max-w-[78%] rounded-card border border-border bg-card p-11 text-center shadow-md">
           <ShieldCheck className="mx-auto mb-4 size-10 text-accent-strong" strokeWidth={1.6} />
           <h1 className="font-display text-2xl leading-snug text-foreground">
-            Before we connect you
+            {copy.recording.heading}
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-            Your call with the front desk may be recorded for training and quality. Tap continue
-            when you're ready.
+            {copy.recording.body}
           </p>
           <button
             type="button"
             onClick={onOk}
-            className="mt-6 rounded-button bg-accent-strong px-11 py-4 text-lg font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+            className="mt-6 rounded-button bg-accent-strong px-11 py-4 text-xl font-bold text-accent-foreground transition-transform active:scale-[0.98]"
           >
-            Continue
+            {copy.recording.action}
           </button>
         </div>
       </div>

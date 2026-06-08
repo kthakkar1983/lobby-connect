@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { CallRow, type CallRowData } from "@/components/owner/call-row";
 import { dayGroupLabel } from "@/lib/owner/summary";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
 
@@ -145,9 +147,12 @@ export default async function OwnerCallsPage({
       )}
 
       {rows.length === 0 ? (
-        <Card className="items-center gap-2 p-16 text-center">
-          <Phone className="size-10 text-text-muted/20" aria-hidden="true" />
-          <p className="text-sm text-text-muted">No calls yet.</p>
+        <Card className="p-0">
+          <EmptyState
+            icon={Phone}
+            title={copy.empty.ownerCalls.title}
+            description={copy.empty.ownerCalls.description}
+          />
         </Card>
       ) : (
         <div className="flex flex-col gap-4">

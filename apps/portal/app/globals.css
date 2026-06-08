@@ -64,6 +64,14 @@
   --shadow-md: 0 12px 26px -14px rgba(44, 66, 92, 0.16);
   --shadow-lg: 0 18px 40px -16px rgba(44, 66, 92, 0.20);
 
+  /* Motion — Stage 3. Single curve + durations (Stage 0 §4 / spec §3.1).
+     Never ease-in on UI; never transition: all; UI stays under ~300ms. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);      /* entrances, UI responses */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); /* on-screen movement / morph */
+  --duration-fast: 150ms;     /* micro: press, hover */
+  --duration-standard: 220ms; /* default UI: dropdowns, toggles */
+  --duration-slow: 320ms;     /* dialogs / sheets */
+
   /* Sidebar — aliases to brand tokens so the shadcn sidebar primitive resolves.
      Neutral surface for foundation; Stage 2 admin polish may choose a navy rail. */
   --color-sidebar: var(--color-card);
@@ -82,4 +90,57 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   Stage 3 — motion. The seam "drift": animate the gradient ANGLE
+   (not the element) so an active-call edge/ring feels alive.
+   Used on active/connected surfaces only (spec §3.2) — never the
+   persistent header hairline or the operational dashboards/tables.
+   ============================================================ */
+@property --seam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 135deg;
+}
+@keyframes lc-seam-drift {
+  to { --seam-angle: 495deg; } /* 135 + 360 */
+}
+.lc-seam-drift {
+  background: linear-gradient(var(--seam-angle), #2c425c, #06d6a0, #f0795b);
+  animation: lc-seam-drift 8s linear infinite;
+}
+
+/* Skeleton — a calm, neutral highlight sweep (brand timing) instead of the
+   stock pulse. Seen often but briefly, so keep it quiet (spec §3.4). */
+@keyframes lc-skeleton-sweep {
+  from { background-position: 150% 0; }
+  to   { background-position: -150% 0; }
+}
+.lc-skeleton {
+  background-color: var(--color-muted);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent 100%
+  );
+  background-size: 150% 100%;
+  background-repeat: no-repeat;
+  animation: lc-skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+/* Accessibility — universal reduced-motion safety net (spec §3.5).
+   Neutralizes movement/looping app-wide so no animation (incl. future
+   ones) can violate the user's preference. Comprehension cues that are
+   color/opacity-only still read; only motion is removed. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

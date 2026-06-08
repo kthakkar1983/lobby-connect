@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { IncidentRow } from "@/components/owner/incident-row";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function OwnerIncidentsPage() {
@@ -36,9 +38,12 @@ export default async function OwnerIncidentsPage() {
       <h1 className="font-display text-3xl text-foreground">Incidents</h1>
 
       {rows.length === 0 ? (
-        <Card className="items-center gap-2 p-16 text-center">
-          <Siren className="size-10 text-text-muted/20" aria-hidden="true" />
-          <p className="text-sm text-text-muted">No emergencies.</p>
+        <Card className="p-0">
+          <EmptyState
+            icon={Siren}
+            title={copy.empty.ownerIncidents.title}
+            description={copy.empty.ownerIncidents.description}
+          />
         </Card>
       ) : (
         <div className="flex flex-col gap-2">

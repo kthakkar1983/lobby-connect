@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SeamTop } from "../components/brand";
+import { copy } from "../lib/copy";
 
 export function Apology({ message, onDone }: { message: string | null; onDone: () => void }) {
   const [left, setLeft] = useState(10);
@@ -14,11 +15,10 @@ export function Apology({ message, onDone }: { message: string | null; onDone: (
       <SeamTop />
       <div className="flex h-full flex-col items-center justify-center px-9 text-center">
         <h1 className="max-w-[80%] font-display text-3xl leading-tight text-foreground">
-          Sorry to keep you waiting.
+          {copy.apology.heading}
         </h1>
         <p className="mt-3.5 max-w-[70%] text-base leading-relaxed text-muted-foreground">
-          {message ??
-            "The front desk is helping another guest right now. Please try again in a couple of minutes."}
+          {message ?? copy.apology.fallback}
         </p>
         <p className="mt-6 font-mono text-xs text-muted-foreground">
           Returning to home in {Math.max(0, left)}s…

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Phone } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { SectionCard } from "@/components/owner/section-card";
@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { KioskContentCard } from "./kiosk-content-card";
 import { PlaybookCard } from "./playbook-card";
 import { KIOSK_FIELDS, type KioskContentInput, type KioskCtaStyle } from "@/lib/owner/kiosk";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import type { ProfileStatus } from "@lc/shared";
 
 function Field({
@@ -125,7 +127,12 @@ export default async function OwnerPropertyDetailPage({
         }
       >
         {(recent ?? []).length === 0 ? (
-          <p className="text-sm text-text-muted">No calls yet.</p>
+          <EmptyState
+            icon={Phone}
+            title={copy.empty.ownerPropertyCalls.title}
+            description={copy.empty.ownerPropertyCalls.description}
+            className="py-8"
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {(recent ?? []).map((c) => {

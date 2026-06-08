@@ -10,6 +10,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Greeting } from "@/components/owner/greeting";
 import { StatTile } from "@/components/owner/stat-tile";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 
 export default async function OwnerHomePage() {
   const actor = await requireRole("OWNER");
@@ -95,9 +97,12 @@ export default async function OwnerHomePage() {
       </div>
 
       {cards.length === 0 ? (
-        <Card className="items-center gap-2 p-16 text-center">
-          <Building2 className="size-10 text-text-muted/20" aria-hidden="true" />
-          <p className="text-sm text-text-muted">No properties assigned to you yet.</p>
+        <Card className="p-0">
+          <EmptyState
+            icon={Building2}
+            title={copy.empty.ownerHome.title}
+            description={copy.empty.ownerHome.description}
+          />
         </Card>
       ) : (
         cards.map((c) => (

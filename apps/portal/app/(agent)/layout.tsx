@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Building2 } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { Softphone } from "@/components/softphone/softphone";
@@ -6,6 +7,8 @@ import { VideoCallHost } from "@/components/video-call/video-call-host";
 import { Wordmark } from "@/components/brand/wordmark";
 import { UserMenu } from "@/components/user-menu";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { copy } from "@/lib/copy";
 import { LineStatusProvider } from "@/components/dashboard/line-status-provider";
 
 export default async function AgentLayout({
@@ -65,7 +68,12 @@ export default async function AgentLayout({
                 Properties you cover
               </h2>
               {coverage.length === 0 ? (
-                <p className="text-sm text-text-muted">No properties assigned.</p>
+                <EmptyState
+                  icon={Building2}
+                  title={copy.empty.agentProperties.title}
+                  description={copy.empty.agentProperties.description}
+                  className="gap-2 px-2 py-6"
+                />
               ) : (
                 <ul className="flex flex-col">
                   {coverage.map(({ id, name }) => (
