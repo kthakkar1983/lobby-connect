@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { StatTile } from "@/components/owner/stat-tile";
 import { GreetingLine } from "@/components/dashboard/greeting-line";
 import { LineBeacon } from "@/components/dashboard/line-beacon";
-import { countToday, avgPickupSeconds } from "@/lib/dashboard/calls";
+import { countToday, avgPickupSeconds, sumTodayDurationSeconds } from "@/lib/dashboard/calls";
 import { formatDuration, formatTimeOnly } from "@/lib/owner/format";
 
 export default async function AgentDashboardPage() {
@@ -12,53 +12,49 @@ export default async function AgentDashboardPage() {
   const supabase = await createServerClient();
   const now = new Date();
 
-  // Fetch full_name separately — requireRole returns id/role/operator_id/active/must_change_password only
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", actor.id)
-    .maybeSingle();
+  // Group A (no deps): profile name + active assignments — run in parallel
+  const [{ data: profile }, { data: assignments }] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", actor.id).maybeSingle(),
+    supabase
+      .from("property_assignments")
+      .select("property_id")
+      .eq("primary_agent_id", actor.id)
+      .is("effective_until", null),
+  ]);
 
   const fullName = profile?.full_name ?? "Agent";
   const firstName = fullName.split(/\s+/)[0] ?? fullName;
 
-  // Active assignments for this agent — 2-query pattern (no FK Relationships defined)
-  const { data: assignments } = await supabase
-    .from("property_assignments")
-    .select("property_id")
-    .eq("primary_agent_id", actor.id)
-    .is("effective_until", null);
-
   const coveredIds = (assignments ?? []).map((a) => a.property_id);
-
-  let covered: Array<{ id: string; name: string; timeZone: string }> = [];
-  const tzById = new Map<string, string>();
-  if (coveredIds.length > 0) {
-    const { data: props } = await supabase
-      .from("properties")
-      .select("id, name, timezone")
-      .in("id", coveredIds);
-    covered = (props ?? []).map((p) => ({ id: p.id, name: p.name, timeZone: p.timezone }));
-    for (const p of covered) tzById.set(p.id, p.timeZone);
-  }
 
   const since = new Date(now.getTime() - 48 * 3600_000).toISOString();
 
-  // Calls handled by this agent in the last 48h
-  const { data: handledRaw } = await supabase
-    .from("calls")
-    .select("id, property_id, ring_started_at, answered_at, room_number")
-    .eq("handled_by_user_id", actor.id)
-    .gte("ring_started_at", since)
-    .order("ring_started_at", { ascending: false });
+  // Group B (needs coveredIds): properties lookup + handled calls — run in parallel
+  const [{ data: props }, { data: handledRaw }] = await Promise.all([
+    coveredIds.length > 0
+      ? supabase.from("properties").select("id, name, timezone").in("id", coveredIds)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("calls")
+      .select("id, property_id, ring_started_at, answered_at, duration_seconds, room_number")
+      .eq("handled_by_user_id", actor.id)
+      .gte("ring_started_at", since)
+      .order("ring_started_at", { ascending: false }),
+  ]);
 
-  // Merge property name/tz by id
+  const covered: Array<{ id: string; name: string; timeZone: string }> = (props ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    timeZone: p.timezone,
+  }));
+  const tzById = new Map(covered.map((p) => [p.id, p.timeZone]));
   const nameById = new Map(covered.map((c) => [c.id, c.name]));
 
   const handled = (handledRaw ?? []).map((c) => ({
     id: c.id,
     ring_started_at: c.ring_started_at,
     answered_at: c.answered_at,
+    duration_seconds: c.duration_seconds,
     room_number: c.room_number,
     propertyName: nameById.get(c.property_id) ?? "—",
     timeZone: tzById.get(c.property_id) ?? "UTC",
@@ -66,24 +62,7 @@ export default async function AgentDashboardPage() {
 
   const todayCount = countToday(handled, now);
   const avgPickup = avgPickupSeconds(handled, now);
-
-  // Missed calls (NO_ANSWER) on covered properties today
-  let missed = 0;
-  if (coveredIds.length > 0) {
-    const { data: noAns } = await supabase
-      .from("calls")
-      .select("property_id, ring_started_at")
-      .in("property_id", coveredIds)
-      .eq("state", "NO_ANSWER")
-      .gte("ring_started_at", since);
-    missed = countToday(
-      (noAns ?? []).map((c) => ({
-        ring_started_at: c.ring_started_at,
-        timeZone: tzById.get(c.property_id) ?? "UTC",
-      })),
-      now,
-    );
-  }
+  const talkTime = sumTodayDurationSeconds(handled, now);
 
   const recent = handled.slice(0, 5);
 
@@ -101,7 +80,7 @@ export default async function AgentDashboardPage() {
           <div className="flex flex-1 gap-3">
             <StatTile value={todayCount} label="Today" />
             <StatTile value={formatDuration(avgPickup)} label="Avg pickup" />
-            <StatTile value={missed} label="Missed" alert={missed > 0} />
+            <StatTile value={formatDuration(talkTime)} label="Talk time" />
           </div>
         </div>
         <Card className="flex-1 gap-2 p-5">

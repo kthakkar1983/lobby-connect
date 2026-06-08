@@ -30,3 +30,11 @@ export function avgPickupSeconds(items: ReadonlyArray<PickupCall>, now: Date): n
   );
   return Math.round(total / today.length);
 }
+
+export type DurationCall = DatedCall & { readonly duration_seconds: number | null };
+
+export function sumTodayDurationSeconds(items: ReadonlyArray<DurationCall>, now: Date): number {
+  return items
+    .filter((c) => isToday(c.ring_started_at, c.timeZone, now))
+    .reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
+}
