@@ -779,3 +779,91 @@ already in place — bounce/spring must be gated). Kiosk already has `lc-pulse`/
 keyframes to build on. No `framer-motion` dep yet — decide CSS spring/`@keyframes` vs adding Motion if a
 real spring is wanted (CSS keyframes can't truly spring; a small `cubic-bezier` overshoot can fake it).
 Best paired with the live in-browser visual pass (run the kiosk + portal, polish what you see).
+
+---
+
+## 2026-06-08 (session 13) — emergency reverted to 911 + kiosk ~120s video disconnect FIXED; v1 reported working
+
+Two pilot-blocking items closed this session. Kumar reports **every v1 feature working from his testing**, and
+the **§5 emergency 933 smoke is DONE/cleared** — the last original smoke item is no longer outstanding.
+
+**1) Prod emergency dialing REVERTED `933` → `911` (DONE + verified).** The TEMP testing override is undone —
+prod emergency now dials real 911, safe for the pilot. Did it via the **Vercel CLI** (the cached REST token in
+`auth.json` returned `invalidToken` even though `vercel whoami` worked — these `vca_` OAuth tokens are
+refreshed per-CLI-call, so prefer the CLI over hand-rolled curl). **Gotcha hit + recorded:** `vercel env add`
+over a stdin pipe **silently stores an empty string** (CLI 52.2.1) — first attempt left `EMERGENCY_DIAL_NUMBER=""`
+(caught on the decrypted pull). Correct path: `vercel env rm … production -y` then
+`vercel env add … production --value 911 --no-sensitive --yes` (the `--no-sensitive` keeps it decryptable so
+`vercel env pull --environment=production` can verify it = `911`), then `vercel redeploy <prod-url> --target production`
+(env binds at deploy). Verified decrypted `911` **post-deploy**. `TEMP-emergency-933.md` memory **deleted**;
+the env-management lesson is in `~/.claude` `build-quirks`. (Kumar's call: no more live 911 testing — he'll be
+on-property during the pilot and can dial 911 by hand if needed.)
+
+**2) Kiosk video calls dropped at ~120s — root-caused + FIXED + confirmed in prod (commit `f26488a`).**
+Symptom (seen before, intermittently): a connected video call abruptly disconnects ~2min in; the **agent
+returns home** but the **kiosk freezes on the Connected screen** — no apology, no reconnect, no home.
+- **Not** instability and **not** a backend dial cap. **Root cause:** `apps/kiosk/src/App.tsx` arms a 120s
+  no-answer ring timer when ringing starts (`onAccept`), and the only thing that cleared it was `teardown()` —
+  which *connecting* never calls (`onAgentJoined` only dispatched `AGENT_JOINED`). So it ran through the live
+  call and fired at ~120s: `teardown()` left the Agora channel (→ agent saw `user-left` → `/end-video`
+  finalized **COMPLETED** → agent home), while `dispatch(RING_TIMEOUT)` was a **no-op** on the `connected`
+  screen → kiosk stranded.
+- **Evidence (decisive):** prod `calls` rows — the two stuck calls ended at **123s and 121s** ring-to-end
+  (≈120s timer + a few s for the agent to react) vs **<85s** for every clean hang-up. (Token TTL is 3600s and
+  the reaper is 30min, so both were ruled out.)
+- **Fix (TDD, two layers):** `onAgentJoined` now **clears the ring timer** on connect (primary); the timer
+  callback bails via a new tested pure guard **`shouldFireRingTimeout(screen)`** (true only when `"ringing"`)
+  using a live `screenRef` (defense-in-depth). Legit no-answer path unchanged (no agent in 120s → apology).
+  24/24 kiosk tests, typecheck, lint green. Pushed straight to `main` (Kumar's call), kiosk deploy
+  `il35eji3l` READY, **confirmed by a clean 4-minute prod call.** Bug+fix detail also in `~/.claude` `build-quirks`.
+- **Deferred follow-up (noted, NOT built):** the kiosk has **no self-recovery watchdog** — if Agora events
+  (`user-left`/`connection-state-change`) never fire, nothing else moves it off `connected` (it does NOT poll
+  call state; heartbeat is one-way fire-and-forget). A belt-and-suspenders watchdog (poll `/api/kiosk` call
+  state, or detect remote-gone independently) was scoped but deferred. This fix removes the known cause.
+
+**PICK UP HERE (fresh chat) — the Solitude capital-W font fix:**
+1. **Solitude-W font decision** — the display serif's capital **W** has a crossed center stroke that reads as
+   **"V"** (e.g. "Welcome" → "Velcome"); there is **no OpenType stylistic-alternate** in the shipped face.
+   Decide: **swap the display serif** (find a comparable warm display serif whose W is clean — Stage 0 proxy
+   was Playfair Display) **vs accept** it. Cross-cutting: Solitude is used display-only across kiosk + owner +
+   agent/admin headings (`--font-display`, self-hosted woff2 in `apps/portal/app/fonts/` + `apps/kiosk/public/fonts/`).
+   If swapping, replace the font files + `--font-display`/`@font-face` wiring in both apps; re-verify headings.
+2. (Optional, after fonts) the **page-by-page final-polish pass** (kiosk shadows/bounce, §ABOVE) + the
+   **live in-browser visual/a11y pass** (Stage 3 contrast is math-verified, not eyeballed; confirm empty/error/
+   loading states, seam-drift, skeleton shimmer, reduced-motion, screen-reader on kiosk flow).
+3. Prod emergency is now **911** (reverted + verified this session) — no longer a pre-pilot action item.
+
+---
+
+## 2026-06-09 (session 14) — display + label fonts SWAPPED (Solitude→Atelier, Vonique→Radon); crossed-W fixed
+
+The session-13 "PICK UP HERE" font task — **done.** The crossed-W wasn't only Solitude (display); **Vonique 43
+(the all-caps label font) has the same crossed-W** ("WI-FI"→"VI-FI", "WESTIN"→"VESTIN"), surfaced while
+mocking. So the fix is a **two-slot swap**, both apps:
+- **`--font-display`: Solitude → Atelier** (an Envato *modern serif* — keeps the warm-serif brand voice, clean W). Headings everywhere (kiosk + owner + agent/admin), CTA, greeting. Single weight (400), like Solitude.
+- **`--font-label`: Vonique 43 → Radon** (Envato "classy elegant display"). All UPPERCASE labels both apps. Radon ships ONE outline; declared across `400 700` (next/font/local `weight:"400 700"` + kiosk `@font-face{font-weight:400 700}`) so the 33 `font-semibold` labels use the real outline, **no faux-bold**. Radon's **capital** W verified clean in-browser (the label slot is uppercase, so its lowercase ligatures don't show there — an earlier "Radon for the CTA, Outfit for utility labels" idea was floated then dropped; Kumar's final call = Radon for labels, Atelier for everything else).
+
+**Decision process:** built faithful side-by-side kiosk mockups (exact brand tokens, real woff2) via a throwaway
+HTML harness + Playwright screenshots, comparing Solitude vs Atelier vs Radon, the W stress-test (hotel brands:
+Westin/Wyndham/Waldorf/WI-FI), and Radon's caps-W at label sizes. Mockups were in `/tmp` (not committed).
+
+**Pure font-definition + token-layer change — NO component edits** (every surface uses the `font-display`/
+`font-label` Tailwind classes, which resolve through the CSS vars). Files: `apps/portal/app/fonts.ts`,
+`apps/portal/app/globals.css`, `apps/kiosk/src/index.css`; added `Atelier-Regular.woff2` + `Radon.woff2` to
+`apps/portal/app/fonts/` + `apps/kiosk/public/fonts/`, removed `Solitude.woff2` + `Vonique43.woff2` from both.
+Net font count flat (−2/+2). Envato license already confirmed in Stage 1.
+
+**Verified:** monorepo typecheck + both `build`s green; no stale Solitude/Vonique refs; live kiosk dev runtime —
+`--font-display`→Atelier, `--font-label`→Radon, both faces `document.fonts` loaded (Radon as `400 700`). The
+kiosk **Home** screen itself needs a `?t=` config link so it wasn't screenshotted in-app; fonts proven via the
+identical-asset mockups + the runtime font-load probe. **Committed straight to `main`** (Kumar's call) → Vercel
+auto-deploys both apps.
+
+**PICK UP HERE (fresh chat):**
+1. **(Optional) eyeball the real kiosk Home** on the deploy via a `?t=` link — confirm Atelier headings + Radon
+   kicker/labels render (esp. a W-bearing hotel name + "WI-FI").
+2. **Page-by-page final-polish pass** (NOT started — Kumar deferred it this session): kiosk **subtle shadows +
+   bounce** on playful moments (CTA tap, "Connected", screen entrances; gate on `prefers-reduced-motion`; keep
+   ops dashboards crisp/no bounce), one screen at a time, plus the live in-browser visual/a11y pass. Craft notes
+   in the session-12 "NEXT" block above.
+3. Prod emergency is **911** (safe). v1 reported working; pilot launch is the remaining product work.

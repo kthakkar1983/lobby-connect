@@ -13,22 +13,28 @@ export const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
 });
 
-export const solitude = localFont({
-  src: "./fonts/Solitude.woff2",
+/** Display serif — headings across every surface. Single weight (400), like the design it replaces. */
+export const atelier = localFont({
+  src: "./fonts/Atelier-Regular.woff2",
   display: "swap",
-  variable: "--font-solitude",
+  variable: "--font-atelier",
 });
 
-export const vonique = localFont({
-  src: "./fonts/Vonique43.woff2",
+/**
+ * Label face — all-caps UI labels. Radon ships a single outline; declaring it across the
+ * 400–700 range lets `font-semibold` (600) labels use that outline directly instead of
+ * faux-bolding it.
+ */
+export const radon = localFont({
+  src: [{ path: "./fonts/Radon.woff2", weight: "400 700", style: "normal" }],
   display: "swap",
-  variable: "--font-vonique",
+  variable: "--font-radon",
 });
 
 /** Attach to <html> so every --font-* var (and thus --font-sans/mono/display/label) resolves. */
 export const fontVars = [
   outfit.variable,
   jetbrainsMono.variable,
-  solitude.variable,
-  vonique.variable,
+  atelier.variable,
+  radon.variable,
 ].join(" ");

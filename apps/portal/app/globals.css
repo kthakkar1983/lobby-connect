@@ -49,8 +49,8 @@
   /* Typography — families set by next/font in Task 3 via these vars */
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: var(--font-solitude), Georgia, "Times New Roman", serif;
-  --font-label: var(--font-vonique), var(--font-outfit), system-ui, sans-serif;
+  --font-display: var(--font-atelier), Georgia, "Times New Roman", serif;
+  --font-label: var(--font-radon), var(--font-outfit), system-ui, sans-serif;
 
   /* Shape — spec §4 (one scale; kiosk rounds a step softer in its own file) */
   --radius-card: 12px;
