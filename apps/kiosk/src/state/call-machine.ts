@@ -26,6 +26,16 @@ export function initialState(): KioskState {
   return { screen: "home", callId: null, channelName: null };
 }
 
+/**
+ * The 120s ring timer is a *no-answer* cutoff: it only means anything while the
+ * call is still ringing. It is armed when ringing begins and must be cancelled
+ * on connect — but if it ever fires after the agent has joined, this guard keeps
+ * it inert so a live call is never torn down out from under the kiosk.
+ */
+export function shouldFireRingTimeout(screen: KioskScreen): boolean {
+  return screen === "ringing";
+}
+
 function home(): KioskState {
   return initialState();
 }

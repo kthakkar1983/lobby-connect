@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
 
-import { reduce, initialState } from "./state/call-machine";
+import { reduce, initialState, shouldFireRingTimeout } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
 import { interpretConnectionState } from "./lib/connection";
@@ -31,6 +31,10 @@ export function App() {
   const callIdRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Live mirror of the current screen for timer callbacks (avoids stale closures).
+  const screenRef = useRef(state.screen);
+  screenRef.current = state.screen;
+
   // Load config + start heartbeat interval.
   useEffect(() => {
     fetchKioskConfig().then(setConfig).catch(() => {});
@@ -59,7 +63,15 @@ export function App() {
       const session = await joinChannel({
         appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid,
         onRemoteVideo: (t) => setRemoteVideo(t ?? null),
-        onAgentJoined: () => dispatch({ type: "AGENT_JOINED" }),
+        onAgentJoined: () => {
+          // Call connected — cancel the no-answer ring timer so it can't fire
+          // mid-call and tear down a live session.
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          dispatch({ type: "AGENT_JOINED" });
+        },
         onAgentLeft: () => {
           void teardown();
           void endCall(callIdRef.current!, "completed");
@@ -87,6 +99,10 @@ export function App() {
       setLocalVideo(session.localVideo);
       dispatch({ type: "ACCEPT_DISCLOSURE", callId, channelName });
       timeoutRef.current = setTimeout(() => {
+        // No-answer cutoff: only valid while still ringing. If the call has since
+        // connected (and the clear above was somehow missed), stay inert rather
+        // than tearing the live call down.
+        if (!shouldFireRingTimeout(screenRef.current)) return;
         if (callIdRef.current) void endCall(callIdRef.current, "no-answer");
         void teardown();
         dispatch({ type: "RING_TIMEOUT" });
