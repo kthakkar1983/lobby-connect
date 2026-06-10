@@ -867,3 +867,28 @@ auto-deploys both apps.
    ops dashboards crisp/no bounce), one screen at a time, plus the live in-browser visual/a11y pass. Craft notes
    in the session-12 "NEXT" block above.
 3. Prod emergency is **911** (safe). v1 reported working; pilot launch is the remaining product work.
+
+---
+
+## 2026-06-10 (session 15) — comprehensive architecture audit (48 findings) + P0-1, H2, H3 fixed
+
+Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architecture, duplication, performance, scalability, maintainability). **48 confirmed findings, 1 refuted.** Full report was presented in the session. Audit doc to be written to `docs/audits/2026-06-10-architecture-audit.md` (not yet done — flagged in TASKS.md).
+
+**Work done this session (3 commits to `main`):**
+
+1. **P0-1 (process):** Merged `docs/readiness-audit-2026-06-06` branch → `main`. The readiness-audit + triage docs (`docs/audits/2026-06-06-readiness-audit.md` + `…-triage.md`) are now on `main` and accessible to every future session. This was the M5 finding: institutional memory of 14 ACCEPT-RISK + 4 DEFER-V2 decisions was only on an unmerged branch.
+
+2. **H3 (video answer race — HIGH):** `apps/portal/app/api/calls/[id]/answer-video/route.ts` — the guarded UPDATE now uses `.select("id")`. Zero rows returned = the concurrent accept won; we return 409. The ON_CALL presence write is gated to the winner only. Previously both concurrent acceptors got `200 + channelName` and both stamped ON_CALL. New test in `tests/app/calls/answer-video.test.ts` covers the race scenario.
+
+3. **H2 (owner stale presence — HIGH):** Added `effectivePresence(status, lastSeenAt, nowMs): PresenceStatus` to `apps/portal/lib/voice/presence.ts` — the single derivation of agent reachability. Owner home (`app/(owner)/owner/page.tsx`) now fetches `last_seen_at` and bakes effective presence into cards at read time. Previously the page showed raw `status` with no `last_seen_at`, so a crashed agent showed mint "Available" for up to 24h. 3 new tests in `tests/lib/voice/presence.test.ts`.
+
+**Test count: 351 (up from 347).**
+
+**Also shipped this session:** `TASKS.md` + `dashboard.html` (productivity system) — tracks all 48 audit findings across 4 phases.
+
+**PICK UP HERE (fresh chat):**
+1. **H1 (stale-closure notes loss — HIGH, the live bug):** softphone.tsx + video-call.tsx silently drop agent notes when the guest hangs up first. Root cause: `call.on("disconnect", ...)` is wired inside a mount effect but `endCall` captures the first-render closure (roomNumber + notes both `""`). Fix requires ref-mirroring roomNumber/notes (kiosk's own documented pattern) + a jsdom+testing-library test lane (portal has no jsdom/RTL today). This is the most impactful remaining Phase 1 fix.
+2. **Phase 2 seam extractions** (after H1): `requireApiActor()` in `lib/auth/api-actor.ts` is the highest-leverage single change — dedupes 7+ hand-rolled API preambles AND is the v2 multi-tenancy seam.
+3. **Page-by-page final-polish pass** (kiosk shadows/bounce + live in-browser visual/a11y pass) — still not started; not blocking.
+4. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — should be written before next session so future sessions can reference the findings.
+5. Prod emergency is **911** (safe, unchanged this session).
