@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { presenceLabel, presenceDotClass, isLivePresence } from "@/lib/owner/format";
+import { effectivePresence } from "@/lib/voice/presence";
 import { countTodayCalls, countOpenIncidents, latestCallTime } from "@/lib/owner/summary";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Greeting } from "@/components/owner/greeting";
@@ -39,17 +40,24 @@ export default async function OwnerHomePage() {
       .is("effective_until", null);
 
     const agentIds = [...new Set((assignments ?? []).map((a) => a.primary_agent_id))];
-    const agentMap = new Map<string, { full_name: string; status: ProfileStatus }>();
+    const agentMap = new Map<string, { full_name: string; status: ProfileStatus; last_seen_at: string | null }>();
     if (agentIds.length > 0) {
       const { data: agents } = await supabase
         .from("profiles")
-        .select("id, full_name, status")
+        .select("id, full_name, status, last_seen_at")
         .in("id", agentIds);
-      for (const a of agents ?? []) agentMap.set(a.id, { full_name: a.full_name, status: a.status });
+      for (const a of agents ?? []) {
+        agentMap.set(a.id, { full_name: a.full_name, status: a.status, last_seen_at: a.last_seen_at });
+      }
     }
     for (const a of assignments ?? []) {
-      const agent = agentMap.get(a.primary_agent_id);
-      if (agent) agentByProperty.set(a.property_id, agent);
+      const raw = agentMap.get(a.primary_agent_id);
+      if (raw) {
+        // Bake effective presence at read time so stale agents show OFFLINE,
+        // not whatever frozen status the daily cron hasn't swept yet.
+        const status = effectivePresence(raw.status, raw.last_seen_at, now.getTime());
+        agentByProperty.set(a.property_id, { full_name: raw.full_name, status });
+      }
     }
   }
 

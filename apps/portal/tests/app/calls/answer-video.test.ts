@@ -6,6 +6,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 let callRow: Record<string, unknown> | null = null;
+// Controls what the guarded UPDATE returns — default winner (one row claimed).
+let callUpdateResult: Array<{ id: string }> = [{ id: "call-1" }];
 const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
@@ -25,7 +27,8 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       return {
         select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
-        update: (v: unknown) => { callUpdateSpy(v); return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }; },
+        // Chain: .update().eq("id").eq("state","RINGING").select("id") → { data: callUpdateResult }
+        update: (v: unknown) => { callUpdateSpy(v); return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: callUpdateResult, error: null }) }) }) }; },
       };
     },
   }),
@@ -44,6 +47,7 @@ beforeEach(() => {
   profileUpdateSpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   callRow = { id: "call-1", state: "RINGING", operator_id: "op-1", agora_channel_name: "call_abc" };
+  callUpdateResult = [{ id: "call-1" }];
 });
 
 describe("POST /api/calls/[id]/answer-video", () => {
@@ -75,5 +79,17 @@ describe("POST /api/calls/[id]/answer-video", () => {
     profileFetch.mockResolvedValueOnce({ data: { id: "u1", operator_id: "op-1", role: "OWNER" } });
     expect((await call("call-1")).status).toBe(403);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("409 when concurrent accept beats us (UPDATE returns 0 rows)", async () => {
+    // callRow still shows RINGING so the read-check passes, but a concurrent
+    // accept claimed it before our UPDATE — the DB returns no rows.
+    callUpdateResult = [];
+    const res = await call("call-1");
+    expect(res.status).toBe(409);
+    // The UPDATE was attempted — we lost the race, not the read-check.
+    expect(callUpdateSpy).toHaveBeenCalled();
+    // The loser must NOT stamp itself ON_CALL.
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 });

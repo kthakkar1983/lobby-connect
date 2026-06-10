@@ -17,6 +17,20 @@ export function isLiveStatus(value: string): value is PresenceStatus {
   return LIVE_STATUSES.has(value);
 }
 
+/**
+ * The single answer to "is this agent actually reachable right now?"
+ * A DB row whose heartbeat went stale is OFFLINE regardless of what the
+ * status column says — the daily sweep cron only persists what this
+ * function already returns at read time.
+ */
+export function effectivePresence(
+  status: string,
+  lastSeenAt: string | null,
+  nowMs: number,
+): PresenceStatus {
+  return isStale(lastSeenAt, nowMs) ? "OFFLINE" : (status as PresenceStatus);
+}
+
 /** True when last_seen is missing or older than the stale window. */
 export function isStale(lastSeenAtIso: string | null, now: number): boolean {
   if (!lastSeenAtIso) return true;

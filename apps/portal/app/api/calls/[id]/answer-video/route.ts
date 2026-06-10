@@ -47,8 +47,8 @@ export async function POST(
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
   }
 
-  // Conditional on still-RINGING to lose the answer race safely.
-  await admin
+  // Self-reporting UPDATE: zero rows returned means a concurrent accept beat us.
+  const { data: claimed } = await admin
     .from("calls")
     .update({
       state: "IN_PROGRESS",
@@ -56,8 +56,14 @@ export async function POST(
       answered_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("state", "RINGING");
+    .eq("state", "RINGING")
+    .select("id");
 
+  if (!claimed || claimed.length === 0) {
+    return NextResponse.json({ error: "Already answered" }, { status: 409 });
+  }
+
+  // ON_CALL only for the winner — losers must not corrupt presence.
   await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", user.id);
 
   return NextResponse.json({ channelName: call.agora_channel_name });
