@@ -8,12 +8,12 @@
 > Source: comprehensive 48-finding audit. Phases sequenced: behavior fixes first, then seam extractions, then perf, then scale invariants.
 
 ### Phase 0 — Process (zero code)
-- [ ] **P0-1** Merge `docs/readiness-audit-2026-06-06` branch to main (M5 — restores institutional memory of ACCEPT-RISK / DEFER-V2 decisions; docs-only, zero risk)
+- [x] **P0-1** Merge `docs/readiness-audit-2026-06-06` branch to main (M5 — restores institutional memory of ACCEPT-RISK / DEFER-V2 decisions; docs-only, zero risk)
 
 ### Phase 1 — Three behavior fixes ⚠
 - [ ] **H1** Fix stale-closure notes loss in softphone.tsx + video-call.tsx (ref-mirror roomNumber/notes; add jsdom+testing-library lane + regression test)
-- [ ] **H2** Fix owner portal showing dead agents as "Available" (hoist effectivePresence() to lib/voice/presence.ts; owner query selects last_seen_at; all 3 consumers call it)
-- [ ] **H3** Fix video answer race — losing agent joins live call (make guarded UPDATE self-reporting via .select("id"); zero rows → 409; ON_CALL write inside winner branch only)
+- [x] **H2** Fix owner portal showing dead agents as "Available" — `effectivePresence()` added to lib/voice/presence.ts; owner home fetches last_seen_at + bakes effective status into cards at read time. 3 new tests.
+- [x] **H3** Fix video answer race — `answer-video` UPDATE now uses `.select("id")`; zero rows → 409; ON_CALL write gated to winner only. 1 new test (concurrent-claim case). 351 tests total.
 
 ### Phase 2 — Extract security/tenancy seams
 - [ ] **P2-1** Extract `lib/auth/api-actor.ts` — `requireApiActor()` + `fetchOperatorCall()` replacing 7+ hand-rolled preambles (also adds missing `profiles.active` check + OWNER reject on audio claim)
