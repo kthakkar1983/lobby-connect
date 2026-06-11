@@ -10,15 +10,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
+import type { CallChannel } from "@lc/shared";
 
 const DEFAULT_LIMIT = 50;
 
 export default async function OwnerCallsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string; limit?: string }>;
+  searchParams: Promise<{ property?: string; limit?: string; channel?: string }>;
 }) {
-  const { property, limit: limitParam } = await searchParams;
+  const { property, limit: limitParam, channel: channelParam } = await searchParams;
+  const activeChannel: CallChannel | null =
+    channelParam === "AUDIO" || channelParam === "VIDEO" ? channelParam : null;
   const actor = await requireRole("OWNER");
   const supabase = await createServerClient();
 
@@ -59,6 +62,10 @@ export default async function OwnerCallsPage({
     callsQuery = callsQuery.in("property_id", []);
   }
 
+  if (activeChannel) {
+    callsQuery = callsQuery.eq("channel", activeChannel);
+  }
+
   const { data: calls } = await callsQuery;
   const rows = calls ?? [];
 
@@ -92,12 +99,17 @@ export default async function OwnerCallsPage({
     }
   }
 
-  const moreHref = (() => {
+  const buildHref = (next: { property?: string | null; channel?: CallChannel | null; limit?: number }) => {
     const sp = new URLSearchParams();
-    if (activeProperty) sp.set("property", activeProperty);
-    sp.set("limit", String(limit + DEFAULT_LIMIT));
-    return `/owner/calls?${sp.toString()}`;
-  })();
+    const p = next.property === undefined ? activeProperty : next.property;
+    const ch = next.channel === undefined ? activeChannel : next.channel;
+    if (p) sp.set("property", p);
+    if (ch) sp.set("channel", ch);
+    if (next.limit) sp.set("limit", String(next.limit));
+    const qs = sp.toString();
+    return `/owner/calls${qs ? `?${qs}` : ""}`;
+  };
+  const moreHref = buildHref({ limit: limit + DEFAULT_LIMIT });
 
   const now = new Date();
   // Build display rows + group them by day label (rows already sorted desc).
@@ -145,7 +157,7 @@ export default async function OwnerCallsPage({
       {multiProperty && (
         <div className="flex flex-wrap gap-2">
           <Link
-            href={"/owner/calls" as never}
+            href={buildHref({ property: null }) as never}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
               !activeProperty ? "border-accent-strong bg-accent/10 text-accent-text" : "border-border text-text-muted",
@@ -156,7 +168,7 @@ export default async function OwnerCallsPage({
           {props.map((p) => (
             <Link
               key={p.id}
-              href={`/owner/calls?property=${p.id}` as never}
+              href={buildHref({ property: p.id }) as never}
               className={cn(
                 "rounded-pill border px-3 py-1 text-sm",
                 activeProperty === p.id
@@ -169,6 +181,29 @@ export default async function OwnerCallsPage({
           ))}
         </div>
       )}
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { label: "All", value: null },
+            { label: "Phone", value: "AUDIO" as const },
+            { label: "Video", value: "VIDEO" as const },
+          ] as const
+        ).map((opt) => (
+          <Link
+            key={opt.label}
+            href={buildHref({ channel: opt.value }) as never}
+            className={cn(
+              "rounded-pill border px-3 py-1 text-sm",
+              activeChannel === opt.value
+                ? "border-accent-strong bg-accent/10 text-accent-text"
+                : "border-border text-text-muted",
+            )}
+          >
+            {opt.label}
+          </Link>
+        ))}
+      </div>
 
       {rows.length === 0 ? (
         <Card className="p-0">
