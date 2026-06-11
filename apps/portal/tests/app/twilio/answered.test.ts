@@ -12,7 +12,7 @@ let callRow: { id: string; state: string; operator_id: string } | null = null;
 const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(async () => ({
-  data: { id: "u1", operator_id: "op1" },
+  data: { id: "u1", operator_id: "op1", role: "AGENT" },
 }));
 
 function makeAdminClient() {

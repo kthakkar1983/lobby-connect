@@ -1,60 +1,46 @@
 import { NextResponse } from "next/server";
+import type { CallState } from "@lc/shared";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { canAnswer } from "@/lib/voice/call-state";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actor instanceof NextResponse) return actor;
 
   const body = (await request.json().catch(() => ({}))) as { callId?: string };
   if (!body.callId) {
     return NextResponse.json({ error: "Missing callId" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const call = await fetchOperatorCall<{ id: string; state: CallState }>(
+    actor,
+    body.callId,
+    "id, state",
+  );
+  if (call instanceof NextResponse) return call;
 
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-
-  const { data: call } = await admin
-    .from("calls")
-    .select("id, state, operator_id")
-    .eq("id", body.callId)
-    .maybeSingle();
-  if (!call || call.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
   if (!canAnswer(call.state)) {
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
   }
+
+  const admin = createAdminClient();
 
   // Conditional on still-RINGING (second .eq) to lose the answer race safely.
   await admin
     .from("calls")
     .update({
       state: "IN_PROGRESS",
-      handled_by_user_id: user.id,
+      handled_by_user_id: actor.userId,
       answered_at: new Date().toISOString(),
     })
     .eq("id", body.callId)
     .eq("state", "RINGING");
 
-  await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", user.id);
+  await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
 
   return new NextResponse(null, { status: 204 });
 }

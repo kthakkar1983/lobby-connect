@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { validatePlaybookFile, playbookStorageKey } from "@/lib/owner/playbook";
 
@@ -13,20 +13,10 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // Resolves the authenticated OWNER + their owned property, or a NextResponse error.
 async function resolveOwnerProperty(propertyId: string) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
+  const actor = await requireApiActor({ allow: ["OWNER"] });
+  if (actor instanceof NextResponse) return { error: actor };
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
 
   const { data: property } = await admin
     .from("properties")
@@ -35,16 +25,14 @@ async function resolveOwnerProperty(propertyId: string) {
     .maybeSingle();
 
   if (
-    !me ||
     !property ||
-    me.role !== "OWNER" ||
-    property.operator_id !== me.operator_id ||
-    property.owner_user_id !== user.id
+    property.operator_id !== actor.operatorId ||
+    property.owner_user_id !== actor.userId
   ) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  return { admin, user, property };
+  return { admin, actor, property };
 }
 
 export async function GET(_request: Request, { params }: Ctx) {
@@ -79,7 +67,7 @@ export async function POST(request: Request, { params }: Ctx) {
   const { id } = await params;
   const resolved = await resolveOwnerProperty(id);
   if ("error" in resolved) return resolved.error;
-  const { admin, user, property } = resolved;
+  const { admin, actor, property } = resolved;
 
   const form = await request.formData();
   const file = form.get("file");
@@ -110,7 +98,7 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   await logAuditEvent({
-    actorUserId: user.id,
+    actorUserId: actor.userId,
     action: "property.playbook_uploaded",
     entityType: "property",
     entityId: property.id as string,
