@@ -1,33 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REAP_RINGING_AFTER_MS } from "@/lib/calls/reaper";
+import { requireApiActor } from "@/lib/auth/api-actor";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actor instanceof NextResponse) return actor;
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-  // Owners are read-only (07a spec) — they never answer calls, so never poll.
-  if (me.role === "OWNER") {
-    return NextResponse.json({ error: "Owners cannot answer calls" }, { status: 403 });
-  }
 
   // Time-bound the RINGING window: a crashed kiosk leaks a RINGING row that the
   // daily reaper only closes much later, so without this bound a dead call rings
@@ -37,7 +20,7 @@ export async function GET(_request: Request): Promise<NextResponse> {
   const { data: rows } = await admin
     .from("calls")
     .select("id, property_id, agora_channel_name, ring_started_at")
-    .eq("operator_id", me.operator_id)
+    .eq("operator_id", actor.operatorId)
     .eq("channel", "VIDEO")
     .eq("state", "RINGING")
     .gte("ring_started_at", ringingSince)

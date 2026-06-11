@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 
 export const runtime = "nodejs";
 
@@ -13,33 +13,17 @@ export async function GET(
 ): Promise<NextResponse> {
   const { id } = await params;
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actor instanceof NextResponse) return actor;
+
+  const call = await fetchOperatorCall<{
+    id: string;
+    property_id: string;
+    operator_id: string;
+  }>(actor, id, "id, property_id");
+  if (call instanceof NextResponse) return call;
 
   const admin = createAdminClient();
-
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-
-  const { data: call } = await admin
-    .from("calls")
-    .select("id, property_id, operator_id")
-    .eq("id", id)
-    .maybeSingle();
-  if (!call || call.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
 
   const { data: property } = await admin
     .from("properties")
