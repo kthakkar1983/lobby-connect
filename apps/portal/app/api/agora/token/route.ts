@@ -5,12 +5,12 @@ import { requireApiActor } from "@/lib/auth/api-actor";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { getAgoraCredentials } from "@/lib/agora/config";
 import { buildRtcPublisherToken } from "@/lib/agora/token";
+import { ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 import type { AgoraTokenResult } from "@lc/shared";
 
 export const runtime = "nodejs";
 
 const TOKEN_TTL_SECONDS = 3600;
-const LIVE_STATES = new Set(["RINGING", "IN_PROGRESS"]);
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
@@ -28,7 +28,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     .eq("agora_channel_name", channel)
     .maybeSingle();
 
-  if (!call || !LIVE_STATES.has(call.state)) {
+  if (!call || !(ACTIVE_CALL_STATES as readonly string[]).includes(call.state)) {
     return NextResponse.json({ error: "No live call for channel" }, { status: 404 });
   }
 

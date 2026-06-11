@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
-import { computeDurationSeconds } from "@/lib/calls/duration";
+import { finalizeCallPayload } from "@/lib/voice/call-state";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -34,18 +34,12 @@ export async function POST(
 
   if (call.state === "IN_PROGRESS") {
     const endedAt = new Date();
-    const durationSeconds = computeDurationSeconds(call.answered_at, endedAt.getTime());
-
     const admin = createAdminClient();
 
     // Conditional on still-IN_PROGRESS so the kiosk-vs-agent finalize race is safe.
     await admin
       .from("calls")
-      .update({
-        state: "COMPLETED",
-        ended_at: endedAt.toISOString(),
-        duration_seconds: durationSeconds,
-      })
+      .update(finalizeCallPayload("COMPLETED", call.answered_at, endedAt))
       .eq("id", id)
       .eq("state", "IN_PROGRESS");
   }

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import { ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 import type { CallStartResult } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -33,7 +34,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     .select("id")
     .eq("property_id", property.id)
     .eq("channel", "VIDEO")
-    .in("state", ["RINGING", "IN_PROGRESS"])
+    .in("state", ACTIVE_CALL_STATES)
     .limit(1)
     .maybeSingle();
   if (existingActive) {

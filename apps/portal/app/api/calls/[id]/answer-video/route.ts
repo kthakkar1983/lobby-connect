@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canAnswer } from "@/lib/voice/call-state";
+import { canAnswer, claimCall } from "@/lib/voice/call-state";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import type { CallState } from "@lc/shared";
 
@@ -30,21 +30,8 @@ export async function POST(
 
   const admin = createAdminClient();
 
-  // Self-reporting UPDATE: zero rows returned means a concurrent accept beat us.
-  const { data: claimed } = await admin
-    .from("calls")
-    .update({
-      state: "IN_PROGRESS",
-      handled_by_user_id: actor.userId,
-      answered_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("state", "RINGING")
-    .select("id");
-
-  if (!claimed || claimed.length === 0) {
-    return NextResponse.json({ error: "Already answered" }, { status: 409 });
-  }
+  const won = await claimCall(admin, id, actor.userId);
+  if (!won) return NextResponse.json({ error: "Already answered" }, { status: 409 });
 
   // ON_CALL only for the winner — losers must not corrupt presence.
   await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
