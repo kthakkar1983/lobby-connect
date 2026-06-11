@@ -919,3 +919,29 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 2. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — still not done; write before continuing audit work.
 3. **Page-by-page final-polish pass** (kiosk shadows/bounce + live in-browser visual/a11y pass) — still not started; not blocking.
 4. Prod emergency is **911** (safe, unchanged).
+
+---
+
+## 2026-06-10 (session 17) — Notes durability + error surfacing + owner Calls tab
+
+**DONE on branch `feat/notes-and-errors`** — 7 commits, **360 tests** green, lint + typecheck clean. Flow: brainstorm → spec → plan → subagent-driven execution (per-task spec+quality review + an opus whole-branch final review). Spec: `docs/specs/2026-06-10-notes-and-errors-design.md` · Plan: `docs/plans/2026-06-10-notes-and-errors.md`.
+
+**Why:** H1 (session 16) patched the stale-closure *symptom*; this fixed the *shape* — a single unretried, silently-swallowed notes save. The same `.catch(()=>{})` pattern hid every other call-surface failure.
+
+**Thread A — agent reliability:**
+- New `apps/portal/lib/http/reliable-fetch.ts` — `reliableFetch(input, init, { label, retries?, backoffMs? }): Promise<Response|null>`: retries network/5xx (default 2), `Sentry.captureException` on exhaustion. 6 unit tests. **Contract:** only a real 5xx is retryable (`!(res.status>=500)`) — a missing-status mock returns as-is (this kept the H1 component tests green).
+- Notes save **decoupled from call phase**: softphone shows a phase-independent "Couldn't save notes — Retry/Discard" banner with the typed text preserved (`notesSave`/`pendingNotes`); video-call keeps the overlay mounted on failure with the same affordance (`finalizingRef` now guards only the one-time teardown, so Retry won't re-tear-down). Notes are never silently lost. `endCall` stays referentially stable (the H1 fix is intact).
+- `answered`, `emergency/control` (leave **and** the live-911 mute/unmute — now reverts the optimistic toggle if the server didn't take it), `end-video` routed through the helper (Sentry). Emergency **trigger** stays bespoke (NOT auto-retried — life-safety) + Sentry. **20s presence heartbeat stays best-effort by design.**
+
+**Thread B — owner Calls tab:**
+- Note icon (`StickyNote`, `role="img"`) on rows with notes; rows **expand inline** (accessible accordion) instead of navigating; shared **`CallDetailBody`** used by both the inline panel and the kept standalone detail page (the incident deep-link still points there).
+- List query enriched (`caller_number, notes, recording_url`) + one batched incidents map → instant expand, no extra round-trip. **All/Phone/Video** channel filter (`?channel=`, `CallChannel`-typed, composes with `?property=` + load-more via `buildHref`).
+- **Cascade:** the property-detail "Recent calls" panel shares `CallRow`, so it also expands inline now — handler names + incidents resolved there for parity (was navigate→full-detail before).
+
+**Constraints honored:** zero migrations / RLS / new API routes; `POST /api/calls/notes` untouched; no routing/Twilio/Agora/presence/finalization/emergency-state-machine changes.
+
+**PICK UP HERE (fresh chat):**
+1. **Merge/PR `feat/notes-and-errors`** (if not already) → push `main` → Vercel auto-deploys → smoke the notes failure-banner (force `/api/calls/notes` to fail) + owner Calls expand/filter on prod.
+2. **Phase 2 — P2-1** `requireApiActor()` in `lib/auth/api-actor.ts` (dedupes 7+ API preambles, adds `profiles.active` check + OWNER reject on audio claim, v2 multi-tenancy seam). Then P2-2..P2-5 (TASKS.md Phase 2). *This is what the session started toward before the notes/errors detour.*
+3. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — still not done.
+4. Prod emergency is **911** (unchanged).
