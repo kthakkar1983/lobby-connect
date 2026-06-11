@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseVerifiedTwilioWebhook } from "@/lib/twilio/client";
 import {
-  validateTwilioSignature,
-  publicUrlFromRequest,
-} from "@/lib/twilio/client";
-import { buildApologyTwiml, buildHangupTwiml } from "@/lib/voice/twiml";
+  APOLOGY_MESSAGE,
+  twimlResponse,
+  buildApologyTwiml,
+  buildHangupTwiml,
+} from "@/lib/voice/twiml";
 import {
   resolveDialResult,
   isTerminalState,
@@ -19,31 +21,15 @@ import { readWithRetry } from "@/lib/db/read-with-retry";
 
 export const runtime = "nodejs";
 
-const APOLOGY =
-  "We're sorry, no one is available right now. Please try again or call us directly.";
-
 // This read decides whether the guest's parent leg joins the emergency
 // conference, so retry a transient blip instead of falling through to a hangup.
 const READ_RETRY = { attempts: 3, delayMs: 150 } as const;
 
-function twimlResponse(xml: string, status = 200): NextResponse {
-  return new NextResponse(xml, {
-    status,
-    headers: { "Content-Type": "text/xml" },
-  });
-}
-
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const form = await request.formData();
-    const params: Record<string, string> = {};
-    for (const [k, v] of form.entries()) params[k] = String(v);
-
-    const signature = request.headers.get("x-twilio-signature");
-    const url = publicUrlFromRequest(request);
-    if (!validateTwilioSignature(signature, url, params)) {
-      return new NextResponse("Invalid signature", { status: 403 });
-    }
+    const parsed = await parseVerifiedTwilioWebhook(request);
+    if (parsed instanceof NextResponse) return parsed;
+    const { params } = parsed;
 
     const callSid = params.CallSid ?? "";
     const { finalState, hangup } = resolveDialResult(params.DialCallStatus ?? "");
@@ -74,7 +60,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // normal call. Play the safe default audio only.
     if (readError) {
       console.error("[voice/dial-result] read failed after retries:", readError);
-      return twimlResponse(hangup ? buildHangupTwiml() : buildApologyTwiml(APOLOGY));
+      return twimlResponse(hangup ? buildHangupTwiml() : buildApologyTwiml(APOLOGY_MESSAGE));
     }
 
     const currentTerminal = existing
@@ -91,9 +77,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       .update(updatePayload)
       .eq("twilio_call_sid", callSid);
 
-    return twimlResponse(hangup ? buildHangupTwiml() : buildApologyTwiml(APOLOGY));
+    return twimlResponse(hangup ? buildHangupTwiml() : buildApologyTwiml(APOLOGY_MESSAGE));
   } catch (err) {
     console.error("[voice/dial-result] unhandled error:", err);
-    return twimlResponse(buildApologyTwiml(APOLOGY));
+    return twimlResponse(buildApologyTwiml(APOLOGY_MESSAGE));
   }
 }

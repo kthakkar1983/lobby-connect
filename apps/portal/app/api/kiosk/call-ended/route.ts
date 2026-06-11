@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import { finalizeCallPayload, ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 
 export const runtime = "nodejs";
 
@@ -40,23 +41,16 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const endedAt = new Date();
   const nextState = STATE_BY_REASON[body.reason ?? "completed"] ?? "COMPLETED";
-  const durationSeconds = call.answered_at
-    ? Math.max(0, Math.round((endedAt.getTime() - new Date(call.answered_at).getTime()) / 1000))
-    : null;
 
   // Conditional on a still-active state so the kiosk-vs-agent finalize race is
   // safe: whichever side closes the call first wins, and a late writer (e.g. the
   // agent already marked it COMPLETED) no-ops instead of clobbering the row.
   await admin
     .from("calls")
-    .update({
-      state: nextState,
-      ended_at: endedAt.toISOString(),
-      duration_seconds: durationSeconds,
-    })
+    .update(finalizeCallPayload(nextState, call.answered_at, endedAt))
     .eq("id", body.callId)
     .eq("property_id", verified.propertyId)
-    .in("state", ["RINGING", "IN_PROGRESS"]);
+    .in("state", ACTIVE_CALL_STATES);
 
   return new NextResponse(null, { status: 204 });
 }

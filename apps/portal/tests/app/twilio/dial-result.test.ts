@@ -9,6 +9,18 @@ vi.mock("@/lib/twilio/client", () => ({
   validateTwilioSignature: (...a: any[]) => (validateTwilioSignature as any)(...a),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   publicUrlFromRequest: (...a: any[]) => (publicUrlFromRequest as any)(...a),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parseVerifiedTwilioWebhook: async (request: any) => {
+    const { NextResponse } = await import("next/server");
+    const form = await request.formData();
+    const params: Record<string, string> = {};
+    for (const [k, v] of form.entries()) params[k] = String(v);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(validateTwilioSignature as any)()) {
+      return new NextResponse("Invalid signature", { status: 403 });
+    }
+    return { params };
+  },
 }));
 
 const updateSpy = vi.fn<() => Promise<{ error: null }>>(

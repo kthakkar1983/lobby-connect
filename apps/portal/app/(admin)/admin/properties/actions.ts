@@ -17,6 +17,7 @@ import {
   planAssignmentChange,
   type CurrentAssignment,
 } from "@/lib/assignments/plan";
+import { diffFields, emptyToNull } from "@/lib/audit/diff";
 
 export type PropertyInput = {
   name: string;
@@ -54,11 +55,6 @@ function validatePropertyInput(input: PropertyInput): string | null {
     validateKioskMessage(input.kiosk_welcome_message) ??
     validateKioskMessage(input.kiosk_apology_message)
   );
-}
-
-function emptyToNull(value: string): string | null {
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
 }
 
 // Defense-in-depth beyond the RLS-scoped dropdown: a non-null owner must be an
@@ -281,14 +277,17 @@ export async function updatePropertyAction(
     "kiosk_apology_message",
   ] as const;
 
-  for (const field of TEXT_FIELDS) {
-    if (next[field] !== current[field]) {
-      (updates as Record<string, unknown>)[field] = next[field];
-      auditEvents.push({
-        action: "property.edited",
-        details: { field, from: current[field], to: next[field] },
-      });
-    }
+  const { updates: textUpdates, changes } = diffFields(
+    current as Record<string, unknown>,
+    next as Record<string, unknown>,
+    TEXT_FIELDS,
+  );
+  Object.assign(updates, textUpdates);
+  for (const c of changes) {
+    auditEvents.push({
+      action: "property.edited",
+      details: { field: c.field, from: c.from, to: c.to },
+    });
   }
 
   if (input.active !== current.active) {

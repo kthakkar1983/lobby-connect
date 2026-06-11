@@ -46,7 +46,7 @@ function call(id: string, body: unknown) {
 
 beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  profileRow = { id: "u1", operator_id: "op-1" };
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
   callRow = {
     id: "call-1",
     operator_id: "op-1",

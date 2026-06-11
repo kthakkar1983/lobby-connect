@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import type { KioskConfig } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
+  const payload: KioskConfig = {
     propertyId: p.id,
     logoUrl: p.logo_url,
     welcomeHeading: p.kiosk_welcome_heading ?? `Welcome to ${p.name}`,
@@ -38,5 +39,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     apologyMessage: p.kiosk_apology_message,
     ctaStyle: p.kiosk_cta_style,
     phoneNumber: p.property_phone_number,
-  });
+  };
+  return NextResponse.json(payload);
 }

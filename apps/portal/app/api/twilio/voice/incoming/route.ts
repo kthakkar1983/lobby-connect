@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
 import {
-  validateTwilioSignature,
+  parseVerifiedTwilioWebhook,
   publicUrlFromRequest,
 } from "@/lib/twilio/client";
 import { planDial, type DialCandidate } from "@/lib/voice/plan-dial";
 import {
+  APOLOGY_MESSAGE,
+  twimlResponse,
   buildApologyTwiml,
   buildIncomingTwiml,
   buildNotInServiceTwiml,
@@ -21,28 +23,13 @@ export const maxDuration = 20;
 const SUPABASE_TIMEOUT_MS = 2500;
 
 const GREETING = "Connecting you to the front desk, one moment.";
-const APOLOGY =
-  "We're sorry, no one is available right now. Please try again or call us directly.";
 const RING_TIMEOUT_SECONDS = 120;
-
-function twimlResponse(xml: string, status = 200): NextResponse {
-  return new NextResponse(xml, {
-    status,
-    headers: { "Content-Type": "text/xml" },
-  });
-}
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const form = await request.formData();
-    const params: Record<string, string> = {};
-    for (const [k, v] of form.entries()) params[k] = String(v);
-
-    const signature = request.headers.get("x-twilio-signature");
-    const url = publicUrlFromRequest(request);
-    if (!validateTwilioSignature(signature, url, params)) {
-      return new NextResponse("Invalid signature", { status: 403 });
-    }
+    const parsed = await parseVerifiedTwilioWebhook(request);
+    if (parsed instanceof NextResponse) return parsed;
+    const { params } = parsed;
 
     const to = params.To ?? "";
     const from = params.From ?? "";
@@ -58,7 +45,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       .maybeSingle();
 
     if (!property || !property.active) {
-      return twimlResponse(buildNotInServiceTwiml(APOLOGY));
+      return twimlResponse(buildNotInServiceTwiml(APOLOGY_MESSAGE));
     }
 
     // Best-effort: record that Twilio reached us (off the critical path).
@@ -141,19 +128,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // 6. Return TwiML (apology if nobody reachable, else parallel dial).
-    const actionUrl = `${new URL(url).origin}/api/twilio/voice/dial-result`;
+    const actionUrl = `${new URL(publicUrlFromRequest(request)).origin}/api/twilio/voice/dial-result`;
     return twimlResponse(
       buildIncomingTwiml(targets, {
         greeting: GREETING,
         timeoutSeconds: RING_TIMEOUT_SECONDS,
         actionUrl,
-        apologyMessage: APOLOGY,
+        apologyMessage: APOLOGY_MESSAGE,
         callId,
         propertyName: property.name,
       }),
     );
   } catch (err) {
     console.error("[voice/incoming] unhandled error:", err);
-    return twimlResponse(buildApologyTwiml(APOLOGY));
+    return twimlResponse(buildApologyTwiml(APOLOGY_MESSAGE));
   }
 }

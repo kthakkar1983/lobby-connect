@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // OWNER kept in allow to preserve the pre-seam behavior (this route had no role
+  // gate). The handled_by_user_id self-scope below makes an OWNER write a harmless
+  // 204 no-op. A deliberate OWNER-reject, if desired, belongs in the OWNER-reject task.
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
 
   const body = (await request.json().catch(() => ({}))) as {
     callId?: string;
@@ -29,7 +28,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     .from("calls")
     .update({ room_number: body.roomNumber ?? null, notes: body.notes ?? null })
     .eq("id", body.callId)
-    .eq("handled_by_user_id", user.id);
+    .eq("handled_by_user_id", actor.userId);
 
   return new NextResponse(null, { status: 204 });
 }

@@ -38,7 +38,7 @@ beforeEach(() => {
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: null } });
   callRow = { id: "call-1", property_id: "prop-1", operator_id: "op-1", state: "RINGING", agora_channel_name: "call_abc" };
-  profileRow = { id: "u1", operator_id: "op-1" };
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
 });
 
 describe("GET /api/agora/token", () => {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 import { getTwilioApiCredentials } from "@/lib/twilio/config";
 import { buildVoiceAccessToken } from "@/lib/twilio/token";
 
@@ -9,18 +10,18 @@ export const runtime = "nodejs";
 const TOKEN_TTL_SECONDS = 3600;
 
 export async function GET(): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  // Second profiles read (seam already read id/operator_id/role). OWNER is blocked
+  // here by the !twilio_identity gate, not by role. Collapsing these two reads is
+  // tracked as a Phase-3 caching item (P1), not changed in this behavior-neutral pass.
+  const { data: profile } = await admin
     .from("profiles")
-    .select("id, role, twilio_identity")
-    .eq("id", user.id)
+    .select("id, twilio_identity")
+    .eq("id", actor.userId)
     .maybeSingle();
 
   if (!profile || !profile.twilio_identity) {

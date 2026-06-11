@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
+import { finalizeCallPayload } from "@/lib/voice/call-state";
+import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -19,54 +21,25 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id } = await params;
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actor instanceof NextResponse) return actor;
 
-  const admin = createAdminClient();
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-  // Owners are read-only (07a spec) — they never participate in a live call.
-  if (me.role === "OWNER") {
-    return NextResponse.json({ error: "Owners cannot join live calls" }, { status: 403 });
-  }
-
-  const { data: call } = await admin
-    .from("calls")
-    .select("id, state, operator_id, answered_at")
-    .eq("id", id)
-    .maybeSingle();
-  if (!call || call.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
+  const call = await fetchOperatorCall<{
+    id: string;
+    state: CallState;
+    operator_id: string;
+    answered_at: string | null;
+  }>(actor, id, "id, state, answered_at");
+  if (call instanceof NextResponse) return call;
 
   if (call.state === "IN_PROGRESS") {
     const endedAt = new Date();
-    const durationSeconds = call.answered_at
-      ? Math.max(
-          0,
-          Math.round((endedAt.getTime() - new Date(call.answered_at as string).getTime()) / 1000),
-        )
-      : null;
+    const admin = createAdminClient();
 
     // Conditional on still-IN_PROGRESS so the kiosk-vs-agent finalize race is safe.
     await admin
       .from("calls")
-      .update({
-        state: "COMPLETED",
-        ended_at: endedAt.toISOString(),
-        duration_seconds: durationSeconds,
-      })
+      .update(finalizeCallPayload("COMPLETED", call.answered_at, endedAt))
       .eq("id", id)
       .eq("state", "IN_PROGRESS");
   }

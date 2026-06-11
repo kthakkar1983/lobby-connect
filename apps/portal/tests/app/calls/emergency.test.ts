@@ -87,7 +87,7 @@ beforeEach(() => {
   participantsCreateMock.mockReset();
   claimResult = { data: [{ id: "call-1" }], error: null };
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  profileRow = { id: "u1", operator_id: "op-1" };
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
   callRow = {
     id: "call-1",
     operator_id: "op-1",

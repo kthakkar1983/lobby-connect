@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTwilioRestClient } from "@/lib/twilio/client";
 import { getTwilioConfig } from "@/lib/twilio/config";
@@ -26,35 +26,26 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id } = await params;
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actor instanceof NextResponse) return actor;
 
   const admin = createAdminClient();
 
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-
-  const { data: callRow } = await admin
-    .from("calls")
-    .select(
-      "id, operator_id, property_id, channel, state, twilio_call_sid, handled_by_user_id, emergency_conference_name",
-    )
-    .eq("id", id)
-    .maybeSingle();
-  if (!callRow || callRow.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
+  const callRow = await fetchOperatorCall<{
+    id: string;
+    operator_id: string;
+    property_id: string;
+    channel: string;
+    state: string;
+    twilio_call_sid: string | null;
+    handled_by_user_id: string | null;
+    emergency_conference_name: string | null;
+  }>(
+    actor,
+    id,
+    "id, operator_id, property_id, channel, state, twilio_call_sid, handled_by_user_id, emergency_conference_name",
+  );
+  if (callRow instanceof NextResponse) return callRow;
 
   // Idempotent fast-path: already escalated — return the existing conference.
   if (callRow.emergency_conference_name) {
@@ -70,7 +61,7 @@ export async function POST(
       state: callRow.state,
       channel: callRow.channel,
       handledByUserId: callRow.handled_by_user_id,
-      userId: user.id,
+      userId: actor.userId,
     })
   ) {
     return NextResponse.json(
@@ -222,7 +213,7 @@ export async function POST(
     operator_id: callRow.operator_id,
     property_id: callRow.property_id,
     call_id: callRow.id,
-    triggered_by: user.id,
+    triggered_by: actor.userId,
     severity: "HIGH",
     kind: "EMERGENCY_911",
     dispatched_to: dialTo,
@@ -237,7 +228,7 @@ export async function POST(
   }
 
   await logAuditEvent({
-    actorUserId: user.id,
+    actorUserId: actor.userId,
     action: "trigger_emergency",
     entityType: "call",
     entityId: callRow.id,

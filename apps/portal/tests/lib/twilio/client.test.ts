@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { NextResponse } from "next/server";
 
 const validateRequest = vi.fn();
 
@@ -6,7 +7,11 @@ vi.mock("twilio", () => ({
   default: { validateRequest: (...args: unknown[]) => validateRequest(...args) },
 }));
 
-import { validateTwilioSignature, publicUrlFromRequest } from "@/lib/twilio/client";
+import {
+  validateTwilioSignature,
+  publicUrlFromRequest,
+  parseVerifiedTwilioWebhook,
+} from "@/lib/twilio/client";
 
 beforeEach(() => {
   validateRequest.mockReset();
@@ -49,5 +54,51 @@ describe("publicUrlFromRequest", () => {
     expect(publicUrlFromRequest(req)).toBe(
       "https://abc.trycloudflare.com/api/twilio/voice/incoming",
     );
+  });
+});
+
+describe("parseVerifiedTwilioWebhook", () => {
+  function makeRequest(
+    body: string,
+    signature: string | null,
+  ): Request {
+    const headers: Record<string, string> = {
+      host: "example.vercel.app",
+      "x-forwarded-proto": "https",
+      "content-type": "application/x-www-form-urlencoded",
+    };
+    if (signature !== null) headers["x-twilio-signature"] = signature;
+    return new Request(
+      "https://example.vercel.app/api/twilio/voice/incoming",
+      { method: "POST", headers, body },
+    );
+  }
+
+  it("returns parsed params when signature is valid", async () => {
+    validateRequest.mockReturnValue(true);
+    const req = makeRequest("CallSid=CA123&From=%2B15550001111", "good-sig");
+    const result = await parseVerifiedTwilioWebhook(req);
+    expect(result).not.toBeInstanceOf(NextResponse);
+    expect((result as { params: Record<string, string> }).params).toEqual({
+      CallSid: "CA123",
+      From: "+15550001111",
+    });
+  });
+
+  it("returns a 403 NextResponse when signature is invalid", async () => {
+    validateRequest.mockReturnValue(false);
+    const req = makeRequest("CallSid=CA999", "bad-sig");
+    const result = await parseVerifiedTwilioWebhook(req);
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(403);
+  });
+
+  it("returns a 403 NextResponse when x-twilio-signature header is missing", async () => {
+    const req = makeRequest("CallSid=CA000", null);
+    const result = await parseVerifiedTwilioWebhook(req);
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(403);
+    // validateRequest not called when signature is null
+    expect(validateRequest).not.toHaveBeenCalled();
   });
 });

@@ -1,60 +1,46 @@
 import { NextResponse } from "next/server";
+import type { CallState } from "@lc/shared";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canAnswer } from "@/lib/voice/call-state";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
+import { canAnswer, claimCall } from "@/lib/voice/call-state";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // OWNER is rejected: owners are read-only (07a spec) and do not participate
+  // in live call handling. This mirrors the same gate on /api/calls/[id]/answer-video.
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actor instanceof NextResponse) return actor;
 
   const body = (await request.json().catch(() => ({}))) as { callId?: string };
   if (!body.callId) {
     return NextResponse.json({ error: "Missing callId" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const call = await fetchOperatorCall<{ id: string; state: CallState }>(
+    actor,
+    body.callId,
+    "id, state",
+  );
+  if (call instanceof NextResponse) return call;
 
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-
-  const { data: call } = await admin
-    .from("calls")
-    .select("id, state, operator_id")
-    .eq("id", body.callId)
-    .maybeSingle();
-  if (!call || call.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
+  // Fast-path: if the state is already non-RINGING, no need to attempt the claim.
   if (!canAnswer(call.state)) {
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
   }
 
-  // Conditional on still-RINGING (second .eq) to lose the answer race safely.
-  await admin
-    .from("calls")
-    .update({
-      state: "IN_PROGRESS",
-      handled_by_user_id: user.id,
-      answered_at: new Date().toISOString(),
-    })
-    .eq("id", body.callId)
-    .eq("state", "RINGING");
+  const admin = createAdminClient();
 
-  await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", user.id);
+  // Race-safe atomic claim: UPDATE ... WHERE state='RINGING', returns rows only
+  // if this caller wins. A concurrent winner returns empty rows → loser gets 409
+  // and does NOT stamp ON_CALL, preventing presence corruption.
+  const won = await claimCall(admin, body.callId, actor.userId);
+  if (!won) {
+    return NextResponse.json({ error: "Already answered" }, { status: 409 });
+  }
+
+  await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
 
   return new NextResponse(null, { status: 204 });
 }

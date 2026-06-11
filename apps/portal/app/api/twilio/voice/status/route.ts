@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  validateTwilioSignature,
-  publicUrlFromRequest,
-} from "@/lib/twilio/client";
+import { parseVerifiedTwilioWebhook } from "@/lib/twilio/client";
 import {
   mapFinalCallState,
   isTerminalState,
@@ -16,15 +13,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const form = await request.formData();
-    const params: Record<string, string> = {};
-    for (const [k, v] of form.entries()) params[k] = String(v);
-
-    const signature = request.headers.get("x-twilio-signature");
-    const url = publicUrlFromRequest(request);
-    if (!validateTwilioSignature(signature, url, params)) {
-      return new NextResponse("Invalid signature", { status: 403 });
-    }
+    const parsed = await parseVerifiedTwilioWebhook(request);
+    if (parsed instanceof NextResponse) return parsed;
+    const { params } = parsed;
 
     const callSid = params.CallSid ?? "";
     const admin = createAdminClient();

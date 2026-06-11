@@ -41,7 +41,7 @@ beforeEach(() => {
   getUser.mockReset();
   gteSpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  profileRow = { id: "u1", operator_id: "op-1" };
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
   callRows = [
     { id: "call-1", property_id: "prop-1", agora_channel_name: "call_abc", ring_started_at: "2026-06-01T00:00:00Z" },
   ];

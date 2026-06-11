@@ -12,7 +12,7 @@ const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
   async (): Promise<{ data: Record<string, unknown> }> => ({
-    data: { id: "u1", operator_id: "op-1" },
+    data: { id: "u1", operator_id: "op-1", role: "AGENT" },
   }),
 );
 
