@@ -51,7 +51,7 @@ beforeEach(() => {
   getUser.mockReset();
   createSignedUrlMock.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  profileRow = { id: "u1", operator_id: "op-1" };
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
   callRow = { id: "call-1", property_id: "prop-1", operator_id: "op-1" };
   propertyRow = { playbook_pdf_url: "op-1/prop-1/playbook.pdf", playbook_version: 2 };
   createSignedUrlMock.mockResolvedValue({
