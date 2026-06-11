@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scrubPii, scrubEvent, PHONE_RE } from "../src/sentry-scrub";
+import { scrubPii, scrubEvent } from "../src/sentry-scrub";
 
 describe("scrubPii", () => {
   it("drops sensitive keys (known + regex)", () => {
@@ -15,5 +15,7 @@ describe("scrubPii", () => {
   it("scrubEvent returns same shape, scrubbed", () => {
     expect(scrubEvent({ message: "+1 415 555 2671" })).toEqual({ message: "[redacted]" });
   });
-  it("exports PHONE_RE", () => expect(PHONE_RE).toBeInstanceOf(RegExp));
+  it("redacts multiple phones in one string", () => {
+    expect(scrubPii("from +1 415 555 2671 to +1 800 555 0199")).toBe("from [redacted] to [redacted]");
+  });
 });

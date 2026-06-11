@@ -1,1 +1,1 @@
-export { scrubPii, scrubEvent, PHONE_RE } from "@lc/shared";
+export { scrubPii, scrubEvent } from "@lc/shared";

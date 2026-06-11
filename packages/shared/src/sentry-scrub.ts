@@ -11,7 +11,7 @@ function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEYS.has(key) || SENSITIVE_KEY_RE.test(key);
 }
 
-export const PHONE_RE = /\+?\d[\d\s().-]{8,}\d/g;
+const PHONE_RE = /\+?\d[\d\s().-]{8,}\d/g;
 
 export function scrubPii(value: unknown): unknown {
   if (typeof value === "string") {
