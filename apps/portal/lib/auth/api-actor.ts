@@ -39,6 +39,9 @@ export async function requireApiActor(
     return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
   }
 
+  // Strict `=== false` (not `!me.active`): `active` is a NOT NULL boolean, so this
+  // is exact in prod, and an absent/undefined value (e.g. a partial test row) must
+  // not be treated as deactivated. Do not "normalize" this to `!me.active`.
   if (me.active === false) {
     return NextResponse.json({ error: "Account deactivated" }, { status: 403 });
   }
