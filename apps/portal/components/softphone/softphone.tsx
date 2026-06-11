@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Phone, PhoneOff, Mic, MicOff, AlertTriangle } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 
 import {
   AlertDialog,
@@ -18,6 +19,7 @@ import {
 import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
+import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -74,6 +76,36 @@ export function Softphone({ role }: SoftphoneProps) {
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
   notesRef.current = notes;
+
+  // Notes save is decoupled from call phase: a failure surfaces in a banner that
+  // outlives the call so the typed text is never silently lost.
+  const [notesSave, setNotesSave] = useState<"idle" | "saving" | "failed">("idle");
+  const [pendingNotes, setPendingNotes] = useState<
+    { callId: string; roomNumber: string; notes: string } | null
+  >(null);
+
+  const saveNotes = useCallback(
+    async (payload: { callId: string; roomNumber: string; notes: string }) => {
+      setNotesSave("saving");
+      const res = await reliableFetch(
+        "/api/calls/notes",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        { label: "calls.notes" },
+      );
+      if (res && res.ok) {
+        setNotesSave("idle");
+        setPendingNotes(null);
+      } else {
+        setNotesSave("failed");
+        setPendingNotes(payload);
+      }
+    },
+    [],
+  );
 
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
@@ -173,11 +205,15 @@ export function Softphone({ role }: SoftphoneProps) {
     call.accept();
     setMuted(false);
     setPhase("in-call");
-    await fetch("/api/twilio/voice/answered", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ callId: callIdRef.current }),
-    }).catch(() => {});
+    await reliableFetch(
+      "/api/twilio/voice/answered",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ callId: callIdRef.current }),
+      },
+      { label: "calls.answered" },
+    );
   }, []);
 
   const declineCall = useCallback(() => {
@@ -191,11 +227,15 @@ export function Softphone({ role }: SoftphoneProps) {
     if (emergencyActiveRef.current && id) {
       // SDK can't disconnect the redirected leg — remove the agent from the
       // conference server-side. Guest + 911 continue (endConferenceOnExit=false).
-      await fetch(`/api/calls/${id}/emergency/control`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "leave" }),
-      }).catch(() => {});
+      await reliableFetch(
+        `/api/calls/${id}/emergency/control`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "leave" }),
+        },
+        { label: "emergency.control" },
+      );
     }
     try {
       callRef.current?.disconnect();
@@ -203,13 +243,11 @@ export function Softphone({ role }: SoftphoneProps) {
       // ignore
     }
     callRef.current = null;
-    if (id && (roomNumberRef.current || notesRef.current)) {
-      await fetch("/api/calls/notes", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ callId: id, roomNumber: roomNumberRef.current, notes: notesRef.current }),
-      }).catch(() => {});
-    }
+    // Capture typed values before clearing, then reset the call UI immediately
+    // (the call is over). The save runs in the background; a failure shows a
+    // phase-independent banner without blocking a new incoming call.
+    const room = roomNumberRef.current;
+    const note = notesRef.current;
     setRoomNumber("");
     setNotes("");
     setMuted(false);
@@ -217,7 +255,10 @@ export function Softphone({ role }: SoftphoneProps) {
     setEmergencyFailed(false);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
-  }, []);
+    if (id && (room || note)) {
+      void saveNotes({ callId: id, roomNumber: room, notes: note });
+    }
+  }, [saveNotes]);
 
   const toggleMute = useCallback(() => {
     const next = !muted;
@@ -257,11 +298,15 @@ export function Softphone({ role }: SoftphoneProps) {
         setEmergencyActive(Boolean(body.agentRedirected));
         setEmergencyFailed(true);
         console.error("[softphone] emergency trigger failed:", res.status);
+        Sentry.captureException(new Error(`emergency.trigger ${res.status}`), {
+          extra: { label: "emergency.trigger", status: res.status },
+        });
       }
     } catch (err) {
       // Unknown server state — keep controls server-side (safer) and warn.
       setEmergencyFailed(true);
       console.error("[softphone] emergency trigger error:", err);
+      Sentry.captureException(err, { extra: { label: "emergency.trigger" } });
     }
   }, []);
 
@@ -277,6 +322,33 @@ export function Softphone({ role }: SoftphoneProps) {
         <span className="font-medium text-foreground">Softphone</span>
         <ConnectionDot phase={phase} />
       </div>
+
+      {pendingNotes && (
+        <div className="mt-3 rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p className="font-medium">Couldn&apos;t save notes from the last call.</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={notesSave === "saving"}
+              onClick={() => void saveNotes(pendingNotes)}
+              className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
+            >
+              {notesSave === "saving" ? "Saving…" : "Retry"}
+            </button>
+            <button
+              type="button"
+              disabled={notesSave === "saving"}
+              onClick={() => {
+                setPendingNotes(null);
+                setNotesSave("idle");
+              }}
+              className="rounded-button border border-border px-3 py-1 text-foreground disabled:opacity-50"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       {role === "AGENT" && phase !== "in-call" && phase !== "incoming" && (
         <>

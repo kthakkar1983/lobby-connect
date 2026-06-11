@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // vi.hoisted: variables defined here are available inside vi.mock() factories.
@@ -75,6 +75,8 @@ vi.mock("@/lib/voice/device-resilience", () => ({
   attachTokenAutoRefresh: vi.fn(),
 }));
 
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+
 import { Softphone } from "@/components/softphone/softphone";
 
 describe("Softphone — stale-closure regression (H1)", () => {
@@ -97,6 +99,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    cleanup();
   });
 
   it("saves typed roomNumber+notes when call disconnects, not stale empty strings", async () => {
@@ -142,5 +145,41 @@ describe("Softphone — stale-closure regression (H1)", () => {
     };
     expect(body.roomNumber).toBe("507");
     expect(body.notes).toBe("VIP guest");
+  });
+
+  it("shows a preserved-text banner when the notes save fails, and Retry re-POSTs", async () => {
+    const user = userEvent.setup();
+    // Notes endpoint always 500s; everything else ok.
+    fetchMock.mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      if (url === "/api/calls/notes") return Promise.resolve({ ok: false, status: 500 });
+      return Promise.resolve({ ok: true, status: 200 });
+    });
+
+    render(<Softphone role="AGENT" />);
+    await waitFor(() => screen.getByText(/Ready — accepting calls/i));
+    await act(async () => twilio.fireIncoming());
+    await user.click(screen.getByText("Accept"));
+    await user.type(screen.getByPlaceholderText("Room #"), "507");
+    await user.type(screen.getByPlaceholderText("Call notes"), "VIP guest");
+    await act(async () => twilio.fireDisconnect());
+
+    // Banner appears after retries are exhausted (real backoff ~0.9s).
+    await waitFor(
+      () => {
+        const el = screen.queryByText(/Couldn.t save notes/i);
+        expect(el).toBeTruthy();
+      },
+      { timeout: 4000 },
+    );
+
+    // Let the notes endpoint succeed, click Retry, banner clears.
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve({ ok: true, status: url === "/api/calls/notes" ? 204 : 200 }),
+    );
+    await user.click(screen.getByText("Retry"));
+    await waitFor(() => expect(screen.queryByText(/Couldn.t save notes/i)).toBeNull());
   });
 });
