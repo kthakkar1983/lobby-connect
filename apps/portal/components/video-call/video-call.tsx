@@ -22,6 +22,12 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const videoRef = useRef<ICameraVideoTrack | null>(null);
   const finalizingRef = useRef(false);
+  // Ref-mirror roomNumber/notes so the Agora "user-left" event listener (which
+  // captures handleEnd at mount time) always reads the current values.
+  const roomNumberRef = useRef(roomNumber);
+  roomNumberRef.current = roomNumber;
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
 
   // Accept the call, then join Agora.
   // NOTE: the cleanup must tear down the client/tracks, and we must bail on
@@ -100,11 +106,11 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     if (finalizingRef.current) return;
     finalizingRef.current = true;
     try {
-      if (roomNumber || notes) {
+      if (roomNumberRef.current || notesRef.current) {
         await fetch("/api/calls/notes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ callId, roomNumber, notes }),
+          body: JSON.stringify({ callId, roomNumber: roomNumberRef.current, notes: notesRef.current }),
         }).catch(() => {});
       }
       // Finalize the call row server-side. The kiosk normally owns this, but if

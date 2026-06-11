@@ -68,6 +68,12 @@ export function Softphone({ role }: SoftphoneProps) {
   const callIdRef = useRef<string>("");
   const readyRef = useRef(ready);
   readyRef.current = ready;
+  // Ref-mirror roomNumber/notes so the stale SDK event-listener closures
+  // (device "incoming" → call "disconnect") always read the current values.
+  const roomNumberRef = useRef(roomNumber);
+  roomNumberRef.current = roomNumber;
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
 
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
@@ -197,11 +203,11 @@ export function Softphone({ role }: SoftphoneProps) {
       // ignore
     }
     callRef.current = null;
-    if (id && (roomNumber || notes)) {
+    if (id && (roomNumberRef.current || notesRef.current)) {
       await fetch("/api/calls/notes", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ callId: id, roomNumber, notes }),
+        body: JSON.stringify({ callId: id, roomNumber: roomNumberRef.current, notes: notesRef.current }),
       }).catch(() => {});
     }
     setRoomNumber("");
@@ -211,7 +217,7 @@ export function Softphone({ role }: SoftphoneProps) {
     setEmergencyFailed(false);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
-  }, [roomNumber, notes]);
+  }, []);
 
   const toggleMute = useCallback(() => {
     const next = !muted;
