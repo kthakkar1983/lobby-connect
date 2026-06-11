@@ -1,0 +1,76 @@
+import { NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export type Role = "AGENT" | "ADMIN" | "OWNER";
+export interface ApiActor {
+  userId: string;
+  operatorId: string;
+  role: Role;
+}
+
+/**
+ * Resolve the authenticated API actor: session user -> profile -> role gate.
+ * Returns the actor, or a NextResponse (401/403) the caller returns directly.
+ * Uses the service-role client for the profile read (matches existing routes).
+ * NOTE: an `active`/deactivation gate is intentionally added in a later task;
+ * today this matches current route behavior (role + operator only).
+ */
+export async function requireApiActor(
+  opts: { allow: Role[] },
+): Promise<ApiActor | NextResponse> {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  const { data: me } = await admin
+    .from("profiles")
+    .select("id, operator_id, role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!me) {
+    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
+  }
+
+  if (!opts.allow.includes(me.role as Role)) {
+    return NextResponse.json({ error: "Forbidden for this role" }, { status: 403 });
+  }
+
+  return {
+    userId: me.id,
+    operatorId: me.operator_id,
+    role: me.role as Role,
+  };
+}
+
+/**
+ * Fetch a call scoped to the actor's operator. `columns` is the select list
+ * (operator_id is always included for the scope check). Returns the row, or a
+ * 404 NextResponse.
+ */
+export async function fetchOperatorCall(
+  actor: ApiActor,
+  callId: string,
+  columns: string,
+): Promise<Record<string, unknown> | NextResponse> {
+  const admin = createAdminClient();
+  const select = columns.includes("operator_id")
+    ? columns
+    : `${columns}, operator_id`;
+  // Dynamic select string: cast the result to loosen the generated-type constraint.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: call } = (await (admin as any)
+    .from("calls")
+    .select(select)
+    .eq("id", callId)
+    .maybeSingle()) as { data: Record<string, unknown> | null };
+  if (!call || call.operator_id !== actor.operatorId) {
+    return NextResponse.json({ error: "Call not found" }, { status: 404 });
+  }
+  return call;
+}
