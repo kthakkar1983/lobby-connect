@@ -183,8 +183,8 @@ sent down for the expansion.
 
 ### 4.3 Enriched list query + batched incident lookup
 
-The list `page.tsx` query gains the detail fields so the expansion has everything in memory:
-`caller_number, notes, answered_at, ended_at, recording_url` (added to the existing select). One
+The list `page.tsx` query gains the detail fields the body actually renders, so the expansion has
+everything in memory: `caller_number, notes, recording_url` (added to the existing select). One
 **batched** incidents-existence query (`incidents` where `call_id in (…)`, select `id, call_id`)
 builds a `Map<call_id, incidentId>`. Property name/tz and handler names are already resolved on this
 page. The expansion renders instantly — **no per-expand round-trip**.
@@ -235,7 +235,7 @@ note-bearing row of a video call filtered via **Video** → same, instant.
 
 **Create:**
 - `apps/portal/lib/http/reliable-fetch.ts`
-- `apps/portal/lib/http/reliable-fetch.test.ts`
+- `apps/portal/tests/http/reliable-fetch.test.ts` (node lane — the runner only globs `tests/**`)
 - `apps/portal/components/owner/call-detail-body.tsx`
 
 **Modify:**
