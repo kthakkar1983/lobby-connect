@@ -892,3 +892,30 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 3. **Page-by-page final-polish pass** (kiosk shadows/bounce + live in-browser visual/a11y pass) — still not started; not blocking.
 4. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — should be written before next session so future sessions can reference the findings.
 5. Prod emergency is **911** (safe, unchanged this session).
+
+---
+
+## 2026-06-10 (session 16) — H1 fixed (stale-closure notes loss)
+
+**H1 is DONE.** Commit `df1d38f`, pushed to `origin/main`, Vercel auto-deploys portal.
+
+**Root cause (confirmed):** `endCall()` in `softphone.tsx` used `useCallback([roomNumber, notes])`, but `call.on("disconnect", () => void endCall())` was registered inside a `useEffect([], [])` — it captured the *initial* `endCall` with `roomNumber=""` / `notes=""`. Identical issue in `video-call.tsx`: `handleEnd()` is a plain render-body function closing over state; `c.on("user-left", () => void handleEnd())` captured it at mount. When the guest/SDK hung up, notes were silently dropped every time.
+
+**Fix:** ref-mirror both values in both components (`roomNumberRef.current = roomNumber` in render body); `endCall`/`handleEnd` read `roomNumberRef.current` / `notesRef.current`. `endCall` deps reduced to `[]`. Stale closures now reach mutable refs.
+
+**Data flow (for reference):** room number + notes are POSTed to `POST /api/calls/notes` → saved to `calls.room_number` + `calls.notes` columns in Supabase, scoped to the agent who handled the call (`handled_by_user_id = user.id`).
+
+**jsdom + testing-library lane added (first component tests in the portal):**
+- `vitest.jsdom.config.ts` — separate Vitest config with `@vitejs/plugin-react` + jsdom, covers `tests/components/**`
+- `vitest.config.ts` — excludes `tests/components/**` from node run
+- `package.json` test script runs both configs
+- `tests/components/softphone.test.tsx` — mounts real Softphone, fires SDK disconnect, asserts notes API received typed values
+- `tests/components/video-call.test.tsx` — same via Agora user-left
+
+**Test count: 353 (351 node + 2 jsdom). Typecheck clean.**
+
+**PICK UP HERE (fresh chat):**
+1. **Phase 2 seam extractions** — `requireApiActor()` in `lib/auth/api-actor.ts` is the highest-leverage change (dedupes 7+ hand-rolled API preambles, adds missing `profiles.active` check + OWNER reject on audio claim, is the v2 multi-tenancy seam). See TASKS.md Phase 2 for full list (P2-1 through P2-5).
+2. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — still not done; write before continuing audit work.
+3. **Page-by-page final-polish pass** (kiosk shadows/bounce + live in-browser visual/a11y pass) — still not started; not blocking.
+4. Prod emergency is **911** (safe, unchanged).
