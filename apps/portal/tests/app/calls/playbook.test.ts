@@ -102,4 +102,10 @@ describe("GET /api/calls/[id]/playbook", () => {
     profileRow = null;
     expect((await call("call-1")).status).toBe(401);
   });
+
+  it("403 when the caller is an OWNER (agent playbook route; owners use /api/owner/properties/[id]/playbook)", async () => {
+    profileRow = { id: "u1", operator_id: "op-1", role: "OWNER", active: true };
+    expect((await call("call-1")).status).toBe(403);
+    expect(createSignedUrlMock).not.toHaveBeenCalled();
+  });
 });

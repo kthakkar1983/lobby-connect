@@ -6,13 +6,19 @@ vi.mock("@/lib/supabase/server", () => ({
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
-// admin client: calls.select(...).eq(...).maybeSingle() for the lookup;
-// calls.update(...).eq(...).eq(...) and profiles.update(...).eq(...) for writes.
+// admin client:
+//   calls.select().eq().maybeSingle()                     — fetchOperatorCall lookup
+//   calls.update().eq("id").eq("state","RINGING")
+//         .select("id")                                   — claimCall (returns callUpdateResult)
+//   profiles.select().eq().maybeSingle()                  — requireApiActor profile read
+//   profiles.update().eq()                                — ON_CALL stamp
 let callRow: { id: string; state: string; operator_id: string } | null = null;
+// Controls what claimCall's .select("id") returns — default winner (one row).
+let callUpdateResult: Array<{ id: string }> = [{ id: "c1" }];
 const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(async () => ({
-  data: { id: "u1", operator_id: "op1", role: "AGENT" },
+  data: { id: "u1", operator_id: "op1", role: "AGENT", active: true },
 }));
 
 function makeAdminClient() {
@@ -27,12 +33,18 @@ function makeAdminClient() {
           },
         };
       }
-      // calls
+      // calls table — update chain must expose .select("id") for claimCall
       return {
         select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
         update: (v: unknown) => {
           callUpdateSpy(v);
-          return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+          return {
+            eq: () => ({
+              eq: () => ({
+                select: () => Promise.resolve({ data: callUpdateResult, error: null }),
+              }),
+            }),
+          };
         },
       };
     },
@@ -54,6 +66,7 @@ beforeEach(() => {
   getUser.mockReset();
   callUpdateSpy.mockClear();
   profileUpdateSpy.mockClear();
+  callUpdateResult = [{ id: "c1" }];
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
 });
 
@@ -63,7 +76,7 @@ describe("POST /api/twilio/voice/answered", () => {
     expect((await POST(req({ callId: "c1" }))).status).toBe(401);
   });
 
-  it("marks the call IN_PROGRESS + handled_by + answered_at, and self ON_CALL", async () => {
+  it("marks the call IN_PROGRESS + handled_by + answered_at, and self ON_CALL (winner)", async () => {
     callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
     const res = await POST(req({ callId: "c1" }));
     expect(res.status).toBe(204);
@@ -91,5 +104,29 @@ describe("POST /api/twilio/voice/answered", () => {
     const res = await POST(req({ callId: "c1" }));
     expect(res.status).toBe(404);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("403 when the caller is an OWNER (read-only role)", async () => {
+    callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
+    profileFetch.mockResolvedValueOnce({
+      data: { id: "u1", operator_id: "op1", role: "OWNER", active: true },
+    });
+    const res = await POST(req({ callId: "c1" }));
+    expect(res.status).toBe(403);
+    expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("409 when concurrent accept beats us (claimCall returns 0 rows)", async () => {
+    // callRow still shows RINGING — canAnswer fast-path passes — but a concurrent
+    // accept claimed the row before our UPDATE lands. DB returns no rows.
+    callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
+    callUpdateResult = [];
+    const res = await POST(req({ callId: "c1" }));
+    expect(res.status).toBe(409);
+    // The UPDATE was attempted (we lost the race, not the read-check).
+    expect(callUpdateSpy).toHaveBeenCalled();
+    // The loser must NOT stamp itself ON_CALL.
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 });

@@ -13,10 +13,9 @@ export async function GET(
 ): Promise<NextResponse> {
   const { id } = await params;
 
-  // Behavior-identical rewire: this route had no role gate before, so OWNER stays
-  // allowed here. (Adding an OWNER-reject is a deliberate change handled in the
-  // dedicated OWNER-reject task, not this behavior-neutral pass.)
-  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  // OWNER is rejected: the in-call playbook reference is for agents/admins only.
+  // Owners access playbooks via /api/owner/properties/[id]/playbook instead.
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
   if (actor instanceof NextResponse) return actor;
 
   const call = await fetchOperatorCall<{
