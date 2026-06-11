@@ -7,6 +7,8 @@ import { isLiveStatus } from "@/lib/voice/presence";
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // OWNER kept in allow for behavior-parity (route had no role gate pre-seam); no
+  // OWNER client ever calls this heartbeat in practice. OWNER-reject is deferred.
   const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
   if (actorOrResponse instanceof NextResponse) return actorOrResponse;
   const actor = actorOrResponse;

@@ -6,6 +6,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const updateSpy = vi.fn();
+// Mutable so individual tests can change the role returned by the profiles read.
+let profileRole = "AGENT";
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -15,7 +17,7 @@ vi.mock("@/lib/supabase/admin", () => ({
             eq: () => ({
               maybeSingle: () =>
                 Promise.resolve({
-                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+                  data: { id: "u1", operator_id: "op-1", role: profileRole },
                 }),
             }),
           }),
@@ -44,6 +46,7 @@ function req(body: unknown) {
 beforeEach(() => {
   getUser.mockReset();
   updateSpy.mockClear();
+  profileRole = "AGENT";
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
 });
 
@@ -62,5 +65,17 @@ describe("POST /api/calls/notes", () => {
     const res = await POST(req({ callId: "c1", roomNumber: "204", notes: "lockout" }));
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledWith({ room_number: "204", notes: "lockout" });
+  });
+
+  // OWNER is in the allow list for behavior-parity (route had no role gate before
+  // the seam). The handled_by_user_id self-scope means an OWNER write matches no
+  // rows (OWNERs never handle calls), making it a harmless 204 no-op.
+  it("OWNER actor gets 204 (no-op: handled_by_user_id scope matches no rows)", async () => {
+    profileRole = "OWNER";
+    const res = await POST(req({ callId: "c1", roomNumber: "101", notes: "test" }));
+    expect(res.status).toBe(204);
+    // update is still called — the no-op is enforced by the handled_by_user_id
+    // eq filter on the DB side, not by an early return in the route.
+    expect(updateSpy).toHaveBeenCalledWith({ room_number: "101", notes: "test" });
   });
 });

@@ -6,6 +6,9 @@ import { requireApiActor } from "@/lib/auth/api-actor";
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // OWNER kept in allow to preserve the pre-seam behavior (this route had no role
+  // gate). The handled_by_user_id self-scope below makes an OWNER write a harmless
+  // 204 no-op. A deliberate OWNER-reject, if desired, belongs in the OWNER-reject task.
   const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
   if (actorOrResponse instanceof NextResponse) return actorOrResponse;
   const actor = actorOrResponse;

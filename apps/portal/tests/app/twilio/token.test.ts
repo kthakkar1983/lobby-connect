@@ -7,11 +7,22 @@ vi.mock("@/lib/supabase/server", () => ({
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
+// Table-aware mock: the seam (requireApiActor) reads id/operator_id/role from
+// "profiles"; the route's second read reads id/twilio_identity from "profiles".
+// Both use maybeSingle(), so the mock delegates all "profiles" calls to it.
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: () => maybeSingle() }) }),
-    }),
+    from: (table: string) => {
+      if (table === "profiles") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: () => maybeSingle() }) }),
+        };
+      }
+      // No other tables are read by this route; fallthrough is a safety net.
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: () => maybeSingle() }) }),
+      };
+    },
   }),
 }));
 
@@ -43,7 +54,9 @@ describe("GET /api/twilio/token", () => {
     expect(res.status).toBe(401);
   });
 
-  it("403 when the profile has no twilio_identity (e.g. OWNER)", async () => {
+  // 403 fires on the twilio_identity gate, not a role gate — any role without an
+  // identity (e.g. an OWNER, who has no twilio_identity) is rejected here.
+  it("403 when twilio_identity is absent", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     maybeSingle.mockResolvedValue({
       data: { id: "u1", operator_id: "op-1", role: "OWNER", twilio_identity: null },

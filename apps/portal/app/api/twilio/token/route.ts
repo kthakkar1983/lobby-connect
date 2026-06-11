@@ -15,6 +15,9 @@ export async function GET(): Promise<NextResponse> {
   const actor = actorOrResponse;
 
   const admin = createAdminClient();
+  // Second profiles read (seam already read id/operator_id/role). OWNER is blocked
+  // here by the !twilio_identity gate, not by role. Collapsing these two reads is
+  // tracked as a Phase-3 caching item (P1), not changed in this behavior-neutral pass.
   const { data: profile } = await admin
     .from("profiles")
     .select("id, twilio_identity")
