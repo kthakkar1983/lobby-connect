@@ -1,8 +1,10 @@
+import "server-only";
 import { NextResponse } from "next/server";
+import type { Role } from "@lc/shared";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type Role = "AGENT" | "ADMIN" | "OWNER";
+export type { Role };
 export interface ApiActor {
   userId: string;
   operatorId: string;
@@ -37,14 +39,14 @@ export async function requireApiActor(
     return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
   }
 
-  if (!opts.allow.includes(me.role as Role)) {
+  if (!opts.allow.includes(me.role)) {
     return NextResponse.json({ error: "Forbidden for this role" }, { status: 403 });
   }
 
   return {
     userId: me.id,
     operatorId: me.operator_id,
-    role: me.role as Role,
+    role: me.role,
   };
 }
 
@@ -53,15 +55,16 @@ export async function requireApiActor(
  * (operator_id is always included for the scope check). Returns the row, or a
  * 404 NextResponse.
  */
-export async function fetchOperatorCall(
+export async function fetchOperatorCall<
+  T extends Record<string, unknown> = Record<string, unknown>,
+>(
   actor: ApiActor,
   callId: string,
   columns: string,
-): Promise<Record<string, unknown> | NextResponse> {
+): Promise<T | NextResponse> {
   const admin = createAdminClient();
-  const select = columns.includes("operator_id")
-    ? columns
-    : `${columns}, operator_id`;
+  const hasOperatorId = columns.split(/[\s,]+/).includes("operator_id");
+  const select = hasOperatorId ? columns : `${columns}, operator_id`;
   // Dynamic select string: cast the result to loosen the generated-type constraint.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: call } = (await (admin as any)
@@ -69,8 +72,8 @@ export async function fetchOperatorCall(
     .select(select)
     .eq("id", callId)
     .maybeSingle()) as { data: Record<string, unknown> | null };
-  if (!call || call.operator_id !== actor.operatorId) {
+  if (!call || (call as Record<string, unknown>).operator_id !== actor.operatorId) {
     return NextResponse.json({ error: "Call not found" }, { status: 404 });
   }
-  return call;
+  return call as T;
 }

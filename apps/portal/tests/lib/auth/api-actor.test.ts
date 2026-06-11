@@ -162,4 +162,20 @@ describe("fetchOperatorCall", () => {
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(404);
   });
+
+  it("word-boundary check: a column containing 'operator_id' as a substring does not skip appending the real operator_id", async () => {
+    // "foreign_operator_id_ref" contains the substring "operator_id" but is NOT
+    // the token "operator_id", so the scope column must still be appended.
+    // operator mismatch → 404 (proves the real operator_id check ran)
+    callFetchResult = { id: "call-1", operator_id: "OTHER", state: "RINGING" };
+    const mismatch = await fetchOperatorCall(actor, "call-1", "id, foreign_operator_id_ref, state");
+    expect(mismatch).toBeInstanceOf(Response);
+    expect((mismatch as Response).status).toBe(404);
+
+    // operator match → row returned (proves the appended operator_id was read correctly)
+    callFetchResult = { id: "call-1", operator_id: "op-1", state: "RINGING" };
+    const match = await fetchOperatorCall(actor, "call-1", "id, foreign_operator_id_ref, state");
+    expect(match).not.toBeInstanceOf(Response);
+    expect((match as Record<string, unknown>).id).toBe("call-1");
+  });
 });
