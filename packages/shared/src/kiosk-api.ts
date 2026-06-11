@@ -6,6 +6,8 @@
  * fails typecheck in either app before reaching the wire.
  */
 
+import type { KioskCtaStyle } from "./supabase-types";
+
 /** Returned by GET /api/kiosk/config */
 export interface KioskConfig {
   propertyId: string;
@@ -19,7 +21,7 @@ export interface KioskConfig {
   breakfastHours: string | null;
   apologyMessage: string | null;
   phoneNumber: string | null;
-  ctaStyle: "warm" | "accent" | "classic";
+  ctaStyle: KioskCtaStyle;
 }
 
 /** Returned by POST /api/kiosk/call-started */

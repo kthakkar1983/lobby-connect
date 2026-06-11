@@ -63,5 +63,9 @@ describe("AgoraTokenResult", () => {
     // We confirm by constructing with the correct type.
     const uid: AgoraTokenResult["uid"] = 0;
     void uid;
+
+    // @ts-expect-error — uid must be a number, not a string
+    const _badUid: AgoraTokenResult["uid"] = "0";
+    void _badUid;
   });
 });
