@@ -1,0 +1,37 @@
+/**
+ * Wire DTOs for the kiosk↔portal HTTP contract.
+ *
+ * These interfaces are the single source of truth for the three API routes
+ * consumed by the kiosk. Both sides import from @lc/shared so a shape drift
+ * fails typecheck in either app before reaching the wire.
+ */
+
+/** Returned by GET /api/kiosk/config */
+export interface KioskConfig {
+  propertyId: string;
+  logoUrl: string | null;
+  welcomeHeading: string;
+  welcomeMessage: string | null;
+  checkinTime: string | null;
+  checkoutTime: string | null;
+  wifiNetwork: string | null;
+  wifiPassword: string | null;
+  breakfastHours: string | null;
+  apologyMessage: string | null;
+  phoneNumber: string | null;
+  ctaStyle: "warm" | "accent" | "classic";
+}
+
+/** Returned by POST /api/kiosk/call-started */
+export interface CallStartResult {
+  callId: string;
+  channelName: string;
+}
+
+/** Returned by GET /api/agora/token (both kiosk-token and session-token branches) */
+export interface AgoraTokenResult {
+  appId: string;
+  channelName: string;
+  uid: number;
+  token: string;
+}

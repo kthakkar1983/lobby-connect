@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import type { CallStartResult } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -60,5 +61,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Could not start call" }, { status: 500 });
   }
 
-  return NextResponse.json({ callId: inserted.id, channelName });
+  const payload: CallStartResult = { callId: inserted.id, channelName };
+  return NextResponse.json(payload);
 }

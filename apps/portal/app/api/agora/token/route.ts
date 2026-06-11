@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { getAgoraCredentials } from "@/lib/agora/config";
 import { buildRtcPublisherToken } from "@/lib/agora/token";
+import type { AgoraTokenResult } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -74,5 +75,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     expireSeconds: TOKEN_TTL_SECONDS,
   });
 
-  return NextResponse.json({ appId, channelName: channel, uid, token });
+  const payload: AgoraTokenResult = { appId, channelName: channel, uid, token };
+  return NextResponse.json(payload);
 }
