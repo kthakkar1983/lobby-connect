@@ -20,6 +20,19 @@ vi.mock("@/lib/supabase/admin", () => ({
         };
         return chain;
       }
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+                }),
+            }),
+          }),
+          update: (v: unknown) => updateSpy(v),
+        };
+      }
       return { update: (v: unknown) => updateSpy(v) };
     },
   }),

@@ -4,12 +4,15 @@ const getUser = vi.fn();
 const maybeSingle = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () =>
-    Promise.resolve({
-      auth: { getUser: () => getUser() },
-      from: () => ({
-        select: () => ({ eq: () => ({ maybeSingle: () => maybeSingle() }) }),
-      }),
+    Promise.resolve({ auth: { getUser: () => getUser() } }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => maybeSingle() }) }),
     }),
+  }),
 }));
 
 const buildVoiceAccessToken = vi.fn((..._a: unknown[]) => "jwt-token");
@@ -43,7 +46,7 @@ describe("GET /api/twilio/token", () => {
   it("403 when the profile has no twilio_identity (e.g. OWNER)", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     maybeSingle.mockResolvedValue({
-      data: { id: "u1", role: "OWNER", twilio_identity: null },
+      data: { id: "u1", operator_id: "op-1", role: "OWNER", twilio_identity: null },
     });
     const res = await GET();
     expect(res.status).toBe(403);
@@ -52,7 +55,7 @@ describe("GET /api/twilio/token", () => {
   it("returns a token + identity for a call-taker", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     maybeSingle.mockResolvedValue({
-      data: { id: "u1", role: "AGENT", twilio_identity: "lc_u1" },
+      data: { id: "u1", operator_id: "op-1", role: "AGENT", twilio_identity: "lc_u1" },
     });
     const res = await GET();
     expect(res.status).toBe(200);

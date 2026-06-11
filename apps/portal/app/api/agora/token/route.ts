@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { getAgoraCredentials } from "@/lib/agora/config";
 import { buildRtcPublisherToken } from "@/lib/agora/token";
@@ -44,25 +44,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   } else {
     // Auth branch 2: agent/admin session in the same operator.
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const { data: me } = await admin
-      .from("profiles")
-      .select("id, operator_id, role")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (!me || me.operator_id !== call.operator_id) {
-      return NextResponse.json({ error: "Channel not in operator" }, { status: 403 });
-    }
     // Owners are read-only (07a spec): a publisher token would let them join a
     // live guest video call. Reject the owner role on the session branch.
-    if (me.role === "OWNER") {
-      return NextResponse.json({ error: "Owners cannot join live calls" }, { status: 403 });
+    const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+    if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+    const actor = actorOrResponse;
+    if (actor.operatorId !== call.operator_id) {
+      return NextResponse.json({ error: "Channel not in operator" }, { status: 403 });
     }
   }
 

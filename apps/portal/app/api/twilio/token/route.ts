@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 import { getTwilioApiCredentials } from "@/lib/twilio/config";
 import { buildVoiceAccessToken } from "@/lib/twilio/token";
 
@@ -9,18 +10,15 @@ export const runtime = "nodejs";
 const TOKEN_TTL_SECONDS = 3600;
 
 export async function GET(): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from("profiles")
-    .select("id, role, twilio_identity")
-    .eq("id", user.id)
+    .select("id, twilio_identity")
+    .eq("id", actor.userId)
     .maybeSingle();
 
   if (!profile || !profile.twilio_identity) {

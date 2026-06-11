@@ -8,12 +8,26 @@ vi.mock("@/lib/supabase/server", () => ({
 const updateSpy = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => ({
-      update: (v: unknown) => {
-        updateSpy(v);
-        return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
-      },
-    }),
+    from: (table: string) => {
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+                }),
+            }),
+          }),
+        };
+      }
+      return {
+        update: (v: unknown) => {
+          updateSpy(v);
+          return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+        },
+      };
+    },
   }),
 }));
 

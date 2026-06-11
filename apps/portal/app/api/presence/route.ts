@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
 import { isLiveStatus } from "@/lib/voice/presence";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
 
   const body = (await request.json().catch(() => ({}))) as { status?: string };
   if (!body.status || !isLiveStatus(body.status)) {
@@ -33,7 +29,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       .select("id")
       .eq("channel", "VIDEO")
       .eq("state", "IN_PROGRESS")
-      .eq("handled_by_user_id", user.id)
+      .eq("handled_by_user_id", actor.userId)
       .limit(1);
     if (liveVideo && liveVideo.length > 0) {
       status = "ON_CALL";
@@ -43,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   await admin
     .from("profiles")
     .update({ status, last_seen_at: new Date().toISOString() })
-    .eq("id", user.id);
+    .eq("id", actor.userId);
 
   return new NextResponse(null, { status: 204 });
 }
