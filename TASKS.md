@@ -18,12 +18,14 @@
 ### Interlude — Notes durability + error surfacing + owner Calls tab ✅
 - [x] **N1** `reliableFetch` helper (retry network/5xx + Sentry on exhaustion); call-notes save decoupled from call phase with a preserved-text Retry/Discard banner (softphone + video-call); `answered` / `emergency-control` (incl. observable live-911 mute) / `end-video` routed through it; emergency *trigger* stays bespoke + Sentry; 20s heartbeat best-effort by design. Owner Calls tab: note icon + inline accordion expand (shared `CallDetailBody`) + Audio/Video filter; property-page recent-calls parity. Branch `feat/notes-and-errors`, 7 commits, 360 tests. Spec/plan: `docs/specs/2026-06-10-notes-and-errors-design.md` · `docs/plans/2026-06-10-notes-and-errors.md`
 
-### Phase 2 — Extract security/tenancy seams
-- [ ] **P2-1** Extract `lib/auth/api-actor.ts` — `requireApiActor()` + `fetchOperatorCall()` replacing 7+ hand-rolled preambles (also adds missing `profiles.active` check + OWNER reject on audio claim)
-- [ ] **P2-2** Extract `parseVerifiedTwilioWebhook()` into `lib/twilio/client.ts` + APOLOGY constant into `lib/voice/twiml.ts`
-- [ ] **P2-3** Extract `claimCall()` + `finalizeCallPayload()` into `lib/voice/call-state.ts` (dedupes claim transaction, duration formula, active-state set across 5 sites)
-- [ ] **P2-4** Move `scrub.ts` + kiosk DTO types into `packages/shared` (both apps already depend on it; security firewall has two hand-synced copies today)
-- [ ] **P2-5** Extract `diffFields()` into `lib/audit/diff.ts` (dedupes Server Action triplication)
+### Phase 2 — Extract security/tenancy seams ✅ DONE (PR #18 merged `7c553e8`)
+> Spec/plan: `docs/specs/2026-06-11-phase2-seam-extractions-design.md` · `docs/plans/2026-06-11-phase2-seam-extractions.md`. Brainstorm→spec→plan→subagent-driven (per-task spec+code review, opus on 911 + opus whole-branch final → GO). 411 tests. **Prod smoke pending** (audio answer, video answer+end, deactivated→403, OWNER→403 on `/answered`).
+- [x] **P2-1** `lib/auth/api-actor.ts` — `requireApiActor()` + `fetchOperatorCall()` across all 12 session routes; **behavior fixes:** `profiles.active`→403 gate + OWNER-reject on `/answered` (and agent `playbook`)
+- [x] **P2-2** `parseVerifiedTwilioWebhook()` (`lib/twilio/client.ts`) + `APOLOGY_MESSAGE`/`twimlResponse` (`lib/voice/twiml.ts`)
+- [x] **P2-3** `claimCall()` + `finalizeCallPayload()` + `ACTIVE_CALL_STATES` (`lib/voice/call-state.ts`) + `computeDurationSeconds()` (`lib/calls/duration.ts`) — `/answered` claim now H3-guarded too
+- [x] **P2-4** PII scrubber + kiosk↔portal DTOs → `packages/shared` (`@lc/shared`)
+- [x] **P2-5** `diffFields()` + `emptyToNull()` → `lib/audit/diff.ts` (properties actions; `users/actions.ts` keeps bespoke per-field diffing by design)
+> Deferred follow-ups (non-blocking): harden `claimCall` to throw on DB error (task chip filed); `emptyToNull` dup in owner-properties actions; reaper builds finalize payload inline.
 
 ### Phase 3 — Per-request caching & parallelization
 - [ ] **P3-1** Wrap session resolution in React `cache()` — one `getUser` + one profiles read per request (P1: ~half the RTT per poll tick)
@@ -57,7 +59,8 @@
 - [x] Kiosk ~120s video disconnect bug FIXED
 
 ### Still open
+- [ ] **Phase 2 prod smoke** (PR #18, after Vercel deploys `main`): audio answer (claim→IN_PROGRESS+ON_CALL), video answer+end (finalize+duration), deactivated-user→403, OWNER→403 on `/answered`
 - [ ] Page-by-page final-polish pass (kiosk subtle shadows + bounce, one screen at a time; gate on prefers-reduced-motion; live in-browser a11y pass)
 - [ ] Visual confirm: Atelier headings + Radon labels on prod kiosk (esp. W-bearing hotel names)
-- [ ] Save audit to repo: `docs/audits/2026-06-10-architecture-audit.md`
+- [x] Save audit to repo: `docs/audits/2026-06-10-architecture-audit.md` (+ triage + methodology, `8cd551f`)
 - [ ] Pilot go-live

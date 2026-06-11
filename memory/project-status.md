@@ -945,3 +945,25 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 2. **Phase 2 — P2-1** `requireApiActor()` in `lib/auth/api-actor.ts` (dedupes 7+ API preambles, adds `profiles.active` check + OWNER reject on audio claim, v2 multi-tenancy seam). Then P2-2..P2-5 (TASKS.md Phase 2). *This is what the session started toward before the notes/errors detour.*
 3. **Save audit to repo:** `docs/audits/2026-06-10-architecture-audit.md` — still not done.
 4. Prod emergency is **911** (unchanged).
+
+---
+
+## 2026-06-10 (session 18) — Phase 2 seam extractions DONE + merged (PR #18)
+
+**All of audit Phase 2 (P2-1…P2-5) complete and merged to `main`** (merge `7c553e8`, PR [#18](https://github.com/kthakkar1983/lobby-connect/pull/18)). Vercel auto-deploys prod; **prod smoke still pending** (only the voice/video gate left). Started from the session-17 hand-off (Phase 2 was next).
+
+**Validation first (per Kumar's request):** before touching code, cross-checked the 48-finding audit's Phase 2 items against `CLAUDE.md` locked decisions + the committed 2026-06-06 triage — confirmed none were intended features / accepted-risks mis-marked as bugs. (Kumar had committed the audit + triage + methodology docs in `8cd551f`.)
+
+**Flow:** brainstorm → spec (`docs/specs/2026-06-11-phase2-seam-extractions-design.md`) → plan (`docs/plans/2026-06-11-phase2-seam-extractions.md`) → subagent-driven execution (10 tasks; per-task spec + code review; **opus** implementer+reviews on the 911 routes; **opus whole-branch final review → GO, no Critical/Important**). 411 tests (395 portal + 16 `@lc/shared`), lint + typecheck clean.
+
+**Shipped (Pass 1 — behavior-identical extractions):** `requireApiActor()`/`fetchOperatorCall()` (`lib/auth/api-actor.ts`) across all 12 session API routes (the **v2 multi-tenancy seam**); `parseVerifiedTwilioWebhook()` + `APOLOGY_MESSAGE`/`twimlResponse`; `claimCall()`/`finalizeCallPayload()`/`ACTIVE_CALL_STATES` (`lib/voice/call-state.ts`) + `computeDurationSeconds()` (`lib/calls/duration.ts`); PII scrubber + kiosk↔portal DTOs → `@lc/shared`; `diffFields()`/`emptyToNull()` (`lib/audit/diff.ts`).
+
+**Two behavior changes (Pass 2 — the only observable ones, A1/H3):** (1) deactivated users (`active=false`) → **403 on all API routes** (one `=== false` gate inside `requireApiActor`); (2) `/api/twilio/voice/answered` now **rejects OWNER + routes its claim through `claimCall`** (loser→409, winner-only `ON_CALL` — mirrors the shipped H3 fix onto the audio path); (3) agent `calls/[id]/playbook` rejects OWNER (owners have their own route). **911 path verified byte-identical** (opus, line-by-line vs main). Zero DB/RLS/migration changes; no premature assignment scoping (DEFER-V2).
+
+**The subagent loop caught real issues:** a route that looked like it rejected OWNER but didn't (would've been a silent behavior change), a too-narrow `git add` that left test fixtures uncommitted, and two reviewer suggestions that would have broken the behavior-neutral guarantee (pushed back, deferred to Pass 2).
+
+**PICK UP HERE (fresh chat):**
+1. **Phase 2 prod smoke** (after Vercel deploys `main`): audio answer (claim→IN_PROGRESS+ON_CALL), video answer+end (finalize+duration), deactivated-user→403, OWNER→403 on `/answered`.
+2. **Audit Phase 3** (perf/caching/parallelization) — mostly forward-scale (the 2026-06-06 readiness audit bucketed perf as ACCEPT-RISK); P3-2 (Twilio webhook hops = guest-audible latency) + P6 (silent 1000-row count truncation) are the pilot-relevant ones. Then **Phase 4** (scale invariants). Re-validate against triage before each (note: TASKS.md P4-7's "21 `href as never`" is stale — only 3 remain, all intentional nav forward-refs; P4-1/S2 + P4-10/S7 are triage-marked ACCEPT-RISK/DEFER-V2).
+3. **Deferred Phase-2 follow-ups:** `claimCall` throw-on-DB-error (task chip filed); `emptyToNull` dup in owner-properties actions; reaper finalize payload via `finalizeCallPayload`.
+4. Prod emergency is **911** (unchanged, safe).
