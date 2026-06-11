@@ -111,10 +111,33 @@ describe("requireApiActor", () => {
     expect(actor.role).toBe("OWNER");
   });
 
-  it("does NOT check the active field (no active column selected)", async () => {
-    // If `active` were selected, the mock would need to return it.
-    // The fact that the mock only returns id/operator_id/role and this passes
-    // confirms no active check is performed.
+  it("returns 403 when the profile has active: false (deactivated user)", async () => {
+    profileFetch.mockResolvedValue({
+      data: { id: "u1", operator_id: "op-1", role: "AGENT", active: false },
+    });
+    const result = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(403);
+    const body = await (result as Response).json();
+    expect(body.error).toBe("Account deactivated");
+  });
+
+  it("succeeds when the profile has active: true", async () => {
+    profileFetch.mockResolvedValue({
+      data: { id: "u1", operator_id: "op-1", role: "AGENT", active: true },
+    });
+    const result = await requireApiActor({ allow: ["AGENT"] });
+    expect(result).not.toBeInstanceOf(Response);
+    const actor = result as ApiActor;
+    expect(actor.userId).toBe("u1");
+  });
+
+  it("succeeds when active is absent (=== false is exact — undefined is not false)", async () => {
+    // Fixtures that omit `active` (→ undefined) are NOT rejected.
+    // This documents the deliberate choice of `=== false` over `!me.active`.
+    profileFetch.mockResolvedValue({
+      data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+    });
     const result = await requireApiActor({ allow: ["AGENT"] });
     expect(result).not.toBeInstanceOf(Response);
   });

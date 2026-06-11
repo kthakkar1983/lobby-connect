@@ -15,8 +15,8 @@ export interface ApiActor {
  * Resolve the authenticated API actor: session user -> profile -> role gate.
  * Returns the actor, or a NextResponse (401/403) the caller returns directly.
  * Uses the service-role client for the profile read (matches existing routes).
- * NOTE: an `active`/deactivation gate is intentionally added in a later task;
- * today this matches current route behavior (role + operator only).
+ * Rejects deactivated users (active === false) with 403 before the role check
+ * (A1/D1 — closes the gap where a still-valid JWT bypassed the deactivation).
  */
 export async function requireApiActor(
   opts: { allow: Role[] },
@@ -32,11 +32,15 @@ export async function requireApiActor(
   const admin = createAdminClient();
   const { data: me } = await admin
     .from("profiles")
-    .select("id, operator_id, role")
+    .select("id, operator_id, role, active")
     .eq("id", user.id)
     .maybeSingle();
   if (!me) {
     return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
+  }
+
+  if (me.active === false) {
+    return NextResponse.json({ error: "Account deactivated" }, { status: 403 });
   }
 
   if (!opts.allow.includes(me.role)) {
