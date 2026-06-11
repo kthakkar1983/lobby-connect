@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
+import { computeDurationSeconds } from "@/lib/calls/duration";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -33,12 +34,7 @@ export async function POST(
 
   if (call.state === "IN_PROGRESS") {
     const endedAt = new Date();
-    const durationSeconds = call.answered_at
-      ? Math.max(
-          0,
-          Math.round((endedAt.getTime() - new Date(call.answered_at as string).getTime()) / 1000),
-        )
-      : null;
+    const durationSeconds = computeDurationSeconds(call.answered_at, endedAt.getTime());
 
     const admin = createAdminClient();
 

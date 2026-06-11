@@ -9,6 +9,8 @@
  * VIDEO rows, as a backstop behind the real-time agent-side finalizer.
  */
 
+import { computeDurationSeconds } from "./duration";
+
 /** A connected (answered) video call live longer than this is treated as dead. */
 export const REAP_IN_PROGRESS_AFTER_MS = 30 * 60_000; // 30 min
 
@@ -46,12 +48,12 @@ export function inProgressIsStale(
 
 /**
  * Whole-second duration of a reaped call, clamped to >= 0, or null when the call
- * was never answered (no `answered_at`) — mirrors the real-time finalizers.
+ * was never answered (no `answered_at`). Delegates to computeDurationSeconds so
+ * the formula is identical across the kiosk route, the agent route, and the reaper.
  */
 export function reapDurationSeconds(
   answeredAt: string | null,
   endedAtMs: number,
 ): number | null {
-  if (!answeredAt) return null;
-  return Math.max(0, Math.round((endedAtMs - new Date(answeredAt).getTime()) / 1000));
+  return computeDurationSeconds(answeredAt, endedAtMs);
 }

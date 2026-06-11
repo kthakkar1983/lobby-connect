@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import { computeDurationSeconds } from "@/lib/calls/duration";
 
 export const runtime = "nodejs";
 
@@ -40,9 +41,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const endedAt = new Date();
   const nextState = STATE_BY_REASON[body.reason ?? "completed"] ?? "COMPLETED";
-  const durationSeconds = call.answered_at
-    ? Math.max(0, Math.round((endedAt.getTime() - new Date(call.answered_at).getTime()) / 1000))
-    : null;
+  const durationSeconds = computeDurationSeconds(call.answered_at, endedAt.getTime());
 
   // Conditional on a still-active state so the kiosk-vs-agent finalize race is
   // safe: whichever side closes the call first wins, and a late writer (e.g. the
