@@ -1,6 +1,15 @@
+import { NextResponse } from "next/server";
+
 import type { DialTarget } from "@/lib/voice/plan-dial";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>';
+
+export const APOLOGY_MESSAGE =
+  "We're sorry, no one is available right now. Please try again or call us directly.";
+
+export function twimlResponse(xml: string, status = 200): NextResponse {
+  return new NextResponse(xml, { status, headers: { "Content-Type": "text/xml" } });
+}
 
 function escapeXml(s: string): string {
   return s
