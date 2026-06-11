@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createServerClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { getTwilioRestClient } from "@/lib/twilio/client";
 
 export const runtime = "nodejs";
@@ -19,34 +18,23 @@ export async function POST(
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN", "OWNER"] });
+  if (actor instanceof NextResponse) return actor;
 
-  const admin = createAdminClient();
-
-  const { data: me } = await admin
-    .from("profiles")
-    .select("id, operator_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!me) {
-    return NextResponse.json({ error: "Unknown profile" }, { status: 401 });
-  }
-
-  const { data: callRow } = await admin
-    .from("calls")
-    .select("id, operator_id, state, handled_by_user_id, emergency_conference_name, emergency_agent_call_sid")
-    .eq("id", id)
-    .maybeSingle();
-  if (!callRow || callRow.operator_id !== me.operator_id) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  }
-  if (callRow.handled_by_user_id !== user.id) {
+  const callRow = await fetchOperatorCall<{
+    id: string;
+    operator_id: string;
+    state: string;
+    handled_by_user_id: string | null;
+    emergency_conference_name: string | null;
+    emergency_agent_call_sid: string | null;
+  }>(
+    actor,
+    id,
+    "id, operator_id, state, handled_by_user_id, emergency_conference_name, emergency_agent_call_sid",
+  );
+  if (callRow instanceof NextResponse) return callRow;
+  if (callRow.handled_by_user_id !== actor.userId) {
     return NextResponse.json({ error: "Not the handling agent" }, { status: 403 });
   }
   // Only a live call can be conference-controlled. A finalized call's agent leg
