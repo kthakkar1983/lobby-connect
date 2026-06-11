@@ -75,10 +75,36 @@ export default async function OwnerPropertyDetailPage({
 
   const { data: recent } = await supabase
     .from("calls")
-    .select("id, channel, state, ring_started_at")
+    .select("id, channel, state, ring_started_at, duration_seconds, room_number, caller_number, notes, recording_url, handled_by_user_id")
     .eq("property_id", id)
     .order("ring_started_at", { ascending: false })
     .limit(5);
+  const recentRows = recent ?? [];
+
+  // Resolve handler names + incident existence for the recent calls so the inline
+  // row expansion shows the same detail the full call page does (parity).
+  const recentHandlerName = new Map<string, string>();
+  const recentHandlerIds = [
+    ...new Set(recentRows.map((c) => c.handled_by_user_id).filter((x): x is string => !!x)),
+  ];
+  if (recentHandlerIds.length > 0) {
+    const { data: handlers } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", recentHandlerIds);
+    for (const h of handlers ?? []) recentHandlerName.set(h.id, h.full_name);
+  }
+  const recentIncidentByCall = new Map<string, string>();
+  const recentCallIds = recentRows.map((c) => c.id);
+  if (recentCallIds.length > 0) {
+    const { data: incidents } = await supabase
+      .from("incidents")
+      .select("id, call_id")
+      .in("call_id", recentCallIds);
+    for (const inc of incidents ?? []) {
+      if (inc.call_id) recentIncidentByCall.set(inc.call_id, inc.id);
+    }
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
@@ -126,7 +152,7 @@ export default async function OwnerPropertyDetailPage({
           </Link>
         }
       >
-        {(recent ?? []).length === 0 ? (
+        {recentRows.length === 0 ? (
           <EmptyState
             icon={Phone}
             title={copy.empty.ownerPropertyCalls.title}
@@ -135,15 +161,26 @@ export default async function OwnerPropertyDetailPage({
           />
         ) : (
           <div className="flex flex-col gap-2">
-            {(recent ?? []).map((c) => {
+            {recentRows.map((c) => {
               const item: CallRowData = {
-                id: c.id,
-                channel: c.channel,
-                state: c.state,
-                ring_started_at: c.ring_started_at,
-                duration_seconds: null,
-                timeZone: property.timezone,
                 secondary: c.channel === "VIDEO" ? "Video" : "Audio",
+                detail: {
+                  id: c.id,
+                  channel: c.channel,
+                  state: c.state,
+                  caller_number: c.caller_number,
+                  room_number: c.room_number,
+                  ring_started_at: c.ring_started_at,
+                  duration_seconds: c.duration_seconds,
+                  notes: c.notes,
+                  recording_url: c.recording_url,
+                  propertyName: property.name,
+                  timeZone: property.timezone,
+                  handlerName: c.handled_by_user_id
+                    ? (recentHandlerName.get(c.handled_by_user_id) ?? "—")
+                    : "Unanswered",
+                  incidentId: recentIncidentByCall.get(c.id) ?? null,
+                },
               };
               return <CallRow key={c.id} call={item} />;
             })}

@@ -44,7 +44,7 @@ export default async function OwnerCallsPage({
   let callsQuery = supabase
     .from("calls")
     .select(
-      "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number",
+      "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
     )
     // created_at is index-backed and monotonic with ring_started_at at insert.
     .order("created_at", { ascending: false })
@@ -79,6 +79,19 @@ export default async function OwnerCallsPage({
     for (const h of handlers ?? []) handlerName.set(h.id, h.full_name);
   }
 
+  // Incident existence per call — one batched query → Map<call_id, incidentId>.
+  const incidentByCall = new Map<string, string>();
+  const callIds = rows.map((c) => c.id);
+  if (callIds.length > 0) {
+    const { data: incidents } = await supabase
+      .from("incidents")
+      .select("id, call_id")
+      .in("call_id", callIds);
+    for (const inc of incidents ?? []) {
+      if (inc.call_id) incidentByCall.set(inc.call_id, inc.id);
+    }
+  }
+
   const moreHref = (() => {
     const sp = new URLSearchParams();
     if (activeProperty) sp.set("property", activeProperty);
@@ -100,13 +113,24 @@ export default async function OwnerCallsPage({
       .filter(Boolean)
       .join(" · ");
     const item: CallRowData = {
-      id: c.id,
-      channel: c.channel,
-      state: c.state,
-      ring_started_at: c.ring_started_at,
-      duration_seconds: c.duration_seconds,
-      timeZone: tz,
       secondary,
+      detail: {
+        id: c.id,
+        channel: c.channel,
+        state: c.state,
+        caller_number: c.caller_number,
+        room_number: c.room_number,
+        ring_started_at: c.ring_started_at,
+        duration_seconds: c.duration_seconds,
+        notes: c.notes,
+        recording_url: c.recording_url,
+        propertyName: nameById.get(c.property_id) ?? "—",
+        timeZone: tz,
+        handlerName: c.handled_by_user_id
+          ? (handlerName.get(c.handled_by_user_id) ?? "—")
+          : "Unanswered",
+        incidentId: incidentByCall.get(c.id) ?? null,
+      },
     };
     const last = grouped[grouped.length - 1];
     if (last && last.label === label) last.items.push(item);
@@ -162,7 +186,7 @@ export default async function OwnerCallsPage({
                 {g.label}
               </h2>
               {g.items.map((item) => (
-                <CallRow key={item.id} call={item} />
+                <CallRow key={item.detail.id} call={item} />
               ))}
             </div>
           ))}
