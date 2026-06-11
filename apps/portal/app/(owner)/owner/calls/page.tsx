@@ -10,15 +10,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
+import type { CallChannel } from "@lc/shared";
 
 const DEFAULT_LIMIT = 50;
 
 export default async function OwnerCallsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string; limit?: string }>;
+  searchParams: Promise<{ property?: string; limit?: string; channel?: string }>;
 }) {
-  const { property, limit: limitParam } = await searchParams;
+  const { property, limit: limitParam, channel: channelParam } = await searchParams;
+  const activeChannel: CallChannel | null =
+    channelParam === "AUDIO" || channelParam === "VIDEO" ? channelParam : null;
   const actor = await requireRole("OWNER");
   const supabase = await createServerClient();
 
@@ -44,7 +47,7 @@ export default async function OwnerCallsPage({
   let callsQuery = supabase
     .from("calls")
     .select(
-      "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number",
+      "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
     )
     // created_at is index-backed and monotonic with ring_started_at at insert.
     .order("created_at", { ascending: false })
@@ -57,6 +60,10 @@ export default async function OwnerCallsPage({
   } else {
     // Owner has no properties — skip the query.
     callsQuery = callsQuery.in("property_id", []);
+  }
+
+  if (activeChannel) {
+    callsQuery = callsQuery.eq("channel", activeChannel);
   }
 
   const { data: calls } = await callsQuery;
@@ -79,12 +86,30 @@ export default async function OwnerCallsPage({
     for (const h of handlers ?? []) handlerName.set(h.id, h.full_name);
   }
 
-  const moreHref = (() => {
+  // Incident existence per call — one batched query → Map<call_id, incidentId>.
+  const incidentByCall = new Map<string, string>();
+  const callIds = rows.map((c) => c.id);
+  if (callIds.length > 0) {
+    const { data: incidents } = await supabase
+      .from("incidents")
+      .select("id, call_id")
+      .in("call_id", callIds);
+    for (const inc of incidents ?? []) {
+      if (inc.call_id) incidentByCall.set(inc.call_id, inc.id);
+    }
+  }
+
+  const buildHref = (next: { property?: string | null; channel?: CallChannel | null; limit?: number }) => {
     const sp = new URLSearchParams();
-    if (activeProperty) sp.set("property", activeProperty);
-    sp.set("limit", String(limit + DEFAULT_LIMIT));
-    return `/owner/calls?${sp.toString()}`;
-  })();
+    const p = next.property === undefined ? activeProperty : next.property;
+    const ch = next.channel === undefined ? activeChannel : next.channel;
+    if (p) sp.set("property", p);
+    if (ch) sp.set("channel", ch);
+    if (next.limit) sp.set("limit", String(next.limit));
+    const qs = sp.toString();
+    return `/owner/calls${qs ? `?${qs}` : ""}`;
+  };
+  const moreHref = buildHref({ limit: limit + DEFAULT_LIMIT });
 
   const now = new Date();
   // Build display rows + group them by day label (rows already sorted desc).
@@ -100,13 +125,24 @@ export default async function OwnerCallsPage({
       .filter(Boolean)
       .join(" · ");
     const item: CallRowData = {
-      id: c.id,
-      channel: c.channel,
-      state: c.state,
-      ring_started_at: c.ring_started_at,
-      duration_seconds: c.duration_seconds,
-      timeZone: tz,
       secondary,
+      detail: {
+        id: c.id,
+        channel: c.channel,
+        state: c.state,
+        caller_number: c.caller_number,
+        room_number: c.room_number,
+        ring_started_at: c.ring_started_at,
+        duration_seconds: c.duration_seconds,
+        notes: c.notes,
+        recording_url: c.recording_url,
+        propertyName: nameById.get(c.property_id) ?? "—",
+        timeZone: tz,
+        handlerName: c.handled_by_user_id
+          ? (handlerName.get(c.handled_by_user_id) ?? "—")
+          : "Unanswered",
+        incidentId: incidentByCall.get(c.id) ?? null,
+      },
     };
     const last = grouped[grouped.length - 1];
     if (last && last.label === label) last.items.push(item);
@@ -121,7 +157,7 @@ export default async function OwnerCallsPage({
       {multiProperty && (
         <div className="flex flex-wrap gap-2">
           <Link
-            href={"/owner/calls" as never}
+            href={buildHref({ property: null }) as never}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
               !activeProperty ? "border-accent-strong bg-accent/10 text-accent-text" : "border-border text-text-muted",
@@ -132,7 +168,7 @@ export default async function OwnerCallsPage({
           {props.map((p) => (
             <Link
               key={p.id}
-              href={`/owner/calls?property=${p.id}` as never}
+              href={buildHref({ property: p.id }) as never}
               className={cn(
                 "rounded-pill border px-3 py-1 text-sm",
                 activeProperty === p.id
@@ -145,6 +181,29 @@ export default async function OwnerCallsPage({
           ))}
         </div>
       )}
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { label: "All", value: null },
+            { label: "Phone", value: "AUDIO" as const },
+            { label: "Video", value: "VIDEO" as const },
+          ] as const
+        ).map((opt) => (
+          <Link
+            key={opt.label}
+            href={buildHref({ channel: opt.value }) as never}
+            className={cn(
+              "rounded-pill border px-3 py-1 text-sm",
+              activeChannel === opt.value
+                ? "border-accent-strong bg-accent/10 text-accent-text"
+                : "border-border text-text-muted",
+            )}
+          >
+            {opt.label}
+          </Link>
+        ))}
+      </div>
 
       {rows.length === 0 ? (
         <Card className="p-0">
@@ -162,7 +221,7 @@ export default async function OwnerCallsPage({
                 {g.label}
               </h2>
               {g.items.map((item) => (
-                <CallRow key={item.id} call={item} />
+                <CallRow key={item.detail.id} call={item} />
               ))}
             </div>
           ))}

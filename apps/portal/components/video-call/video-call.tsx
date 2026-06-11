@@ -10,12 +10,15 @@ import type {
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
 import { PlaybookPanel } from "./playbook-panel";
+import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -100,29 +103,46 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
 
+  async function saveNotes(): Promise<boolean> {
+    if (!roomNumberRef.current && !notesRef.current) return true; // nothing to save
+    setSaving(true);
+    const res = await reliableFetch(
+      "/api/calls/notes",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          callId,
+          roomNumber: roomNumberRef.current,
+          notes: notesRef.current,
+        }),
+      },
+      { label: "calls.notes" },
+    );
+    setSaving(false);
+    const ok = !!res && res.ok;
+    setSaveFailed(!ok);
+    return ok;
+  }
+
   async function handleEnd() {
     // Idempotent: user-left (guest hung up / crashed) and the End button can both
-    // reach here — run the finalize + teardown exactly once.
-    if (finalizingRef.current) return;
-    finalizingRef.current = true;
-    try {
-      if (roomNumberRef.current || notesRef.current) {
-        await fetch("/api/calls/notes", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ callId, roomNumber: roomNumberRef.current, notes: notesRef.current }),
-        }).catch(() => {});
-      }
-      // Finalize the call row server-side. The kiosk normally owns this, but if
-      // it crashed mid-call (the `user-left` that triggered this handler), it
-      // never will — so close it here. Idempotent server-side if the kiosk wins.
-      await fetch(`/api/calls/${callId}/end-video`, { method: "POST" }).catch(() => {});
+    // reach here. Tear down video + finalize the row exactly once; the call is over
+    // regardless. Then persist notes — and if that fails, keep the overlay mounted
+    // (in a "call ended — notes unsaved" state) so the typed text isn't lost.
+    if (!finalizingRef.current) {
+      finalizingRef.current = true;
+      await reliableFetch(
+        `/api/calls/${callId}/end-video`,
+        { method: "POST" },
+        { label: "calls.end_video" },
+      );
       audioRef.current?.close();
       videoRef.current?.close();
-      await clientRef.current?.leave();
-    } finally {
-      onClose();
+      await clientRef.current?.leave().catch(() => {});
     }
+    const ok = await saveNotes();
+    if (ok) onClose();
   }
 
   function toggleMute() {
@@ -158,6 +178,30 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         </div>
         <PlaybookPanel callId={callId} />
       </div>
+
+      {saveFailed && (
+        <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
+          <span className="flex gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void handleEnd()}
+              className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Retry"}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onClose}
+              className="rounded-button border border-border px-3 py-1 disabled:opacity-50"
+            >
+              Discard
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* control bar */}
       <div className="flex items-center gap-2 border-t border-border bg-card p-3">

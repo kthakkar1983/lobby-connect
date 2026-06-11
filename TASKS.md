@@ -15,6 +15,9 @@
 - [x] **H2** Fix owner portal showing dead agents as "Available" — `effectivePresence()` added to lib/voice/presence.ts; owner home fetches last_seen_at + bakes effective status into cards at read time. 3 new tests.
 - [x] **H3** Fix video answer race — `answer-video` UPDATE now uses `.select("id")`; zero rows → 409; ON_CALL write gated to winner only. 1 new test (concurrent-claim case). 351 tests total.
 
+### Interlude — Notes durability + error surfacing + owner Calls tab ✅
+- [x] **N1** `reliableFetch` helper (retry network/5xx + Sentry on exhaustion); call-notes save decoupled from call phase with a preserved-text Retry/Discard banner (softphone + video-call); `answered` / `emergency-control` (incl. observable live-911 mute) / `end-video` routed through it; emergency *trigger* stays bespoke + Sentry; 20s heartbeat best-effort by design. Owner Calls tab: note icon + inline accordion expand (shared `CallDetailBody`) + Audio/Video filter; property-page recent-calls parity. Branch `feat/notes-and-errors`, 7 commits, 360 tests. Spec/plan: `docs/specs/2026-06-10-notes-and-errors-design.md` · `docs/plans/2026-06-10-notes-and-errors.md`
+
 ### Phase 2 — Extract security/tenancy seams
 - [ ] **P2-1** Extract `lib/auth/api-actor.ts` — `requireApiActor()` + `fetchOperatorCall()` replacing 7+ hand-rolled preambles (also adds missing `profiles.active` check + OWNER reject on audio claim)
 - [ ] **P2-2** Extract `parseVerifiedTwilioWebhook()` into `lib/twilio/client.ts` + APOLOGY constant into `lib/voice/twiml.ts`
