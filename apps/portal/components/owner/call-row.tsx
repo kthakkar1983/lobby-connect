@@ -20,19 +20,19 @@ export function CallRow({ call }: { readonly call: CallRowData }) {
   const hasNotes = Boolean(detail.notes?.trim());
 
   return (
-    <div className="rounded-card border border-border bg-card shadow-sm">
+    <div className="rounded-card border border-border bg-card shadow-sm transition-colors hover:border-accent/40">
       <button
         type="button"
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:border-accent/40"
+        className="flex w-full items-center gap-3 p-3 text-left"
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-input bg-muted text-foreground">
           <Icon className="size-4" aria-hidden="true" />
         </span>
         {hasNotes && (
-          <StickyNote className="size-3.5 shrink-0 text-text-muted" aria-label="Has notes" />
+          <StickyNote className="size-3.5 shrink-0 text-text-muted" role="img" aria-label="Has notes" />
         )}
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">

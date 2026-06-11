@@ -262,21 +262,29 @@ export function Softphone({ role }: SoftphoneProps) {
 
   const toggleMute = useCallback(() => {
     const next = !muted;
+    setMuted(next); // optimistic
     if (emergencyActiveRef.current) {
       // The agent's leg was redirected into the conference; the browser SDK can no
       // longer control it, so mute via the server-side Conference Participant API.
+      // On a live 911 call a wrong mute state matters, so report failures and
+      // revert the optimistic toggle if the server didn't take it.
       const id = callIdRef.current;
       if (id) {
-        void fetch(`/api/calls/${id}/emergency/control`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: next ? "mute" : "unmute" }),
-        }).catch(() => {});
+        void reliableFetch(
+          `/api/calls/${id}/emergency/control`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: next ? "mute" : "unmute" }),
+          },
+          { label: "emergency.control" },
+        ).then((res) => {
+          if (!res || !res.ok) setMuted((m) => (m === next ? !next : m));
+        });
       }
     } else {
       callRef.current?.mute(next);
     }
-    setMuted(next);
   }, [muted]);
 
   const triggerEmergency = useCallback(async () => {
