@@ -27,7 +27,7 @@
 **Files:**
 - Create: `apps/portal/lib/auth/session.ts`
 - Modify: `apps/portal/lib/auth/require-role.ts`
-- Modify: `apps/portal/app/(agent)/layout.tsx`, `apps/portal/app/(owner)/layout.tsx` (the agent dashboard page + admin overview also do a duplicate name read, but those files are fully rewritten in Tasks 2 and 4 — they drop the read there, to avoid editing the same file twice)
+- Modify: `apps/portal/app/(agent)/layout.tsx`, `apps/portal/app/(owner)/layout.tsx`, `apps/portal/app/(admin)/layout.tsx` (**all three role layouts** do the duplicate name read for their header `UserMenu`). The agent dashboard *page* + admin overview *page* also do one, but those files are fully rewritten in Tasks 2 and 4 — they drop the read there.
 - Test: `apps/portal/tests/lib/auth/session.test.ts` (new); keep `tests/lib/auth/require-role.test.ts` green
 
 - [ ] **Step 1: Write the failing test** — `tests/lib/auth/session.test.ts`
