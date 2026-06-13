@@ -27,14 +27,14 @@
 - [x] **P2-5** `diffFields()` + `emptyToNull()` → `lib/audit/diff.ts` (properties actions; `users/actions.ts` keeps bespoke per-field diffing by design)
 > Deferred follow-ups (non-blocking): harden `claimCall` to throw on DB error (task chip filed); `emptyToNull` dup in owner-properties actions; reaper builds finalize payload inline.
 
-### Phase 3 — Per-request caching & parallelization
-> **PR-A (P3-1/P3-3/P3-4/P3-5/P3-6) BUILT + opus whole-branch GO** on `feat/phase3-perf-parallelization` (`2b1b52c…af5423e`); 407 tests + lint + typecheck + `next build` green; **awaiting Kumar's local review → push/merge**. **PR-B = P3-2 voice restage** (opus, branch off `main` + prod voice smoke) NOT started. Spec/plan: `docs/specs/2026-06-12-phase3-perf-parallelization-design.md` · `docs/plans/2026-06-12-phase3-perf-parallelization.md`.
-- [~] **P3-1** Wrap session resolution in React `cache()` — one `getUser` + one profiles read per request (P1: ~half the RTT per poll tick) — *built (PR-A)*
-- [ ] **P3-2** `Promise.all` the Twilio incoming webhook 8→4 hops + detach the heartbeat (P4: guest-audible latency — most impactful perf win)
-- [ ] **P3-3** `Promise.all` owner home independent stages (P5: ~200–400ms avoidable per tick)
-- [ ] **P3-4** `Promise.all` agent layout independent stages (P8)
-- [ ] **P3-5** `unstable_cache` Sentry error count (P2: 4,320 calls/day/tab → once/min max)
-- [ ] **P3-6** Count queries instead of row-shipping on admin overview + `.limit()` on incidents + keyset pagination for owner calls (P6/P7/S4/S10)
+### Phase 3 — Per-request caching & parallelization ✅ SHIPPED (smoke pending)
+> **All 6 + the voice restage MERGED to `main` `37ff689` (`--no-ff`) + prod deploy `dpl_FNU5…` READY (2026-06-12).** Subagent-driven (per-task spec+quality review, opus on the voice route + opus whole-branch final = GO). 412 tests + lint + typecheck + `next build` green; **zero migrations**. **Prod smoke PENDING** (perf sanity + a live voice call — fresh chat). Spec/plan: `docs/specs/2026-06-12-phase3-perf-parallelization-design.md` · `docs/plans/2026-06-12-phase3-perf-parallelization.md`.
+- [x] **P3-1** React `cache()` session resolution (`lib/auth/session.ts`); `requireRole` widened (+full_name/email) → all 3 role layouts deduped (P1)
+- [x] **P3-2** Restage Twilio incoming webhook 8→4 hops + detach heartbeat (P4/S5 — guest-audible latency; opus, byte-identical)
+- [x] **P3-3** `Promise.all` owner home + tz count/last-call queries (P5)
+- [x] **P3-4** `cache()` agent coverage shared by layout + page (P8)
+- [x] **P3-5** `unstable_cache` Sentry error count, 60s (P2)
+- [x] **P3-6** Count queries on admin overview + owner home (P6, no 1000-cap); owner-calls keyset cursor pages (P7/S4/S10)
 
 ### Phase 4 — Encode scale invariants in Postgres/code
 - [ ] **P4-1** Cap `planDial` at 10 with deterministic priority + Sentry warn on truncation (S2: Twilio rejects >10 parallel nouns — breaks the entire call)
