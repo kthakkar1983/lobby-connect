@@ -7,7 +7,6 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { SkipLink } from "@/components/skip-link";
 import { UserMenu } from "@/components/user-menu";
-import { createServerClient } from "@/lib/supabase/server";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 
@@ -18,16 +17,6 @@ export default async function AdminLayout({
 }) {
   const profile = await requireRole("ADMIN");
 
-  // requireRole returns id/role/operator_id/active but we also need name + email
-  // for the header. One extra small query — cheap and avoids changing the
-  // requireRole signature for one consumer.
-  const supabase = await createServerClient();
-  const { data: identity } = await supabase
-    .from("profiles")
-    .select("full_name, email")
-    .eq("id", profile.id)
-    .maybeSingle();
-
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -37,9 +26,9 @@ export default async function AdminLayout({
           <div className="flex h-14 items-center justify-between px-4">
             <SidebarTrigger />
             <UserMenu
-              fullName={identity?.full_name ?? ""}
-              email={identity?.email ?? ""}
-              role={profile.role as "ADMIN"}
+              fullName={profile.full_name}
+              email={profile.email}
+              role="ADMIN"
             />
           </div>
           <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />

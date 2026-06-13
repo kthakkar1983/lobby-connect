@@ -20,12 +20,6 @@ export default async function AgentLayout({
   const actor = await requireRole("AGENT");
   const supabase = await createServerClient();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, email")
-    .eq("id", actor.id)
-    .maybeSingle();
-
   const { data: assignments } = await supabase
     .from("property_assignments")
     .select("property_id")
@@ -53,8 +47,8 @@ export default async function AgentLayout({
               <Wordmark />
             </Link>
             <UserMenu
-              fullName={profile?.full_name ?? "Agent"}
-              email={profile?.email ?? ""}
+              fullName={actor.full_name}
+              email={actor.email}
               role="AGENT"
             />
           </div>
