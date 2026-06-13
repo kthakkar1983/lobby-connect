@@ -19,7 +19,7 @@
 - [x] **N1** `reliableFetch` helper (retry network/5xx + Sentry on exhaustion); call-notes save decoupled from call phase with a preserved-text Retry/Discard banner (softphone + video-call); `answered` / `emergency-control` (incl. observable live-911 mute) / `end-video` routed through it; emergency *trigger* stays bespoke + Sentry; 20s heartbeat best-effort by design. Owner Calls tab: note icon + inline accordion expand (shared `CallDetailBody`) + Audio/Video filter; property-page recent-calls parity. Branch `feat/notes-and-errors`, 7 commits, 360 tests. Spec/plan: `docs/specs/2026-06-10-notes-and-errors-design.md` · `docs/plans/2026-06-10-notes-and-errors.md`
 
 ### Phase 2 — Extract security/tenancy seams ✅ DONE (PR #18 merged `7c553e8`)
-> Spec/plan: `docs/specs/2026-06-11-phase2-seam-extractions-design.md` · `docs/plans/2026-06-11-phase2-seam-extractions.md`. Brainstorm→spec→plan→subagent-driven (per-task spec+code review, opus on 911 + opus whole-branch final → GO). 411 tests. **Prod smoke pending** (audio answer, video answer+end, deactivated→403, OWNER→403 on `/answered`).
+> Spec/plan: `docs/specs/2026-06-11-phase2-seam-extractions-design.md` · `docs/plans/2026-06-11-phase2-seam-extractions.md`. Brainstorm→spec→plan→subagent-driven (per-task spec+code review, opus on 911 + opus whole-branch final → GO). 411 tests. **Prod smoke CONFIRMED** (Kumar, 2026-06-12): audio answer, video answer+end, deactivated→403, OWNER→403 on `/answered` — all good.
 - [x] **P2-1** `lib/auth/api-actor.ts` — `requireApiActor()` + `fetchOperatorCall()` across all 12 session routes; **behavior fixes:** `profiles.active`→403 gate + OWNER-reject on `/answered` (and agent `playbook`)
 - [x] **P2-2** `parseVerifiedTwilioWebhook()` (`lib/twilio/client.ts`) + `APOLOGY_MESSAGE`/`twimlResponse` (`lib/voice/twiml.ts`)
 - [x] **P2-3** `claimCall()` + `finalizeCallPayload()` + `ACTIVE_CALL_STATES` (`lib/voice/call-state.ts`) + `computeDurationSeconds()` (`lib/calls/duration.ts`) — `/answered` claim now H3-guarded too
@@ -28,7 +28,8 @@
 > Deferred follow-ups (non-blocking): harden `claimCall` to throw on DB error (task chip filed); `emptyToNull` dup in owner-properties actions; reaper builds finalize payload inline.
 
 ### Phase 3 — Per-request caching & parallelization
-- [ ] **P3-1** Wrap session resolution in React `cache()` — one `getUser` + one profiles read per request (P1: ~half the RTT per poll tick)
+> **PR-A (P3-1/P3-3/P3-4/P3-5/P3-6) BUILT + opus whole-branch GO** on `feat/phase3-perf-parallelization` (`2b1b52c…af5423e`); 407 tests + lint + typecheck + `next build` green; **awaiting Kumar's local review → push/merge**. **PR-B = P3-2 voice restage** (opus, branch off `main` + prod voice smoke) NOT started. Spec/plan: `docs/specs/2026-06-12-phase3-perf-parallelization-design.md` · `docs/plans/2026-06-12-phase3-perf-parallelization.md`.
+- [~] **P3-1** Wrap session resolution in React `cache()` — one `getUser` + one profiles read per request (P1: ~half the RTT per poll tick) — *built (PR-A)*
 - [ ] **P3-2** `Promise.all` the Twilio incoming webhook 8→4 hops + detach the heartbeat (P4: guest-audible latency — most impactful perf win)
 - [ ] **P3-3** `Promise.all` owner home independent stages (P5: ~200–400ms avoidable per tick)
 - [ ] **P3-4** `Promise.all` agent layout independent stages (P8)
@@ -59,7 +60,7 @@
 - [x] Kiosk ~120s video disconnect bug FIXED
 
 ### Still open
-- [ ] **Phase 2 prod smoke** (PR #18, after Vercel deploys `main`): audio answer (claim→IN_PROGRESS+ON_CALL), video answer+end (finalize+duration), deactivated-user→403, OWNER→403 on `/answered`
+- [x] **Phase 2 prod smoke** (PR #18) — ✅ CONFIRMED 2026-06-12: audio answer (claim→IN_PROGRESS+ON_CALL), video answer+end (finalize+duration), deactivated-user→403, OWNER→403 on `/answered`
 - [ ] Page-by-page final-polish pass (kiosk subtle shadows + bounce, one screen at a time; gate on prefers-reduced-motion; live in-browser a11y pass)
 - [ ] Visual confirm: Atelier headings + Radon labels on prod kiosk (esp. W-bearing hotel names)
 - [x] Save audit to repo: `docs/audits/2026-06-10-architecture-audit.md` (+ triage + methodology, `8cd551f`)
