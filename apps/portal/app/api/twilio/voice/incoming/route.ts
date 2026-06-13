@@ -37,79 +37,34 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const admin = createAdminClient({ timeoutMs: SUPABASE_TIMEOUT_MS });
 
-    // 1. Property by routing_did (active only).
+    // 1. Property gate (everything needs operator_id / property.id).
     const { data: property } = await admin
       .from("properties")
       .select("id, operator_id, active, name")
       .eq("routing_did", to)
       .maybeSingle();
-
     if (!property || !property.active) {
       return twimlResponse(buildNotInServiceTwiml(APOLOGY_MESSAGE));
     }
 
-    // Best-effort: record that Twilio reached us (off the critical path).
-    await recordHeartbeat(property.operator_id, "twilio_webhook");
+    // Best-effort heartbeat — detached so it never sits on the guest's critical path.
+    void recordHeartbeat(property.operator_id, "twilio_webhook").catch(() => {});
 
-    // 2. Idempotency: has this CallSid already been recorded?
-    const { data: existing } = await admin
-      .from("calls")
-      .select("id")
-      .eq("twilio_call_sid", callSid)
-      .maybeSingle();
-
-    // 3. Active primary agent (effective_until is null).
-    const { data: assignment } = await admin
-      .from("property_assignments")
-      .select("primary_agent_id")
-      .eq("property_id", property.id)
-      .is("effective_until", null)
-      .maybeSingle();
-
-    let primaryAgent: DialCandidate | null = null;
-    if (assignment?.primary_agent_id) {
-      const { data: agent } = await admin
-        .from("profiles")
-        .select("id, twilio_identity, active")
-        .eq("id", assignment.primary_agent_id)
-        .maybeSingle();
-      if (agent?.active && agent.twilio_identity) {
-        primaryAgent = { id: agent.id, twilioIdentity: agent.twilio_identity };
-      }
-    }
-
-    // 4. Admins accepting calls for this property.
-    const { data: availRows } = await admin
-      .from("admin_call_availability")
-      .select("profile_id")
-      .eq("property_id", property.id)
-      .eq("accepting_calls", true);
-
-    const availableAdmins: DialCandidate[] = [];
-    const availIds = (availRows ?? []).map(
-      (r: { profile_id: string }) => r.profile_id,
-    );
-    if (availIds.length > 0) {
-      const { data: admins } = await admin
-        .from("profiles")
-        .select("id, twilio_identity, active, role, operator_id")
-        .in("id", availIds)
-        .eq("active", true)
-        .eq("role", "ADMIN")
-        .eq("operator_id", property.operator_id);
-      for (const a of (admins ?? []) as Array<{
-        id: string;
-        twilio_identity: string | null;
-      }>) {
-        if (a.twilio_identity) {
-          availableAdmins.push({ id: a.id, twilioIdentity: a.twilio_identity });
-        }
-      }
-    }
+    // 2–4. Independent reads in parallel.
+    const [existing, primaryAgent, availableAdmins] = await Promise.all([
+      admin
+        .from("calls")
+        .select("id")
+        .eq("twilio_call_sid", callSid)
+        .maybeSingle()
+        .then((r) => r.data as { id: string } | null),
+      resolvePrimaryAgent(admin, property.id),
+      resolveAvailableAdmins(admin, property.id, property.operator_id),
+    ]);
 
     const targets = planDial({ primaryAgent, availableAdmins });
 
-    // 5. Record the call (idempotent on CallSid); capture its id for the TwiML callId.
+    // 5. Record the call (idempotent on CallSid).
     let callId = existing?.id ?? "";
     if (!existing) {
       const { data: inserted } = await admin
@@ -127,7 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       callId = inserted?.id ?? "";
     }
 
-    // 6. Return TwiML (apology if nobody reachable, else parallel dial).
+    // 6. TwiML.
     const actionUrl = `${new URL(publicUrlFromRequest(request)).origin}/api/twilio/voice/dial-result`;
     return twimlResponse(
       buildIncomingTwiml(targets, {
@@ -143,4 +98,49 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.error("[voice/incoming] unhandled error:", err);
     return twimlResponse(buildApologyTwiml(APOLOGY_MESSAGE));
   }
+}
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+// Today's exact query logic, lifted into named readers so the two 2-deep chains
+// run in parallel. Behavior-identical to the prior inline blocks.
+async function resolvePrimaryAgent(admin: Admin, propertyId: string): Promise<DialCandidate | null> {
+  const { data: assignment } = await admin
+    .from("property_assignments")
+    .select("primary_agent_id")
+    .eq("property_id", propertyId)
+    .is("effective_until", null)
+    .maybeSingle();
+  if (!assignment?.primary_agent_id) return null;
+  const { data: agent } = await admin
+    .from("profiles")
+    .select("id, twilio_identity, active")
+    .eq("id", assignment.primary_agent_id)
+    .maybeSingle();
+  if (agent?.active && agent.twilio_identity) {
+    return { id: agent.id, twilioIdentity: agent.twilio_identity };
+  }
+  return null;
+}
+
+async function resolveAvailableAdmins(admin: Admin, propertyId: string, operatorId: string): Promise<DialCandidate[]> {
+  const { data: availRows } = await admin
+    .from("admin_call_availability")
+    .select("profile_id")
+    .eq("property_id", propertyId)
+    .eq("accepting_calls", true);
+  const ids = (availRows ?? []).map((r: { profile_id: string }) => r.profile_id);
+  if (ids.length === 0) return [];
+  const { data: admins } = await admin
+    .from("profiles")
+    .select("id, twilio_identity, active, role, operator_id")
+    .in("id", ids)
+    .eq("active", true)
+    .eq("role", "ADMIN")
+    .eq("operator_id", operatorId);
+  const out: DialCandidate[] = [];
+  for (const a of (admins ?? []) as Array<{ id: string; twilio_identity: string | null }>) {
+    if (a.twilio_identity) out.push({ id: a.id, twilioIdentity: a.twilio_identity });
+  }
+  return out;
 }

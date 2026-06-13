@@ -24,6 +24,12 @@ vi.mock("@/lib/twilio/client", () => ({
   },
 }));
 
+const recordHeartbeat = vi.fn<() => Promise<void>>(() => Promise.resolve());
+vi.mock("@/lib/health/heartbeat", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recordHeartbeat: (...a: any[]) => (recordHeartbeat as any)(...a),
+}));
+
 // Per-table canned responses, settable per test.
 type Canned = {
   property?: unknown;
@@ -35,6 +41,10 @@ type Canned = {
   // When set, the first Supabase query rejects — simulates a hung/aborted
   // dependency (e.g. the AbortSignal.timeout fired on the admin client).
   throwOnQuery?: boolean;
+  // When set, the maybeSingle read for this specific table rejects — pins the
+  // Promise.all in-branch rejection path (a parallel read failing after the
+  // property gate already passed).
+  throwOnTable?: string;
 };
 let canned: Canned = {};
 const insertSpy = vi.fn<() => Promise<{ error: null }>>(
@@ -60,7 +70,7 @@ function makeAdminClient() {
         };
       };
       builder.maybeSingle = () => {
-        if (canned.throwOnQuery) {
+        if (canned.throwOnQuery || canned.throwOnTable === table) {
           return Promise.reject(
             new DOMException("The operation timed out.", "TimeoutError"),
           );
@@ -104,6 +114,8 @@ beforeEach(() => {
   canned = {};
   insertSpy.mockClear();
   validateTwilioSignature.mockReturnValue(true);
+  recordHeartbeat.mockReset();
+  recordHeartbeat.mockResolvedValue(undefined);
 });
 
 describe("POST /api/twilio/voice/incoming", () => {
@@ -187,5 +199,30 @@ describe("POST /api/twilio/voice/incoming", () => {
     expect(xml).toContain("<Say");
     expect(xml).toContain("<Hangup/>");
     expect(xml).not.toContain("<Dial");
+  });
+
+  it("does not let a failing heartbeat divert the response (detached, off critical path)", async () => {
+    recordHeartbeat.mockImplementationOnce(() => Promise.reject(new Error("boom")));
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
+    canned.assignment = { primary_agent_id: "a1" };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Identity>lc_a1</Identity>"); // dialed, not apology
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays apology when a parallel branch read rejects (Promise.all rejection path)", async () => {
+    // Property gate passes, but the primary-agent branch's read times out inside
+    // the Promise.all — the restage's one new failure path. Same outcome as a
+    // sequential-await throw: outer catch -> apology, no dial, no insert.
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
+    canned.throwOnTable = "property_assignments";
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Hangup/>");
+    expect(xml).not.toContain("<Dial");
+    expect(insertSpy).not.toHaveBeenCalled();
   });
 });
