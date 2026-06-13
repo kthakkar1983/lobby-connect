@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
-import { getRecentErrorCount } from "@/lib/sentry/errors";
+import { getCachedErrorCount } from "@/lib/sentry/errors";
 import {
   SIGNAL_SPECS,
   classifyHeartbeat,
@@ -36,7 +36,7 @@ export default async function AdminStatusPage() {
   }
 
   // Pull signal 2: Sentry issue count (null => degrade to link-only).
-  const errorCount = await getRecentErrorCount();
+  const errorCount = await getCachedErrorCount();
   const sentryUrl =
     process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
       ? `https://sentry.io/organizations/${process.env.SENTRY_ORG}/projects/${process.env.SENTRY_PROJECT}/`

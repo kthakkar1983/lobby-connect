@@ -967,3 +967,28 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 2. **Audit Phase 3** (perf/caching/parallelization) — mostly forward-scale (the 2026-06-06 readiness audit bucketed perf as ACCEPT-RISK); P3-2 (Twilio webhook hops = guest-audible latency) + P6 (silent 1000-row count truncation) are the pilot-relevant ones. Then **Phase 4** (scale invariants). Re-validate against triage before each (note: TASKS.md P4-7's "21 `href as never`" is stale — only 3 remain, all intentional nav forward-refs; P4-1/S2 + P4-10/S7 are triage-marked ACCEPT-RISK/DEFER-V2).
 3. **Deferred Phase-2 follow-ups:** `claimCall` throw-on-DB-error (task chip filed); `emptyToNull` dup in owner-properties actions; reaper finalize payload via `finalizeCallPayload`.
 4. Prod emergency is **911** (unchanged, safe).
+
+---
+
+## 2026-06-12 (session 19) — Phase 2 prod smoke CONFIRMED; Phase 3 re-validated (scope decision pending)
+
+**Phase 2 prod smoke = PASS** (Kumar, this session): audio answer, video answer+end, deactivated-user→403, OWNER→403 on `/answered` all working in prod "so far." PR #18 fully closed out — the last Phase-2 gate (voice/video) is cleared.
+
+**Phase 3 re-validated against the 2026-06-10 triage + CLAUDE.md locked decisions** (the documented pre-phase step). All 6 tasks (P3-1…P3-6) are genuine BUG-bucket findings — **none mis-marked** as intended features or locked-decision violations. But Phase 3 is **mostly forward-scale** (the 2026-06-06 readiness audit already bucketed perf as ACCEPT-RISK):
+- **Pilot-relevant — P3-2** (P4/S5: Twilio incoming webhook 8→4 hops + detach heartbeat): guest hears dead air today (250–650ms typical, 20s worst-case → Twilio ~15s webhook timeout = failed call). **Touches the live voice critical path → must be behavior-identical + prod voice smoke** (voice only testable on prod). The standout.
+- **Correctness-at-scale — P3-6**'s P6 count-query part (silent 1000-row JS count): real, but "breaks at ~25+ properties" = v2 scale, not pilot.
+- **Correctness-neutral RTT polish:** P3-1 (React `cache()` session), P3-3 (owner home `Promise.all`), P3-4 (agent layout `Promise.all`) — behavior-identical latency wins, low pilot impact.
+- **Triage ACCEPT-RISK polish (optional):** P3-5 (`unstable_cache` Sentry count), P3-6's keyset pagination (P7/S10). S4 = DEFER-V2.
+
+**Scope decision (Kumar): FULL Phase 3** — all 6 tasks P3-1…P3-6 via the usual brainstorm→spec→plan→subagent flow (declined the pilot-slice / reprioritize alternatives; doing the whole phase now).
+
+**Spec + plan committed** (`5c2f5ae` spec, `222c20e` plan) on branch `feat/phase3-perf-parallelization`; full superpowers chain (brainstorm → writing-plans → subagent-driven).
+
+**PR-A (safe batch: P3-1, P3-3, P3-4, P3-5, P3-6) — BUILT + opus whole-branch review = GO.** Commits `2b1b52c…af5423e`, each task TDD'd + spec-reviewed + quality-reviewed (subagent-driven, ~sonnet impl + reviews). Gate: **407 tests** (404 node + 3 jsdom) + lint + typecheck + `next build` all green. New pure helpers + tests: `lib/auth/session.ts` (`getSessionProfile` React `cache()`), `lib/auth/agent-coverage.ts` (`getAgentCoverage` cache), `lib/calls/today-window.ts` (`startOfTodayUtc`, shared by owner home + admin), `lib/owner/calls-cursor.ts` (keyset encode/decode/`.or()`). `requireRole` now returns `full_name`/`email` → all 3 role layouts + agent page + admin overview dropped their 2nd profiles read. Admin/owner-home counts → `{count, head:true}` (no row-ship, no 1000-cap). **One user-visible change:** owner Calls → 50-row cursor pages (← Newest / Older →). Reviews caught + fixed: the admin **layout** dedup (plan listed 2 of 3 role layouts); cursor `?before=` hardening (uuid + structural-char guard, also kills a multi-`~` edge); a `<nav aria-label>` landmark. **Non-blocking minors left:** 2 now-orphaned `summary.ts` helpers (`countTodayCalls`/`latestCallTime`, still tested); local `.next/types` stale-duplicate-file tsc quirk (gitignored — `rm -rf .next` clears it; CI/Vercel unaffected).
+
+**NOT pushed / NOT merged — Kumar is reviewing PR-A locally first (his call).**
+
+**PICK UP HERE:**
+1. **On Kumar's go:** push `feat/phase3-perf-parallelization` (preview deploy only — prod is main-only) + open PR-A; **then build PR-B = P3-2 voice restage** (opus, own branch off `main`) per plan Task 8 — restage the incoming webhook 8→4 hops + detach the heartbeat, keep routing/911 byte-identical; ends in a **prod voice smoke** (live inbound call → prompt ringback + answer → COMPLETED; no-answer → apology + `NO_ANSWER`) that needs Kumar.
+2. **If Kumar requests PR-A changes:** the branch + spec/plan are the source of truth; re-review the affected task.
+3. Prod emergency is **911** (unchanged, safe).

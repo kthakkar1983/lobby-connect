@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/require-role";
-import { createServerClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/user-menu";
 import { OwnerTopNav, OwnerBottomNav } from "@/components/owner/owner-nav";
 import { Wordmark } from "@/components/brand/wordmark";
@@ -12,13 +11,6 @@ export default async function OwnerLayout({
   readonly children: React.ReactNode;
 }) {
   const profile = await requireRole("OWNER");
-
-  const supabase = await createServerClient();
-  const { data: identity } = await supabase
-    .from("profiles")
-    .select("full_name, email")
-    .eq("id", profile.id)
-    .maybeSingle();
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -32,8 +24,8 @@ export default async function OwnerLayout({
             <OwnerTopNav />
           </div>
           <UserMenu
-            fullName={identity?.full_name ?? ""}
-            email={identity?.email ?? ""}
+            fullName={profile.full_name}
+            email={profile.email}
             role="OWNER"
           />
         </div>

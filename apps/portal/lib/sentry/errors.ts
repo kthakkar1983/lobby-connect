@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 
 // Count of unresolved issues in the last 24h, from the Sentry API. Server-only
 // (uses the auth token). Returns null on any missing-config / failure so the
@@ -27,3 +28,12 @@ export async function getRecentErrorCount(
     return null;
   }
 }
+
+// /admin/status refreshes every 20s; without this each tick (per tab) hit the
+// Sentry API. Cache the count for 60s so it's ~1 call/min regardless of viewers.
+// The card is ≤60s stale — fine for an at-a-glance health dot.
+export const getCachedErrorCount = unstable_cache(
+  async () => getRecentErrorCount(),
+  ["status:sentry-error-count"],
+  { revalidate: 60 },
+);

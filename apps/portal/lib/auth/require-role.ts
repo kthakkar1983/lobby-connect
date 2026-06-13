@@ -8,32 +8,13 @@
 
 import { redirect } from "next/navigation";
 import type { Role } from "@lc/shared";
-import { createServerClient } from "@/lib/supabase/server";
+import { getSessionProfile, type SessionProfile } from "@/lib/auth/session";
 
-export type RequiredProfile = {
-  id: string;
-  role: Role;
-  operator_id: string;
-  active: boolean;
-  must_change_password: boolean;
-};
+// Now includes full_name + email — additive, backward-compatible with all callers.
+export type RequiredProfile = SessionProfile;
 
 export async function requireRole(role: Role): Promise<RequiredProfile> {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/sign-in");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, operator_id, active, must_change_password")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getSessionProfile();
 
   if (!profile || !profile.active) {
     redirect("/sign-in");
