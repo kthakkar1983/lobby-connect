@@ -1,18 +1,49 @@
 import Link from "next/link";
 import { Building2, ChevronRight } from "lucide-react";
-import type { ProfileStatus } from "@lc/shared";
+import type { ProfileStatus, IncidentStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-import { presenceLabel, presenceDotClass, isLivePresence } from "@/lib/owner/format";
+import { presenceLabel, presenceDotClass, isLivePresence, formatTimeOnly } from "@/lib/owner/format";
 import { effectivePresence } from "@/lib/voice/presence";
-import { countTodayCalls, countOpenIncidents, latestCallTime } from "@/lib/owner/summary";
+import { countOpenIncidents } from "@/lib/owner/summary";
+import { startOfTodayUtc } from "@/lib/calls/today-window";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Greeting } from "@/components/owner/greeting";
 import { StatTile } from "@/components/owner/stat-tile";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
+
+type SupabaseServer = Awaited<ReturnType<typeof createServerClient>>;
+
+async function resolveAgents(
+  supabase: SupabaseServer,
+  propIds: string[],
+  now: Date,
+): Promise<Map<string, { full_name: string; status: ProfileStatus }>> {
+  const out = new Map<string, { full_name: string; status: ProfileStatus }>();
+  if (propIds.length === 0) return out;
+  const { data: assignments } = await supabase
+    .from("property_assignments")
+    .select("property_id, primary_agent_id")
+    .in("property_id", propIds)
+    .is("effective_until", null);
+  const agentIds = [...new Set((assignments ?? []).map((a) => a.primary_agent_id))];
+  const raw = new Map<string, { full_name: string; status: ProfileStatus; last_seen_at: string | null }>();
+  if (agentIds.length > 0) {
+    const { data: agents } = await supabase
+      .from("profiles")
+      .select("id, full_name, status, last_seen_at")
+      .in("id", agentIds);
+    for (const a of agents ?? []) raw.set(a.id, { full_name: a.full_name, status: a.status, last_seen_at: a.last_seen_at });
+  }
+  for (const a of assignments ?? []) {
+    const r = raw.get(a.primary_agent_id);
+    if (r) out.set(a.property_id, { full_name: r.full_name, status: effectivePresence(r.status, r.last_seen_at, now.getTime()) });
+  }
+  return out;
+}
 
 export default async function OwnerHomePage() {
   const actor = await requireRole("OWNER");
@@ -30,68 +61,49 @@ export default async function OwnerHomePage() {
   const props = properties ?? [];
   const propIds = props.map((p) => p.id);
 
-  // Active assignments → agent presence (2-query pattern).
-  const agentByProperty = new Map<string, { full_name: string; status: ProfileStatus }>();
-  if (propIds.length > 0) {
-    const { data: assignments } = await supabase
-      .from("property_assignments")
-      .select("property_id, primary_agent_id")
-      .in("property_id", propIds)
-      .is("effective_until", null);
+  const [agentByProperty, perProperty, openRows] = await Promise.all([
+    resolveAgents(supabase, propIds, now),
+    Promise.all(
+      props.map(async (p) => {
+        const [{ count }, { data: last }] = await Promise.all([
+          supabase
+            .from("calls")
+            .select("id", { count: "exact", head: true })
+            .eq("property_id", p.id)
+            .gte("ring_started_at", startOfTodayUtc(p.timezone, now)),
+          supabase
+            .from("calls")
+            .select("ring_started_at")
+            .eq("property_id", p.id)
+            .order("ring_started_at", { ascending: false })
+            .limit(1),
+        ]);
+        return {
+          id: p.id,
+          todayCount: count ?? 0,
+          lastCall: last && last[0] ? formatTimeOnly(last[0].ring_started_at, p.timezone) : "—",
+        };
+      }),
+    ),
+    propIds.length
+      ? supabase.from("incidents").select("property_id, status").in("property_id", propIds).neq("status", "RESOLVED")
+      : Promise.resolve({ data: [] as { property_id: string; status: IncidentStatus }[] }),
+  ]);
 
-    const agentIds = [...new Set((assignments ?? []).map((a) => a.primary_agent_id))];
-    const agentMap = new Map<string, { full_name: string; status: ProfileStatus; last_seen_at: string | null }>();
-    if (agentIds.length > 0) {
-      const { data: agents } = await supabase
-        .from("profiles")
-        .select("id, full_name, status, last_seen_at")
-        .in("id", agentIds);
-      for (const a of agents ?? []) {
-        agentMap.set(a.id, { full_name: a.full_name, status: a.status, last_seen_at: a.last_seen_at });
-      }
-    }
-    for (const a of assignments ?? []) {
-      const raw = agentMap.get(a.primary_agent_id);
-      if (raw) {
-        // Bake effective presence at read time so stale agents show OFFLINE,
-        // not whatever frozen status the daily cron hasn't swept yet.
-        const status = effectivePresence(raw.status, raw.last_seen_at, now.getTime());
-        agentByProperty.set(a.property_id, { full_name: raw.full_name, status });
-      }
-    }
-  }
-
-  // Recent calls (48h window covers any tz day boundary) + open incidents.
-  const since = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
-  const { data: recentCalls } = propIds.length
-    ? await supabase
-        .from("calls")
-        .select("property_id, ring_started_at")
-        .in("property_id", propIds)
-        .gte("ring_started_at", since)
-    : { data: [] };
-  const { data: openIncidents } = propIds.length
-    ? await supabase
-        .from("incidents")
-        .select("property_id, status")
-        .in("property_id", propIds)
-        .neq("status", "RESOLVED")
-    : { data: [] };
+  const statByProperty = new Map(perProperty.map((s) => [s.id, s]));
+  const openIncidents = openRows.data ?? [];
 
   const cards = props.map((p) => {
     const agent = agentByProperty.get(p.id) ?? null;
-    const propCalls = (recentCalls ?? []).filter((c) => c.property_id === p.id);
-    const todayCount = countTodayCalls(propCalls, p.timezone, now);
-    const openCount = countOpenIncidents(
-      (openIncidents ?? []).filter((i) => i.property_id === p.id),
-    );
+    const stat = statByProperty.get(p.id);
+    const openCount = countOpenIncidents(openIncidents.filter((i) => i.property_id === p.id));
     return {
       id: p.id,
       name: p.name,
       agent,
-      todayCount,
+      todayCount: stat?.todayCount ?? 0,
       openCount,
-      lastCall: latestCallTime(propCalls, p.timezone) ?? "—",
+      lastCall: stat?.lastCall ?? "—",
       live: agent ? isLivePresence(agent.status) : false,
     };
   });
