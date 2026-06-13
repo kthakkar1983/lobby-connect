@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { SkipLink } from "@/components/skip-link";
 import { requireRole } from "@/lib/auth/require-role";
-import { createServerClient } from "@/lib/supabase/server";
+import { getAgentCoverage } from "@/lib/auth/agent-coverage";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 import { Wordmark } from "@/components/brand/wordmark";
@@ -18,24 +18,7 @@ export default async function AgentLayout({
   readonly children: React.ReactNode;
 }) {
   const actor = await requireRole("AGENT");
-  const supabase = await createServerClient();
-
-  const { data: assignments } = await supabase
-    .from("property_assignments")
-    .select("property_id")
-    .eq("primary_agent_id", actor.id)
-    .is("effective_until", null);
-
-  const ids = (assignments ?? []).map((a) => a.property_id);
-  let coverage: { id: string; name: string }[] = [];
-  if (ids.length > 0) {
-    const { data: props } = await supabase
-      .from("properties")
-      .select("id, name")
-      .in("id", ids)
-      .order("name");
-    coverage = (props ?? []) as typeof coverage;
-  }
+  const { properties: coverage } = await getAgentCoverage(actor.id);
 
   return (
     <LineStatusProvider>
