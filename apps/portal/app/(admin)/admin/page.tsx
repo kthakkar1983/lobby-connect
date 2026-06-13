@@ -12,8 +12,8 @@ import {
 import { StatTile } from "@/components/owner/stat-tile";
 import { GreetingLine } from "@/components/dashboard/greeting-line";
 import { AvailabilityToggle } from "./availability-cards";
-import { countToday } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
+import { startOfTodayUtc } from "@/lib/calls/today-window";
 import { presenceDotClass, presenceLabel } from "@/lib/owner/format";
 import { isStale } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
@@ -23,22 +23,15 @@ export default async function AdminOverviewPage() {
   const actor = await requireRole("ADMIN");
   const supabase = await createServerClient();
   const now = new Date();
-  const since = new Date(now.getTime() - 48 * 3600_000).toISOString();
 
+  // Stage 1 — operator-scoped reads, independent of property ids.
   const [
-    { data: me },
     { data: properties },
     { data: agents },
-    { data: incidents },
+    { count: openIncidents },
     { data: avail },
     { data: assigns },
-    { data: calls },
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", actor.id)
-      .maybeSingle(),
     supabase
       .from("properties")
       .select("id, name, timezone")
@@ -53,7 +46,7 @@ export default async function AdminOverviewPage() {
       .eq("active", true),
     supabase
       .from("incidents")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("operator_id", actor.operator_id)
       .eq("status", "OPEN"),
     supabase
@@ -65,13 +58,26 @@ export default async function AdminOverviewPage() {
       .select("property_id, primary_agent_id")
       .eq("operator_id", actor.operator_id)
       .is("effective_until", null),
-    supabase
-      .from("calls")
-      .select("property_id, ring_started_at")
-      .eq("operator_id", actor.operator_id)
-      .gte("ring_started_at", since),
   ]);
 
+  const props = properties ?? [];
+
+  // Stage 2 — per-property "today" counts (count queries; tz-aware window).
+  const todayCounts = new Map<string, number>(
+    await Promise.all(
+      props.map(async (p) => {
+        const { count } = await supabase
+          .from("calls")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", p.id)
+          .gte("ring_started_at", startOfTodayUtc(p.timezone, now));
+        return [p.id, count ?? 0] as [string, number];
+      }),
+    ),
+  );
+  const callsToday = [...todayCounts.values()].reduce((a, b) => a + b, 0);
+
+  // Agent profiles (2-query pattern) — unchanged.
   const agentIds = [...new Set((assigns ?? []).map((a) => a.primary_agent_id))];
   let agentProfiles: { id: string; full_name: string; status: ProfileStatus; last_seen_at: string | null }[] =
     [];
@@ -84,20 +90,10 @@ export default async function AdminOverviewPage() {
   }
   const profileById = new Map(agentProfiles.map((p) => [p.id, p]));
 
-  const props = properties ?? [];
-  const tzById = new Map(props.map((p) => [p.id, p.timezone]));
-  const callsWithTz = (calls ?? []).map((c) => ({
-    property_id: c.property_id,
-    ring_started_at: c.ring_started_at,
-    timeZone: tzById.get(c.property_id) ?? "UTC",
-  }));
-
   const onlineAgents = countOnlineAgents(
     (agents ?? []) as { status: ProfileStatus; last_seen_at: string | null }[],
     now.getTime(),
   );
-  const callsToday = countToday(callsWithTz, now);
-  const openIncidents = (incidents ?? []).length;
   const acceptingMap = new Map(
     (avail ?? []).map((a) => [a.property_id, a.accepting_calls]),
   );
@@ -108,13 +104,9 @@ export default async function AdminOverviewPage() {
       profileById.get(a.primary_agent_id) ?? null,
     ]),
   );
-  const todayByProperty = (id: string) =>
-    countToday(
-      callsWithTz.filter((c) => c.property_id === id),
-      now,
-    );
+  const todayByProperty = (id: string) => todayCounts.get(id) ?? 0;
 
-  const firstName = (me?.full_name ?? "Admin").split(/\s+/)[0] ?? "Admin";
+  const firstName = (actor.full_name || "Admin").split(/\s+/)[0] ?? "Admin";
 
   return (
     <div className="flex flex-col gap-6">
@@ -130,9 +122,9 @@ export default async function AdminOverviewPage() {
         <StatTile value={onlineAgents} label="Agents online" />
         <StatTile value={callsToday} label="Calls today" />
         <StatTile
-          value={openIncidents}
+          value={openIncidents ?? 0}
           label="Open incidents"
-          alert={openIncidents > 0}
+          alert={(openIncidents ?? 0) > 0}
         />
         <StatTile value={`${acceptingCount}/${props.length}`} label="Accepting" />
       </div>
