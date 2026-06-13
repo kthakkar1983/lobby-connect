@@ -11,15 +11,17 @@ import { copy } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
 import type { CallChannel } from "@lc/shared";
+import { encodeCursor, decodeCursor, keysetOrFilter } from "@/lib/owner/calls-cursor";
 
-const DEFAULT_LIMIT = 50;
+const PAGE_SIZE = 50;
 
 export default async function OwnerCallsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string; limit?: string; channel?: string }>;
+  searchParams: Promise<{ property?: string; before?: string; channel?: string }>;
 }) {
-  const { property, limit: limitParam, channel: channelParam } = await searchParams;
+  const { property, before, channel: channelParam } = await searchParams;
+  const cursor = decodeCursor(before);
   const activeChannel: CallChannel | null =
     channelParam === "AUDIO" || channelParam === "VIDEO" ? channelParam : null;
   const actor = await requireRole("OWNER");
@@ -37,21 +39,21 @@ export default async function OwnerCallsPage({
   const nameById = new Map(props.map((p) => [p.id, p.name]));
   const multiProperty = props.length > 1;
   const activeProperty = property && tzById.has(property) ? property : null;
-  const limit = Math.min(
-    Math.max(Number(limitParam) || DEFAULT_LIMIT, DEFAULT_LIMIT),
-    500,
-  );
 
   const propIds = props.map((p) => p.id);
 
   let callsQuery = supabase
     .from("calls")
     .select(
-      "id, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
+      "id, created_at, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
     )
     // created_at is index-backed and monotonic with ring_started_at at insert.
+    // id tiebreaker gives a stable total order for keyset pagination.
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("id", { ascending: false })
+    .limit(PAGE_SIZE);
+
+  if (cursor) callsQuery = callsQuery.or(keysetOrFilter(cursor));
 
   if (activeProperty) {
     callsQuery = callsQuery.eq("property_id", activeProperty);
@@ -99,17 +101,19 @@ export default async function OwnerCallsPage({
     }
   }
 
-  const buildHref = (next: { property?: string | null; channel?: CallChannel | null; limit?: number }) => {
+  const buildHref = (next: { property?: string | null; channel?: CallChannel | null; before?: string | null }) => {
     const sp = new URLSearchParams();
     const p = next.property === undefined ? activeProperty : next.property;
     const ch = next.channel === undefined ? activeChannel : next.channel;
     if (p) sp.set("property", p);
     if (ch) sp.set("channel", ch);
-    if (next.limit) sp.set("limit", String(next.limit));
+    if (next.before) sp.set("before", next.before);
     const qs = sp.toString();
     return `/owner/calls${qs ? `?${qs}` : ""}`;
   };
-  const moreHref = buildHref({ limit: limit + DEFAULT_LIMIT });
+  const lastRow = rows[rows.length - 1];
+  const olderHref = lastRow ? buildHref({ before: encodeCursor({ created_at: lastRow.created_at, id: lastRow.id }) }) : null;
+  const newestHref = buildHref({ before: null });
 
   const now = new Date();
   // Build display rows + group them by day label (rows already sorted desc).
@@ -228,11 +232,18 @@ export default async function OwnerCallsPage({
         </div>
       )}
 
-      {rows.length === limit && (
-        <Button asChild variant="outline" className="self-center">
-          <Link href={moreHref as never}>Load more</Link>
-        </Button>
-      )}
+      <nav aria-label="Call history pages" className="flex items-center justify-between">
+        {cursor ? (
+          <Button asChild variant="ghost" size="sm">
+            <Link href={newestHref as never} aria-label="Go to newest calls">← Newest</Link>
+          </Button>
+        ) : <span />}
+        {rows.length === PAGE_SIZE && olderHref ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={olderHref as never} aria-label="Go to older calls">Older →</Link>
+          </Button>
+        ) : <span />}
+      </nav>
     </div>
   );
 }
