@@ -39,7 +39,7 @@ export function AuditTable({
   hasMore,
 }: {
   readonly rows: AuditTableRow[];
-  readonly actions: string[];
+  readonly actions: readonly string[];
   readonly activeAction: string | null;
   readonly limit: number;
   readonly hasMore: boolean;
