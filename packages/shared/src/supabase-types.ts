@@ -1,14 +1,16 @@
 // packages/shared/src/supabase-types.ts
 //
-// Hand-written types matching the shape of `supabase gen types typescript`.
-// When a remote Supabase project is linked, regenerate this file via:
-//   pnpm supabase gen types typescript --linked > packages/shared/src/supabase-types.ts
-// Until then, keep this file in sync with supabase/migrations/*.sql by hand.
+// Curated overlay over the machine-generated DB structure (database.generated.ts,
+// produced by `pnpm gen:types`). The generator types CHECK-constrained text
+// columns as plain `string`; this overlay re-narrows them to the curated unions
+// the app relies on, using type-fest's MergeDeep (the Supabase-documented pattern).
+// Regenerate the base with `pnpm gen:types`; the drift check enforces it in CI.
+import type { MergeDeep } from "type-fest";
+import type { Database as Generated } from "./database.generated";
 
 // =============================================================================
 // String-union types for CHECK-constrained columns
 // =============================================================================
-
 export type Role = "AGENT" | "ADMIN" | "OWNER";
 export type ProfileStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
 export type CallChannel = "AUDIO" | "VIDEO";
@@ -25,462 +27,68 @@ export type IncidentStatus = "OPEN" | "RESOLVED";
 export type KioskCtaStyle = "warm" | "accent" | "classic";
 
 // =============================================================================
-// Generic JSON helper (mirrors what gen types emits)
+// Database — generated structure with curated column overrides
 // =============================================================================
-
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
-
-// =============================================================================
-// Database — top-level type, mirrors `supabase gen types` shape
-// =============================================================================
-
-export type Database = {
+// MergeDeep re-narrows only the CHECK-constrained columns the generator widened
+// to `string`. Every other table/column (and the graphql_public schema) passes
+// through from the generated base unchanged.
+type ColumnOverrides = {
   public: {
     Tables: {
-      operators: {
-        Row: {
-          id: string;
-          name: string;
-          slug: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          slug: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          slug?: string;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       profiles: {
-        Row: {
-          id: string;
-          operator_id: string;
-          role: Role;
-          full_name: string;
-          email: string;
-          twilio_identity: string | null;
-          status: ProfileStatus;
-          active: boolean;
-          must_change_password: boolean;
-          mfa_secret: string | null;
-          last_seen_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id: string;
-          operator_id: string;
-          role: Role;
-          full_name: string;
-          email: string;
-          twilio_identity?: string | null;
-          status?: ProfileStatus;
-          active?: boolean;
-          must_change_password?: boolean;
-          mfa_secret?: string | null;
-          last_seen_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          operator_id?: string;
-          role?: Role;
-          full_name?: string;
-          email?: string;
-          twilio_identity?: string | null;
-          status?: ProfileStatus;
-          active?: boolean;
-          must_change_password?: boolean;
-          mfa_secret?: string | null;
-          last_seen_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      properties: {
-        Row: {
-          id: string;
-          operator_id: string;
-          name: string;
-          owner_user_id: string | null;
-          timezone: string;
-          routing_did: string | null;
-          property_phone_number: string | null;
-          after_hours_support_phone: string | null;
-          playbook_pdf_url: string | null;
-          playbook_version: number | null;
-          logo_url: string | null;
-          kiosk_welcome_message: string | null;
-          kiosk_apology_message: string | null;
-          kiosk_welcome_heading: string | null;
-          kiosk_checkin_time: string | null;
-          kiosk_checkout_time: string | null;
-          kiosk_wifi_network: string | null;
-          kiosk_wifi_password: string | null;
-          kiosk_breakfast_hours: string | null;
-          kiosk_cta_style: KioskCtaStyle;
-          geocoded_lat: number | null;
-          geocoded_long: number | null;
-          active: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          operator_id: string;
-          name: string;
-          owner_user_id?: string | null;
-          timezone: string;
-          routing_did?: string | null;
-          property_phone_number?: string | null;
-          after_hours_support_phone?: string | null;
-          playbook_pdf_url?: string | null;
-          playbook_version?: number | null;
-          logo_url?: string | null;
-          kiosk_welcome_message?: string | null;
-          kiosk_apology_message?: string | null;
-          kiosk_welcome_heading?: string | null;
-          kiosk_checkin_time?: string | null;
-          kiosk_checkout_time?: string | null;
-          kiosk_wifi_network?: string | null;
-          kiosk_wifi_password?: string | null;
-          kiosk_breakfast_hours?: string | null;
-          kiosk_cta_style?: KioskCtaStyle;
-          geocoded_lat?: number | null;
-          geocoded_long?: number | null;
-          active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          operator_id?: string;
-          name?: string;
-          owner_user_id?: string | null;
-          timezone?: string;
-          routing_did?: string | null;
-          property_phone_number?: string | null;
-          after_hours_support_phone?: string | null;
-          playbook_pdf_url?: string | null;
-          playbook_version?: number | null;
-          logo_url?: string | null;
-          kiosk_welcome_message?: string | null;
-          kiosk_apology_message?: string | null;
-          kiosk_welcome_heading?: string | null;
-          kiosk_checkin_time?: string | null;
-          kiosk_checkout_time?: string | null;
-          kiosk_wifi_network?: string | null;
-          kiosk_wifi_password?: string | null;
-          kiosk_breakfast_hours?: string | null;
-          kiosk_cta_style?: KioskCtaStyle;
-          geocoded_lat?: number | null;
-          geocoded_long?: number | null;
-          active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      property_assignments: {
-        Row: {
-          id: string;
-          operator_id: string;
-          property_id: string;
-          primary_agent_id: string;
-          backup_agent_id: string | null;
-          effective_from: string;
-          effective_until: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          operator_id: string;
-          property_id: string;
-          primary_agent_id: string;
-          backup_agent_id?: string | null;
-          effective_from?: string;
-          effective_until?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          operator_id?: string;
-          property_id?: string;
-          primary_agent_id?: string;
-          backup_agent_id?: string | null;
-          effective_from?: string;
-          effective_until?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
-      admin_call_availability: {
-        Row: {
-          profile_id: string;
-          property_id: string;
-          operator_id: string;
-          accepting_calls: boolean;
-          updated_at: string;
-        };
-        Insert: {
-          profile_id: string;
-          property_id: string;
-          operator_id: string;
-          accepting_calls?: boolean;
-          updated_at?: string;
-        };
-        Update: {
-          profile_id?: string;
-          property_id?: string;
-          operator_id?: string;
-          accepting_calls?: boolean;
-          updated_at?: string;
-        };
-        Relationships: [];
+        Row: { role: Role; status: ProfileStatus };
+        Insert: { role: Role; status?: ProfileStatus };
+        Update: { role?: Role; status?: ProfileStatus };
       };
       calls: {
-        Row: {
-          id: string;
-          operator_id: string;
-          property_id: string;
-          channel: CallChannel;
-          state: CallState;
-          twilio_call_sid: string | null;
-          agora_channel_name: string | null;
-          caller_number: string | null;
-          handled_by_user_id: string | null;
-          room_number: string | null;
-          ring_started_at: string;
-          answered_at: string | null;
-          ended_at: string | null;
-          duration_seconds: number | null;
-          recording_url: string | null;
-          recording_sid: string | null;
-          flagged_for_review: boolean;
-          notes: string | null;
-          emergency_conference_name: string | null;
-          emergency_agent_call_sid: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          operator_id: string;
-          property_id: string;
-          channel: CallChannel;
-          state: CallState;
-          twilio_call_sid?: string | null;
-          agora_channel_name?: string | null;
-          caller_number?: string | null;
-          handled_by_user_id?: string | null;
-          room_number?: string | null;
-          ring_started_at?: string;
-          answered_at?: string | null;
-          ended_at?: string | null;
-          duration_seconds?: number | null;
-          recording_url?: string | null;
-          recording_sid?: string | null;
-          flagged_for_review?: boolean;
-          notes?: string | null;
-          emergency_conference_name?: string | null;
-          emergency_agent_call_sid?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          operator_id?: string;
-          property_id?: string;
-          channel?: CallChannel;
-          state?: CallState;
-          twilio_call_sid?: string | null;
-          agora_channel_name?: string | null;
-          caller_number?: string | null;
-          handled_by_user_id?: string | null;
-          room_number?: string | null;
-          ring_started_at?: string;
-          answered_at?: string | null;
-          ended_at?: string | null;
-          duration_seconds?: number | null;
-          recording_url?: string | null;
-          recording_sid?: string | null;
-          flagged_for_review?: boolean;
-          notes?: string | null;
-          emergency_conference_name?: string | null;
-          emergency_agent_call_sid?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
+        Row: { channel: CallChannel; state: CallState };
+        Insert: { channel: CallChannel; state: CallState };
+        Update: { channel?: CallChannel; state?: CallState };
       };
       audit_logs: {
-        Row: {
-          id: string;
-          operator_id: string;
-          actor_user_id: string | null;
-          actor_type: ActorType;
-          action: string;
-          entity_type: string;
-          entity_id: string | null;
-          details: Json | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          operator_id: string;
-          actor_user_id?: string | null;
-          actor_type: ActorType;
-          action: string;
-          entity_type: string;
-          entity_id?: string | null;
-          details?: Json | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          operator_id?: string;
-          actor_user_id?: string | null;
-          actor_type?: ActorType;
-          action?: string;
-          entity_type?: string;
-          entity_id?: string | null;
-          details?: Json | null;
-          created_at?: string;
-        };
-        Relationships: [];
+        Row: { actor_type: ActorType };
+        Insert: { actor_type?: ActorType };
+        Update: { actor_type?: ActorType };
       };
       incidents: {
         Row: {
-          id: string;
-          operator_id: string;
-          property_id: string;
-          call_id: string | null;
-          triggered_by: string | null;
           severity: IncidentSeverity;
           kind: IncidentKind;
-          dispatched_to: string;
-          conference_name: string | null;
-          conference_sid: string | null;
-          emergency_call_sid: string | null;
           status: IncidentStatus;
-          notes: string | null;
-          resolution_note: string | null;
-          created_at: string;
-          resolved_at: string | null;
         };
         Insert: {
-          id?: string;
-          operator_id: string;
-          property_id: string;
-          call_id?: string | null;
-          triggered_by?: string | null;
           severity?: IncidentSeverity;
           kind?: IncidentKind;
-          dispatched_to: string;
-          conference_name?: string | null;
-          conference_sid?: string | null;
-          emergency_call_sid?: string | null;
           status?: IncidentStatus;
-          notes?: string | null;
-          resolution_note?: string | null;
-          created_at?: string;
-          resolved_at?: string | null;
         };
         Update: {
-          id?: string;
-          operator_id?: string;
-          property_id?: string;
-          call_id?: string | null;
-          triggered_by?: string | null;
           severity?: IncidentSeverity;
           kind?: IncidentKind;
-          dispatched_to?: string;
-          conference_name?: string | null;
-          conference_sid?: string | null;
-          emergency_call_sid?: string | null;
           status?: IncidentStatus;
-          notes?: string | null;
-          resolution_note?: string | null;
-          created_at?: string;
-          resolved_at?: string | null;
         };
-        Relationships: [];
       };
-      operator_settings: {
-        Row: {
-          operator_id: string;
-          key: string;
-          value: string;
-          updated_at: string;
-        };
-        Insert: {
-          operator_id: string;
-          key: string;
-          value: string;
-          updated_at?: string;
-        };
-        Update: {
-          operator_id?: string;
-          key?: string;
-          value?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      health_signals: {
-        Row: {
-          operator_id: string;
-          signal: string;
-          last_ok_at: string | null;
-          details: Json | null;
-          updated_at: string;
-        };
-        Insert: {
-          operator_id: string;
-          signal: string;
-          last_ok_at?: string | null;
-          details?: Json | null;
-          updated_at?: string;
-        };
-        Update: {
-          operator_id?: string;
-          signal?: string;
-          last_ok_at?: string | null;
-          details?: Json | null;
-          updated_at?: string;
-        };
-        Relationships: [];
+      properties: {
+        Row: { kiosk_cta_style: KioskCtaStyle };
+        Insert: { kiosk_cta_style?: KioskCtaStyle };
+        Update: { kiosk_cta_style?: KioskCtaStyle };
       };
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
   };
 };
 
-// =============================================================================
-// Convenience aliases
-// =============================================================================
+export type Database = MergeDeep<Generated, ColumnOverrides>;
 
+export type { Json } from "./database.generated";
+
+// =============================================================================
+// Convenience aliases (unchanged public surface)
+// =============================================================================
+// Defined over the MERGED Database (not the generated helpers) so the curated
+// column narrowing flows through to every consumer.
 export type Tables<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Row"];
-
 export type TablesInsert<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Insert"];
-
 export type TablesUpdate<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Update"];
 

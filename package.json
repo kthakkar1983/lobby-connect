@@ -17,6 +17,8 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "gen:types": "supabase gen types typescript --local > packages/shared/src/database.generated.ts && prettier --write packages/shared/src/database.generated.ts",
+    "gen:types:check": "node scripts/check-types-drift.mjs",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop"
   },
