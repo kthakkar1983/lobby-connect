@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 import { RING_WINDOW_SECONDS } from "@lc/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -62,7 +63,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       resolveAvailableAdmins(admin, property.id, property.operator_id),
     ]);
 
-    const targets = planDial({ primaryAgent, availableAdmins });
+    const { targets, droppedCount } = planDial({ primaryAgent, availableAdmins });
+    if (droppedCount > 0) {
+      Sentry.captureMessage(
+        `Dial fan-out capped at ${targets.length}; ${droppedCount} candidate(s) dropped (property ${property.id})`,
+        "warning",
+      );
+    }
 
     // 5. Record the call (idempotent on CallSid).
     let callId = existing?.id ?? "";
