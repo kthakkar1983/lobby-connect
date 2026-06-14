@@ -9,6 +9,8 @@ vi.mock("@/lib/supabase/server", () => ({
 const updateSpy = vi.fn((_v: unknown) => ({ eq: () => Promise.resolve({ error: null }) }));
 // Rows the simulated `calls` query returns for the on-call lookup.
 let videoCallRows: unknown[] = [];
+// Spy to capture the .gte("answered_at", ...) call added by the S3 fix.
+const gteSpy = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -16,6 +18,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         const chain = {
           select: () => chain,
           eq: () => chain,
+          gte: (...args: unknown[]) => { gteSpy(...args); return chain; },
           limit: () => Promise.resolve({ data: videoCallRows, error: null }),
         };
         return chain;
@@ -51,6 +54,7 @@ function req(body: unknown) {
 beforeEach(() => {
   getUser.mockReset();
   updateSpy.mockClear();
+  gteSpy.mockClear();
   videoCallRows = [];
 });
 
@@ -105,5 +109,44 @@ describe("POST /api/presence", () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ status: "AWAY" }),
     );
+  });
+});
+
+describe("presence ON_CALL inference is time-bounded (S3)", () => {
+  it("calls .gte('answered_at', ...) to bound the live-video query", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    videoCallRows = [];
+    await POST(req({ status: "AVAILABLE" }));
+    // The route must bound the live-video call query with a freshSince cutoff so
+    // a leaked IN_PROGRESS row from a crashed kiosk cannot pin the agent ON_CALL
+    // indefinitely (bug S3). Mirrors the bound in incoming-video/route.ts.
+    expect(gteSpy).toHaveBeenCalledWith("answered_at", expect.any(String));
+  });
+
+  it("keeps AVAILABLE when no fresh live video call (stale row bounded out)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    videoCallRows = [];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(gteSpy).toHaveBeenCalledWith("answered_at", expect.any(String));
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "AVAILABLE" }),
+    );
+  });
+
+  it("upgrades to ON_CALL when a fresh live video call exists", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    videoCallRows = [{ id: "c1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "ON_CALL" }),
+    );
+  });
+
+  it("does not call .gte when status is AWAY (no video-call check)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    await POST(req({ status: "AWAY" }));
+    expect(gteSpy).not.toHaveBeenCalled();
   });
 });
