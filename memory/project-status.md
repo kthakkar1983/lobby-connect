@@ -1025,6 +1025,30 @@ Full superpowers chain: brainstorm → spec → plan → subagent-driven (per-ta
 
 **Deferred — minor UI tweaks:** Kumar noted a couple of small UI changes on the audio in-call overlay (specifics not captured this session) to fold into the **page-by-page UI/UX final-polish pass** (the standing follow-up first requested in session 12) rather than a one-off fix now.
 
+---
+
+## Phase 4 — Invariants, indexes & CI — COMPLETE + MERGED + PROD (2026-06-14)
+
+**The final 2026-06-10 architecture-audit tranche.** Full superpowers chain: brainstorm → spec → plan → subagent-driven (15 tasks, per-task spec+quality review + **opus whole-branch = GO**). Spec `docs/specs/2026-06-14-phase4-invariants-ci-design.md` · plan `docs/plans/2026-06-14-phase4-invariants-ci.md`.
+
+**Shipped (15 findings, 470 tests):**
+- **Single-sources:** `@lc/shared/protocol.ts` (all cross-app timing constants + reaper>ring module-load guard) (M7/A8); single `CallState` re-exported from `@lc/shared` (M3); **generated-base DB types** (`database.generated.ts` via `supabase gen types` + curated `MergeDeep` overlay in `supabase-types.ts`) with `gen:types`/`gen:types:check` drift check (M6); typed `AuditEvent.details` (M8); `lib/audit/actions.ts` constants (D10); `lib/storage/playbook.ts` signed-URL helper (D9).
+- **Correctness (tested):** time-bound ON_CALL presence inference (S3); kiosk one-active-call **DB partial-unique-index** + 23505→409 (S8, mig 0016); parallel-dial cap 10 + Sentry warn (S2).
+- **Cleanups:** password reset → `/auth/confirm`, dead `/auth/callback` deleted (M4); dead browser supabase client deleted (A7); parallelized reaper/sweep crons (S7); `audit_logs(operator_id,action,created_at)` index (S11, mig 0017); 22 `as never` route casts removed (→`as Route`) + `scripts/check-routes.mjs` guard (M2).
+- **CI:** first GitHub Actions workflow (`.github/workflows/ci.yml`). 911 path byte-identical except one value-identical constant swap. A1/A2/A4 left as-is per triage.
+
+**DONE this session — do NOT redo:**
+- Merged PR [#19](https://github.com/kthakkar1983/lobby-connect/pull/19) to `main` (merge commit `d17a146`); **CI green** on the PR before merge.
+- **Migrations 0016 + 0017 APPLIED to prod** (`ztunzdpmazwwwkxcpyfp`) via MCP — pre-checked no active-VIDEO dup before 0016; both indexes verified present in prod.
+- CLAUDE.md build-status + key-patterns updated; this file updated. Tag `plan-phase4-invariants-ci-complete` (push if not already).
+
+**CI gotcha (recorded):** `pnpm gen:types` / the drift check need Supabase **CLI 2.101.0** + a running local stack. Newer CLIs demand an access token even for `gen types --local`; CI's `supabase/setup-cli@v1` is pinned to `2.101.0` for this reason. Bump that pin in lockstep with any future `pnpm gen:types`. Per-package `lint` skips `tests/`; only root `eslint .` (in `pnpm lint`/CI) catches test-file lint.
+
+**Optional follow-up:** light prod smoke (kiosk→agent video happy-path confirms the 0016 index doesn't block; `/admin/audit` action filter; a no-answer audio call). Non-blocking — all changes are behavior-preserving or additive + CI-validated.
+
+**Process note:** mid-run a subagent left the worktree on `main` once → a false "typecheck passed"; the two-stage review caught the real build-breaker (a `readonly`/mutable prop mismatch). No work lost (commits were on the branch); a branch-guard was added to every later dispatch.
+
 **PICK UP HERE (new chat):**
-1. **Page-by-page UI/UX final-polish pass** (session-12 follow-up) — include the audio in-call overlay minor tweaks Kumar flagged.
-2. **Audit Phase 4** (scale invariants P4-1…P4-10), re-validating against the 2026-06-10 triage first.
+1. **Page-by-page UI/UX final-polish pass** (session-12 follow-up) — include the audio in-call overlay minor tweaks Kumar flagged. **This is now the main open work item** (all audit phases 0–4 done).
+2. *(optional)* Phase 4 prod smoke (above).
+3. Audit DEFER-V2 items remain parked (S4/S6/P3/etc. — real scale work, not pilot-blocking).
