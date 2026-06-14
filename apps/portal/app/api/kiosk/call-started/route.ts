@@ -46,7 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const channelName = `call_${randomUUID().replace(/-/g, "")}`;
 
-  const { data: inserted } = await admin
+  const { data: inserted, error: insertError } = await admin
     .from("calls")
     .insert({
       operator_id: property.operator_id,
@@ -58,6 +58,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     .select("id")
     .single();
 
+  if (insertError) {
+    // 23505 = unique_violation: the partial index (calls_one_active_video_per_property)
+    // caught a concurrent active VIDEO call that slipped past the check-then-insert
+    // fast-path above (e.g. double-tap / reload storm). Map to 409 — same body as the
+    // fast-path check so the kiosk can handle both uniformly.
+    if (insertError.code === "23505") {
+      return NextResponse.json(
+        { error: "A call is already active for this property" },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: "Could not start call" }, { status: 500 });
+  }
   if (!inserted) {
     return NextResponse.json({ error: "Could not start call" }, { status: 500 });
   }
