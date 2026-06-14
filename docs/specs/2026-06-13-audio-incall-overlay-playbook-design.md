@@ -31,7 +31,7 @@ renders inline in differently-shaped containers.
 ## Goals
 
 1. Surface the property playbook to the agent/admin **during an audio call**, reusing the existing
-   playbook route and viewer unchanged.
+   playbook route (unchanged) and viewer (one backward-compatible width prop — see below).
 2. **Unify the audio in-call screen** so it is identical in the agent and admin portals — and
    visually consistent with the existing video overlay.
 
@@ -104,11 +104,13 @@ and deep-navy `--color-call` motif as video, slightly different proportions.
   emergency state and effects stay in `Softphone`. The `incoming`/`ready`/`error`/`pendingNotes`
   states keep their current inline rendering in the widget (small Accept/Decline on `incoming`,
   matching video's small incoming banner).
-- **Reused unchanged:** `GET /api/calls/[id]/playbook` (already call-type-agnostic, operator-scoped,
-  AGENT/ADMIN-only, rejects OWNER) and the `PlaybookPanel` viewer (takes only `{ callId }`).
-- **`PlaybookPanel` move:** relocate `components/video-call/playbook-panel.tsx` →
-  `components/call/playbook-panel.tsx` (it is shared call UI now, not video-specific). Update the one
-  import in `video-call.tsx` and import it in `audio-call-overlay.tsx`. No behavior change.
+- **Route reused unchanged:** `GET /api/calls/[id]/playbook` (already call-type-agnostic,
+  operator-scoped, AGENT/ADMIN-only, rejects OWNER).
+- **`PlaybookPanel` move + one prop:** relocate `components/video-call/playbook-panel.tsx` →
+  `components/call/playbook-panel.tsx` (it is shared call UI now, not video-specific) and add a `basis`
+  width prop (default `basis-3/5` = video's current 60%) so audio can request 75%. Update the import in
+  `video-call.tsx` (keeps the default → **video's rendered output is unchanged**) and import it in
+  `audio-call-overlay.tsx`.
 
 ### Visual consistency with video
 
@@ -146,7 +148,7 @@ comment in both files will point to this seam.
 
 **Unchanged (reused)**
 - `apps/portal/app/api/calls/[id]/playbook/route.ts`
-- `PlaybookPanel` internals
+- `PlaybookPanel`'s fetch/render logic (only its root flex-basis becomes a prop)
 
 ## Testing
 
