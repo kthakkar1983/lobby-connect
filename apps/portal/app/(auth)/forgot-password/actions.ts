@@ -20,7 +20,7 @@ export async function forgotPasswordAction(
 
   const supabase = await createServerClient();
   const appUrl = env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const redirectTo = `${appUrl}/auth/callback?next=/auth/update-password`;
+  const redirectTo = `${appUrl}/auth/confirm?type=recovery&next=/auth/update-password`;
 
   await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 

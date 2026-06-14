@@ -11,7 +11,7 @@ import { env } from "@/lib/env";
 //
 // CRITICAL: the session cookies are written onto the SAME redirect response we
 // return. A freshly constructed `NextResponse` does NOT inherit cookies set via
-// `next/headers`, so the previous `/auth/callback` (which used the shared
+// `next/headers`, so the removed `/auth/callback` (which used the shared
 // next/headers client + a new NextResponse) never persisted the session —
 // invited users landed on /sign-in without a session, never reached
 // /onboarding, never set a password, and could never sign in. This pattern
