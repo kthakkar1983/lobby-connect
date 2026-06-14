@@ -47,7 +47,7 @@ vi.mock("agora-rtc-sdk-ng", () => ({
 }));
 
 // Stub PlaybookPanel to prevent its own fetch calls from polluting assertions.
-vi.mock("@/components/video-call/playbook-panel", () => ({
+vi.mock("@/components/call/playbook-panel", () => ({
   PlaybookPanel: () => null,
 }));
 

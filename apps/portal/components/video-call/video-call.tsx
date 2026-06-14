@@ -9,7 +9,7 @@ import type {
   IMicrophoneAudioTrack,
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
-import { PlaybookPanel } from "./playbook-panel";
+import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {

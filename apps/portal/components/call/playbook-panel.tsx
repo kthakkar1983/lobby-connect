@@ -8,7 +8,13 @@ interface PlaybookState {
   signedUrl?: string;
 }
 
-export function PlaybookPanel({ callId }: { callId: string }) {
+export function PlaybookPanel({
+  callId,
+  basis = "basis-3/5",
+}: {
+  callId: string;
+  basis?: string;
+}) {
   const [state, setState] = useState<PlaybookState>({ status: "loading" });
 
   useEffect(() => {
@@ -39,7 +45,7 @@ export function PlaybookPanel({ callId }: { callId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="flex basis-3/5 flex-col gap-2 bg-background p-4 border-l border-border">
+      <div className={`flex ${basis} flex-col gap-2 bg-background p-4 border-l border-border`}>
         <div className="h-3.5 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
         {[100, 95, 88, 70, 100, 80].map((w, i) => (
           <div key={i} className="h-3 animate-pulse rounded bg-muted motion-reduce:animate-none" style={{ width: `${w}%` }} />
@@ -50,7 +56,7 @@ export function PlaybookPanel({ callId }: { callId: string }) {
 
   if (state.status === "no-playbook") {
     return (
-      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
+      <div className={`flex ${basis} items-center justify-center border-l border-border bg-card text-sm text-text-muted`}>
         No playbook uploaded yet.
       </div>
     );
@@ -58,14 +64,14 @@ export function PlaybookPanel({ callId }: { callId: string }) {
 
   if (state.status === "error") {
     return (
-      <div className="flex basis-3/5 items-center justify-center border-l border-border bg-card text-sm text-text-muted">
+      <div className={`flex ${basis} items-center justify-center border-l border-border bg-card text-sm text-text-muted`}>
         Playbook unavailable.
       </div>
     );
   }
 
   return (
-    <div className="flex basis-3/5 flex-col border-l border-border bg-card">
+    <div className={`flex ${basis} flex-col border-l border-border bg-card`}>
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-sm font-medium text-foreground">Playbook</span>
         <a
