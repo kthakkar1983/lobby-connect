@@ -4,7 +4,7 @@ const assignmentsResult = vi.fn();
 const propertiesResult = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: async () => ({
-    from: (table: string) => ({
+    from: (_table: string) => ({
       select: () => ({
         eq: () => ({ is: () => assignmentsResult() }),
         in: () => ({ order: () => propertiesResult() }),
