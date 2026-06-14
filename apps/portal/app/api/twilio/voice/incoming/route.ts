@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { RING_WINDOW_SECONDS } from "@lc/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
 import {
@@ -23,7 +24,6 @@ export const maxDuration = 20;
 const SUPABASE_TIMEOUT_MS = 2500;
 
 const GREETING = "Connecting you to the front desk, one moment.";
-const RING_TIMEOUT_SECONDS = 120;
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -87,7 +87,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return twimlResponse(
       buildIncomingTwiml(targets, {
         greeting: GREETING,
-        timeoutSeconds: RING_TIMEOUT_SECONDS,
+        timeoutSeconds: RING_WINDOW_SECONDS,
         actionUrl,
         apologyMessage: APOLOGY_MESSAGE,
         callId,

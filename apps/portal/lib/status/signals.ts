@@ -4,6 +4,10 @@
 //   - 'info': a fact whose absence isn't an outage (a quiet pilot has no calls);
 //             green once ever seen, grey if never.
 
+import { CRON_SWEEP_INTERVAL_MS } from "@lc/shared";
+// BEFORE PUBLIC LAUNCH: flip CRON_SWEEP_INTERVAL_MS in @lc/shared/protocol to 60_000
+// (per-minute) and move to Vercel Pro — the thresholds below derive from it.
+
 export type SignalStatus = "ok" | "warn" | "down" | "unknown";
 export type SignalMode = "liveness" | "info";
 
@@ -14,12 +18,6 @@ export type SignalSpec = {
   warnAfterMs?: number;
   downAfterMs?: number;
 };
-
-// Presence-sweep cron cadence. PILOT (Vercel Hobby caps crons at once/day) = daily.
-// BEFORE LAUNCH: set apps/portal/vercel.json's cron schedule back to "* * * * *"
-// AND change this constant to 60_000 (per-minute), then move to Vercel Pro. The
-// thresholds below derive from it, so this one constant is the entire switch.
-const CRON_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily (pilot). Per-minute = 60_000.
 
 export const SIGNAL_SPECS: readonly SignalSpec[] = [
   { signal: "twilio_webhook", label: "Twilio webhook", mode: "info" },

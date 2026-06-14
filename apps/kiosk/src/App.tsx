@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
+import { RING_WINDOW_MS } from "@lc/shared";
 
 import { reduce, initialState, shouldFireRingTimeout } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
@@ -14,7 +15,6 @@ import { Ringing } from "./screens/Ringing";
 import { Connected } from "./screens/Connected";
 import { Apology } from "./screens/Apology";
 
-const RING_TIMEOUT_MS = 120_000;
 const HEARTBEAT_MS = 30_000;
 
 export function App() {
@@ -106,7 +106,7 @@ export function App() {
         if (callIdRef.current) void endCall(callIdRef.current, "no-answer");
         void teardown();
         dispatch({ type: "RING_TIMEOUT" });
-      }, RING_TIMEOUT_MS);
+      }, RING_WINDOW_MS);
     } catch {
       await teardown();
       dispatch({ type: "ERROR" });

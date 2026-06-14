@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
-import { STALE_AFTER_MS } from "@/lib/voice/presence";
+import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+  const cutoff = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
   const admin = createAdminClient();
   await admin
     .from("profiles")

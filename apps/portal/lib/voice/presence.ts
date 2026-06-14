@@ -1,7 +1,6 @@
-export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
+import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 
-/** A browser that hasn't checked in for this long is swept OFFLINE by cron. */
-export const STALE_AFTER_MS = 90_000;
+export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
 
 /** On login the agent is Ready (zero-friction pilot). Strict default deferred. */
 export const DEFAULT_LOGIN_STATUS: PresenceStatus = "AVAILABLE";
@@ -36,5 +35,5 @@ export function isStale(lastSeenAtIso: string | null, now: number): boolean {
   if (!lastSeenAtIso) return true;
   const seen = Date.parse(lastSeenAtIso);
   if (Number.isNaN(seen)) return true;
-  return now - seen > STALE_AFTER_MS;
+  return now - seen > PRESENCE_STALE_AFTER_MS;
 }

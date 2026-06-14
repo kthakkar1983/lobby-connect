@@ -9,13 +9,10 @@
  * VIDEO rows, as a backstop behind the real-time agent-side finalizer.
  */
 
+import { REAP_IN_PROGRESS_AFTER_MS, REAP_RINGING_AFTER_MS } from "@lc/shared";
+export { REAP_IN_PROGRESS_AFTER_MS, REAP_RINGING_AFTER_MS };
+
 import { computeDurationSeconds } from "./duration";
-
-/** A connected (answered) video call live longer than this is treated as dead. */
-export const REAP_IN_PROGRESS_AFTER_MS = 30 * 60_000; // 30 min
-
-/** A ringing video call older than this is treated as a dead kiosk (ring window is 120s). */
-export const REAP_RINGING_AFTER_MS = 10 * 60_000; // 10 min
 
 export interface ReapCutoffs {
   /** Reap IN_PROGRESS video rows whose `created_at` is before this ISO time. */
