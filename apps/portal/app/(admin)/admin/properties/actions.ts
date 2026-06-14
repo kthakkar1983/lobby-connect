@@ -6,6 +6,7 @@ import type { AuditDetails } from "@/lib/auth/audit";
 import { createServerClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { signKioskToken } from "@/lib/kiosk/config-token";
 import {
   validatePropertyName,
@@ -162,7 +163,7 @@ export async function createPropertyAction(
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "property.created",
+    action: AUDIT_ACTIONS.PROPERTY_CREATED,
     entityType: "property",
     entityId: data.id,
     details: {
@@ -212,7 +213,7 @@ export async function generateKioskLinkAction(
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "property.kiosk_link_generated",
+    action: AUDIT_ACTIONS.PROPERTY_KIOSK_LINK_GENERATED,
     entityType: "property",
     entityId: propertyId,
   });
@@ -286,7 +287,7 @@ export async function updatePropertyAction(
   Object.assign(updates, textUpdates);
   for (const c of changes) {
     auditEvents.push({
-      action: "property.edited",
+      action: AUDIT_ACTIONS.PROPERTY_EDITED,
       details: { field: c.field, from: c.from, to: c.to },
     });
   }
@@ -294,7 +295,7 @@ export async function updatePropertyAction(
   if (input.active !== current.active) {
     updates.active = input.active;
     auditEvents.push({
-      action: "property.active_toggled",
+      action: AUDIT_ACTIONS.PROPERTY_ACTIVE_TOGGLED,
       details: { from: current.active, to: input.active },
     });
   }
@@ -430,7 +431,7 @@ export async function setPrimaryAgentAction(
   await logAuditEvent({
     actorUserId: actor.id,
     action:
-      plan.action === "reassign" ? "assignment.changed" : "assignment.created",
+      plan.action === "reassign" ? AUDIT_ACTIONS.ASSIGNMENT_CHANGED : AUDIT_ACTIONS.ASSIGNMENT_CREATED,
     entityType: "property_assignment",
     entityId: propertyId,
     details: {
@@ -476,7 +477,7 @@ export async function unassignPrimaryAgentAction(
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "assignment.removed",
+    action: AUDIT_ACTIONS.ASSIGNMENT_REMOVED,
     entityType: "property_assignment",
     entityId: propertyId,
     details: {

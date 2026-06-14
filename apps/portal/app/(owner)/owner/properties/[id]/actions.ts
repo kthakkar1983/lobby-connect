@@ -6,6 +6,7 @@ import type { AuditDetails } from "@/lib/auth/audit";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import {
   KIOSK_FIELDS,
   validateKioskFields,
@@ -81,7 +82,7 @@ export async function updateKioskContentAction(
   for (const a of audits) {
     await logAuditEvent({
       actorUserId: actor.id,
-      action: "property.kiosk_edited",
+      action: AUDIT_ACTIONS.PROPERTY_KIOSK_EDITED,
       entityType: "property",
       entityId: propertyId,
       details: a,

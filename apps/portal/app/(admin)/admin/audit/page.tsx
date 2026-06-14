@@ -5,36 +5,8 @@ import {
   mergeActorNames,
   type AuditRow,
 } from "@/lib/audit/query";
+import { KNOWN_ACTIONS } from "@/lib/audit/actions";
 import { AuditTable } from "./audit-table";
-
-// Catalog of audit actions actually written across the app, for the filter
-// dropdown — kept in sync with the `logAuditEvent({ action })` call sites. (A
-// distinct-on-action query is the v1.1 upgrade; this static list avoids a
-// second round-trip and keeps the order meaningful.)
-const KNOWN_ACTIONS = [
-  "user.signed_in",
-  "user.signed_out",
-  "user.created",
-  "user.invited",
-  "user.onboarded",
-  "user.password_reset",
-  "user.password_reset_by_admin",
-  "user.profile_edited",
-  "user.role_changed",
-  "user.active_toggled",
-  "user.deleted",
-  "property.created",
-  "property.edited",
-  "property.active_toggled",
-  "property.kiosk_edited",
-  "property.kiosk_link_generated",
-  "property.playbook_uploaded",
-  "assignment.created",
-  "assignment.changed",
-  "assignment.removed",
-  "incident.resolved",
-  "trigger_emergency",
-];
 
 export default async function AdminAuditPage({
   searchParams,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { validateResolutionNote } from "@/lib/owner/incidents";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -45,7 +46,7 @@ export async function resolveIncidentAction(
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "incident.resolved",
+    action: AUDIT_ACTIONS.INCIDENT_RESOLVED,
     entityType: "incident",
     entityId: incidentId,
     details: { note_present: Boolean(trimmed && trimmed.length > 0) },

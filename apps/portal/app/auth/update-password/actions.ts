@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { validatePassword } from "@/lib/users/validate";
 
 export type UpdatePasswordState = {
@@ -39,7 +40,7 @@ export async function updatePasswordAction(
 
   await logAuditEvent({
     actorUserId: user.id,
-    action: "user.password_reset",
+    action: AUDIT_ACTIONS.USER_PASSWORD_RESET,
     entityType: "user",
     entityId: user.id,
   });

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { validatePlaybookFile, playbookStorageKey } from "@/lib/owner/playbook";
 
 export const runtime = "nodejs";
@@ -99,7 +100,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
   await logAuditEvent({
     actorUserId: actor.userId,
-    action: "property.playbook_uploaded",
+    action: AUDIT_ACTIONS.PROPERTY_PLAYBOOK_UPLOADED,
     entityType: "property",
     entityId: property.id as string,
     details: { version: nextVersion },
