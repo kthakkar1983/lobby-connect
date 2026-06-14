@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import { ScrollText } from "lucide-react";
 import {
   Table,
@@ -52,13 +53,13 @@ export function AuditTable({
     if (value === "all") sp.delete("action");
     else sp.set("action", value);
     sp.delete("limit");
-    router.push(`/admin/audit?${sp.toString()}` as never);
+    router.push(`/admin/audit?${sp.toString()}` as Route);
   }
 
   function loadMore() {
     const sp = new URLSearchParams(params.toString());
     sp.set("limit", String(limit + 50));
-    router.push(`/admin/audit?${sp.toString()}` as never);
+    router.push(`/admin/audit?${sp.toString()}` as Route);
   }
 
   return (

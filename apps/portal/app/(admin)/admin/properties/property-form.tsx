@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,7 +96,7 @@ export function PropertyForm(props: Props) {
         const result = await createPropertyAction(buildInput());
         if (result.ok) {
           toast.success("Property created");
-          router.push(`/admin/properties/${result.id}` as never);
+          router.push(`/admin/properties/${result.id}` as Route);
         } else {
           setError(result.error);
         }
@@ -240,7 +241,7 @@ export function PropertyForm(props: Props) {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => router.push("/admin/properties" as never)}
+          onClick={() => router.push("/admin/properties")}
           disabled={pending}
         >
           Cancel

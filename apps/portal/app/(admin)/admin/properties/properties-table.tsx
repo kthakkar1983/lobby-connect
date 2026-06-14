@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
+import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
@@ -47,7 +48,7 @@ export function PropertiesTable({ properties }: Props) {
           className="max-w-xs"
         />
         <Button asChild>
-          <Link href={"/admin/properties/new" as never}>
+          <Link href="/admin/properties/new">
             <Plus className="mr-2 h-4 w-4" />
             New property
           </Link>
@@ -62,7 +63,7 @@ export function PropertiesTable({ properties }: Props) {
             description={copy.empty.adminProperties.description}
             action={
               <Button asChild>
-                <Link href={"/admin/properties/new" as never}>
+                <Link href="/admin/properties/new">
                   <Plus className="size-4" />
                   New property
                 </Link>
@@ -87,7 +88,7 @@ export function PropertiesTable({ properties }: Props) {
                 <TableRow key={p.id} className="even:bg-muted/40">
                   <TableCell className="font-medium text-foreground">
                     <Link
-                      href={`/admin/properties/${p.id}` as never}
+                      href={`/admin/properties/${p.id}` as Route}
                       className="hover:underline"
                     >
                       {p.name}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Siren } from "lucide-react";
+import type { Route } from "next";
 import type { IncidentStatus } from "@lc/shared";
 import { StatusPill } from "@/components/owner/status-pill";
 import { formatCallTime } from "@/lib/owner/format";
@@ -18,7 +19,7 @@ export function IncidentRow({ incident }: { readonly incident: IncidentRowData }
   const open = incident.status !== "RESOLVED";
   return (
     <Link
-      href={`/owner/incidents/${incident.id}` as never}
+      href={`/owner/incidents/${incident.id}` as Route}
       className={cn(
         "flex items-center gap-3 rounded-card border border-border bg-card p-3 shadow-sm transition-colors hover:border-accent/40",
         open && "border-l-2 border-l-destructive",
