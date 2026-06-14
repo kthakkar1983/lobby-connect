@@ -91,6 +91,12 @@ describe("Softphone — stale-closure regression (H1)", () => {
           json: () => Promise.resolve({ token: "test-token" }),
         });
       }
+      if (url.endsWith("/playbook")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ hasPlaybook: false }),
+        });
+      }
       // presence, answered, notes, emergency
       return Promise.resolve({ ok: true });
     });
@@ -181,5 +187,19 @@ describe("Softphone — stale-closure regression (H1)", () => {
     );
     await user.click(screen.getByText("Retry"));
     await waitFor(() => expect(screen.queryByText(/Couldn.t save notes/i)).toBeNull());
+  });
+
+  it("renders the unified in-call overlay (with the playbook) after answering", async () => {
+    const user = userEvent.setup();
+    render(<Softphone role="AGENT" />);
+    await waitFor(() => screen.getByText(/Ready — accepting calls/i));
+    await act(async () => twilio.fireIncoming());
+    await user.click(screen.getByText("Accept"));
+
+    // Overlay chrome appears with the property name from the incoming call.
+    await waitFor(() => screen.getByText(/On call · The Sample Hotel/i));
+    // The in-call controls (now inside the overlay) are still present.
+    expect(screen.getByPlaceholderText("Room #")).toBeTruthy();
+    expect(screen.getByText("Hang up")).toBeTruthy();
   });
 });

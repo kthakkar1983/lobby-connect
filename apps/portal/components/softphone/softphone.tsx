@@ -1,21 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Phone, PhoneOff, Mic, MicOff, AlertTriangle } from "lucide-react";
+import { Phone, PhoneOff } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
+import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
 import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
@@ -405,87 +394,20 @@ export function Softphone({ role }: SoftphoneProps) {
       )}
 
       {phase === "in-call" && (
-        <div className="mt-3 space-y-3">
-          {/* Seam hairline — "connected" cue (drifting gradient angle) */}
-          <div className="lc-seam-drift h-px w-full" aria-hidden="true" />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={toggleMute}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
-            >
-              {muted ? <MicOff size={16} /> : <Mic size={16} />}
-              {muted ? "Unmute" : "Mute"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void endCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-accent-strong px-3 py-2 text-[1.1875rem] font-bold leading-none text-accent-foreground"
-            >
-              <PhoneOff size={18} /> Hang up
-            </button>
-          </div>
-          {emergencyActive && !emergencyFailed && (
-            <p className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              Emergency active — 911 is being conferenced in. Stay on the line and relay the
-              property address and room number.
-            </p>
-          )}
-          {emergencyFailed && (
-            <p className="rounded-input border border-destructive bg-destructive/15 px-3 py-2 text-sm font-medium text-destructive">
-              911 dispatch failed. Relay the property address and room number verbally, and have
-              the guest hang up and dial 911 directly.
-            </p>
-          )}
-          <input
-            value={roomNumber}
-            onChange={(e) => setRoomNumber(e.target.value)}
-            placeholder="Room #"
-            className="w-full rounded-input border border-border bg-background px-3 py-2 text-foreground"
-          />
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Call notes"
-            rows={3}
-            className="w-full rounded-input border border-border bg-background px-3 py-2 text-foreground"
-          />
-          <hr className="my-3 border-border" />
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button
-                type="button"
-                disabled={emergencyActive}
-                className="flex w-full items-center justify-center gap-2 rounded-button bg-destructive px-3 py-2 font-medium text-destructive-foreground disabled:opacity-50"
-              >
-                <AlertTriangle size={16} /> {emergencyActive ? "911 active" : "Call 911 — emergency"}
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
-              </div>
-              {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
-                  "also alerts the admin, owner, and property GM" line above. Don't render it until the
-                  backend actually sends those alerts. */}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => void triggerEmergency()}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Yes — call 911
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        <AudioCallOverlay
+          propertyName={incomingProperty}
+          callId={callIdRef.current}
+          muted={muted}
+          roomNumber={roomNumber}
+          notes={notes}
+          emergencyActive={emergencyActive}
+          emergencyFailed={emergencyFailed}
+          onToggleMute={toggleMute}
+          onHangUp={() => void endCall()}
+          onTriggerEmergency={() => void triggerEmergency()}
+          onRoomNumberChange={setRoomNumber}
+          onNotesChange={setNotes}
+        />
       )}
 
       {phase === "error" && (
