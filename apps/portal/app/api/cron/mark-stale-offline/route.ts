@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
-import { STALE_AFTER_MS } from "@/lib/voice/presence";
+import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+  const cutoff = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
   const admin = createAdminClient();
   await admin
     .from("profiles")
@@ -25,9 +25,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   // Self-report cron liveness for /status (per operator — multi-tenant-safe).
   const { data: operators } = await admin.from("operators").select("id");
-  for (const op of operators ?? []) {
-    await recordHeartbeat(op.id, "cron_mark_stale_offline");
-  }
+  await Promise.all(
+    (operators ?? []).map((op) => recordHeartbeat(op.id, "cron_mark_stale_offline")),
+  );
 
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Building2, ChevronRight } from "lucide-react";
+import type { Route } from "next";
 import type { ProfileStatus, IncidentStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
@@ -127,7 +128,7 @@ export default async function OwnerHomePage() {
         </Card>
       ) : (
         cards.map((c) => (
-          <Link key={c.id} href={`/owner/properties/${c.id}` as never}>
+          <Link key={c.id} href={`/owner/properties/${c.id}` as Route}>
             <Card
               className={cn(
                 "gap-3 p-5 transition-colors hover:border-accent/40",

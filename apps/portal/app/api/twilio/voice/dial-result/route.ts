@@ -64,7 +64,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const currentTerminal = existing
-      ? isTerminalState(existing.state as CallState)
+      ? isTerminalState(existing.state)
       : false;
 
     const updatePayload: { ended_at: string; state?: CallState } = {

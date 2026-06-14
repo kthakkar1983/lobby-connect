@@ -9,6 +9,7 @@ import { emergencyConferenceName, buildConferenceTwiml } from "@/lib/emergency/c
 import { canTriggerEmergency } from "@/lib/emergency/guards";
 import { getEmergencyDialNumber, getEmergencyCallerId } from "@/lib/emergency/dispatch";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { withTimeout } from "@/lib/util/timeout";
 
 export const runtime = "nodejs";
@@ -229,7 +230,7 @@ export async function POST(
 
   await logAuditEvent({
     actorUserId: actor.userId,
-    action: "trigger_emergency",
+    action: AUDIT_ACTIONS.TRIGGER_EMERGENCY,
     entityType: "call",
     entityId: callRow.id,
     details: {

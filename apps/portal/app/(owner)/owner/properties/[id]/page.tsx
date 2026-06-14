@@ -147,7 +147,7 @@ export default async function OwnerPropertyDetailPage({
       <SectionCard
         title="Recent calls"
         action={
-          <Link href={"/owner/calls" as never} className="text-sm font-medium text-accent-text hover:underline">
+          <Link href="/owner/calls" className="text-sm font-medium text-accent-text hover:underline">
             View all
           </Link>
         }

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Phone, Siren, type LucideIcon } from "lucide-react";
+import type { Route } from "next";
 import { cn } from "@/lib/utils";
 import { activeOwnerTab, type OwnerTab } from "@/lib/owner/nav";
 
-type Tab = { readonly tab: OwnerTab; readonly href: string; readonly label: string; readonly icon: LucideIcon };
+type Tab = { readonly tab: OwnerTab; readonly href: Route; readonly label: string; readonly icon: LucideIcon };
 
 const TABS: readonly Tab[] = [
   { tab: "home", href: "/owner", label: "Home", icon: Home },
@@ -21,7 +22,7 @@ export function OwnerTopNav() {
       {TABS.map(({ tab, href, label }) => (
         <Link
           key={tab}
-          href={href as never}
+          href={href}
           aria-current={active === tab ? "page" : undefined}
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
@@ -47,7 +48,7 @@ export function OwnerBottomNav() {
       {TABS.map(({ tab, href, label, icon: Icon }) => (
         <Link
           key={tab}
-          href={href as never}
+          href={href}
           aria-current={active === tab ? "page" : undefined}
           className={cn(
             "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium",

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { isLiveStatus } from "@/lib/voice/presence";
+import { REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -26,12 +27,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   // ON_CALL posts are written as-is.
   let status = body.status;
   if (status === "AVAILABLE") {
+    // Only a *fresh* live video call counts. A leaked IN_PROGRESS row (crashed
+    // kiosk, both finalizers missed) older than the reaper's cutoff is a phantom
+    // and must not pin the agent ON_CALL — mirrors the staleness-bound pattern from incoming-video/route.ts.
+    const freshSince = new Date(Date.now() - REAP_IN_PROGRESS_AFTER_MS).toISOString();
     const { data: liveVideo } = await admin
       .from("calls")
       .select("id")
       .eq("channel", "VIDEO")
       .eq("state", "IN_PROGRESS")
       .eq("handled_by_user_id", actor.userId)
+      .gte("answered_at", freshSince)
       .limit(1);
     if (liveVideo && liveVideo.length > 0) {
       status = "ON_CALL";

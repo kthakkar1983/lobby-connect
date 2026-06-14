@@ -1,9 +1,5 @@
-export type CallState =
-  | "RINGING"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "NO_ANSWER"
-  | "FAILED";
+export type { CallState } from "@lc/shared";
+import type { CallState } from "@lc/shared";
 
 const TERMINAL: ReadonlySet<CallState> = new Set([
   "COMPLETED",

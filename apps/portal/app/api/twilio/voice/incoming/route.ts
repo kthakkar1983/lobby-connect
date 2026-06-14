@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
+import { RING_WINDOW_SECONDS } from "@lc/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
 import {
@@ -23,7 +25,6 @@ export const maxDuration = 20;
 const SUPABASE_TIMEOUT_MS = 2500;
 
 const GREETING = "Connecting you to the front desk, one moment.";
-const RING_TIMEOUT_SECONDS = 120;
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -62,7 +63,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       resolveAvailableAdmins(admin, property.id, property.operator_id),
     ]);
 
-    const targets = planDial({ primaryAgent, availableAdmins });
+    const { targets, droppedCount } = planDial({ primaryAgent, availableAdmins });
+    if (droppedCount > 0) {
+      Sentry.captureMessage(
+        `Dial fan-out capped at ${targets.length}; ${droppedCount} candidate(s) dropped (property ${property.id})`,
+        "warning",
+      );
+    }
 
     // 5. Record the call (idempotent on CallSid).
     let callId = existing?.id ?? "";
@@ -87,7 +94,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return twimlResponse(
       buildIncomingTwiml(targets, {
         greeting: GREETING,
-        timeoutSeconds: RING_TIMEOUT_SECONDS,
+        timeoutSeconds: RING_WINDOW_SECONDS,
         actionUrl,
         apologyMessage: APOLOGY_MESSAGE,
         callId,

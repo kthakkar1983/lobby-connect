@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
+import type { Route } from "next";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -161,7 +162,7 @@ export default async function OwnerCallsPage({
       {multiProperty && (
         <div className="flex flex-wrap gap-2">
           <Link
-            href={buildHref({ property: null }) as never}
+            href={buildHref({ property: null }) as Route}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
               !activeProperty ? "border-accent-strong bg-accent/10 text-accent-text" : "border-border text-text-muted",
@@ -172,7 +173,7 @@ export default async function OwnerCallsPage({
           {props.map((p) => (
             <Link
               key={p.id}
-              href={buildHref({ property: p.id }) as never}
+              href={buildHref({ property: p.id }) as Route}
               className={cn(
                 "rounded-pill border px-3 py-1 text-sm",
                 activeProperty === p.id
@@ -196,7 +197,7 @@ export default async function OwnerCallsPage({
         ).map((opt) => (
           <Link
             key={opt.label}
-            href={buildHref({ channel: opt.value }) as never}
+            href={buildHref({ channel: opt.value }) as Route}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
               activeChannel === opt.value
@@ -235,12 +236,12 @@ export default async function OwnerCallsPage({
       <nav aria-label="Call history pages" className="flex items-center justify-between">
         {cursor ? (
           <Button asChild variant="ghost" size="sm">
-            <Link href={newestHref as never} aria-label="Go to newest calls">← Newest</Link>
+            <Link href={newestHref as Route} aria-label="Go to newest calls">← Newest</Link>
           </Button>
         ) : <span />}
         {rows.length === PAGE_SIZE && olderHref ? (
           <Button asChild variant="outline" size="sm">
-            <Link href={olderHref as never} aria-label="Go to older calls">Older →</Link>
+            <Link href={olderHref as Route} aria-label="Go to older calls">Older →</Link>
           </Button>
         ) : <span />}
       </nav>

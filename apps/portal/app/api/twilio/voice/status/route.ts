@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // Only set state if we have a terminal mapping AND the row isn't already terminal.
     const currentTerminal = existing
-      ? isTerminalState(existing.state as CallState)
+      ? isTerminalState(existing.state)
       : false;
     if (mapped && !currentTerminal) {
       if (mapped === "COMPLETED") {

@@ -1,13 +1,18 @@
+import type { Json } from "@lc/shared";
+
 export function emptyToNull(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
 }
 
+/** A detected field change. from/to are typed Json so callers can pass
+ *  FieldChange values directly into AuditDetails without extra casts.
+ *  diffFields only compares JSON-serializable fields, so the cast inside is safe. */
 export interface FieldChange {
   field: string;
-  from: unknown;
-  to: unknown;
+  from: Json;
+  to: Json;
 }
 
 /**
@@ -26,7 +31,13 @@ export function diffFields<T extends Record<string, unknown>>(
   for (const field of fields) {
     if (next[field] !== current[field]) {
       updates[field] = next[field];
-      changes.push({ field: String(field), from: current[field], to: next[field] });
+      // Fields passed to diffFields are always JSON-serializable; the Json cast
+      // is safe and lets callers drop their own casts at log call sites.
+      changes.push({
+        field: String(field),
+        from: current[field] as Json,
+        to: next[field] as Json,
+      });
     }
   }
   return { updates, changes };

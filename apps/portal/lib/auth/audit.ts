@@ -6,13 +6,17 @@
 import "server-only";
 import type { Json } from "@lc/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+
+/** Audit detail payloads are always a JSON object (never a bare scalar/array). */
+export type AuditDetails = { [key: string]: Json };
 
 export type AuditEvent = {
   actorUserId: string;
   action: string;
   entityType: string;
   entityId?: string;
-  details?: Json;
+  details?: AuditDetails;
 };
 
 export async function logAuditEvent(event: AuditEvent): Promise<void> {
@@ -45,7 +49,7 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
 export async function logSignIn(userId: string): Promise<void> {
   await logAuditEvent({
     actorUserId: userId,
-    action: "user.signed_in",
+    action: AUDIT_ACTIONS.USER_SIGNED_IN,
     entityType: "user",
     entityId: userId,
   });
@@ -54,7 +58,7 @@ export async function logSignIn(userId: string): Promise<void> {
 export async function logSignOut(userId: string): Promise<void> {
   await logAuditEvent({
     actorUserId: userId,
-    action: "user.signed_out",
+    action: AUDIT_ACTIONS.USER_SIGNED_OUT,
     entityType: "user",
     entityId: userId,
   });

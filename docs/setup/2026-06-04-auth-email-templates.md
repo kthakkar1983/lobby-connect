@@ -33,5 +33,6 @@ Authentication → Email Templates**, edit the link's `href` (replace
 - The built-in Supabase email service is rate-limited ("testing only"). Configure
   **custom SMTP** (Resend/SendGrid/etc.) before relying on email at the hotel —
   tracked in `docs/v2-backlog.md`.
-- `/auth/callback` (OAuth `?code=` flow) is left in place but unused by the
-  password-only, invite-only v1; email links now go through `/auth/confirm`.
+- `/auth/callback` (the old OAuth `?code=` handler) was **removed** in Phase 4
+  (M4) — it never persisted a session. All email links (invite + recovery) now go
+  through `/auth/confirm`, which exchanges the `token_hash` via `verifyOtp`.

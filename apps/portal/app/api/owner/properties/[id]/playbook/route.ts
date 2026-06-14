@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { validatePlaybookFile, playbookStorageKey } from "@/lib/owner/playbook";
+import { createPlaybookSignedUrl } from "@/lib/storage/playbook";
 
 export const runtime = "nodejs";
-
-const SIGNED_URL_TTL = 3600; // 1 hour
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -45,11 +45,11 @@ export async function GET(_request: Request, { params }: Ctx) {
     return NextResponse.json({ hasPlaybook: false });
   }
 
-  const { data: signed, error } = await admin.storage
-    .from("playbooks")
-    .createSignedUrl(property.playbook_pdf_url as string, SIGNED_URL_TTL);
-
-  if (error || !signed?.signedUrl) {
+  const signedUrl = await createPlaybookSignedUrl(
+    admin,
+    property.playbook_pdf_url as string,
+  );
+  if (!signedUrl) {
     return NextResponse.json(
       { error: "Could not generate playbook URL" },
       { status: 500 },
@@ -58,7 +58,7 @@ export async function GET(_request: Request, { params }: Ctx) {
 
   return NextResponse.json({
     hasPlaybook: true,
-    signedUrl: signed.signedUrl,
+    signedUrl,
     version: property.playbook_version,
   });
 }
@@ -99,7 +99,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
   await logAuditEvent({
     actorUserId: actor.userId,
-    action: "property.playbook_uploaded",
+    action: AUDIT_ACTIONS.PROPERTY_PLAYBOOK_UPLOADED,
     entityType: "property",
     entityId: property.id as string,
     details: { version: nextVersion },

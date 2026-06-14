@@ -6,6 +6,10 @@ vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
 
 let propertyRow: { id: string; operator_id: string; active: boolean } | null = null;
 let existingActiveRow: Record<string, unknown> | null = null;
+let insertResult: { data: { id: string } | null; error: { code: string } | null } = {
+  data: { id: "call-1" },
+  error: null,
+};
 const insertSpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -34,7 +38,7 @@ vi.mock("@/lib/supabase/admin", () => ({
           insertSpy(v);
           return {
             select: () => ({
-              single: () => Promise.resolve({ data: { id: "call-1" } }),
+              single: () => Promise.resolve(insertResult),
             }),
           };
         },
@@ -56,6 +60,7 @@ beforeEach(() => {
   insertSpy.mockClear();
   propertyRow = { id: "prop-1", operator_id: "op-1", active: true };
   existingActiveRow = null;
+  insertResult = { data: { id: "call-1" }, error: null };
 });
 
 describe("POST /api/kiosk/call-started", () => {
@@ -93,5 +98,16 @@ describe("POST /api/kiosk/call-started", () => {
     const res = await POST(req(token));
     expect(res.status).toBe(409);
     expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it("409 when the insert fails with unique_violation (23505) — DB-level one-active-video guard (S8)", async () => {
+    // Simulates a race: the check-then-insert fast-path passes, but the partial
+    // unique index catches a concurrent insert and returns 23505 instead of a row.
+    insertResult = { data: null, error: { code: "23505" } };
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req(token));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toContain("already active");
   });
 });

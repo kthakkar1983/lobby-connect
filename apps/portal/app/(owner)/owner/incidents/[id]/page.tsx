@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Route } from "next";
 import { ChevronLeft, Phone, Siren } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
@@ -81,7 +82,7 @@ export default async function OwnerIncidentDetailPage({
 
       {incident.call_id && (
         <Link
-          href={`/owner/calls/${incident.call_id}` as never}
+          href={`/owner/calls/${incident.call_id}` as Route}
           className="flex items-center gap-2 rounded-card border border-border bg-card p-4 text-sm font-medium text-foreground hover:border-accent/40"
         >
           <Phone className="size-4" aria-hidden="true" /> View the originating call

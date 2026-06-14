@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Siren } from "lucide-react";
+import type { Route } from "next";
 import type { CallState } from "@lc/shared";
 import { SectionCard } from "@/components/owner/section-card";
 import { formatCallTime, formatDuration } from "@/lib/owner/format";
@@ -34,7 +35,7 @@ export function CallDetailBody({ data }: { readonly data: CallDetail }) {
     <div className="flex flex-col gap-4">
       {data.incidentId && (
         <Link
-          href={`/owner/incidents/${data.incidentId}` as never}
+          href={`/owner/incidents/${data.incidentId}` as Route}
           className="flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/5 p-4 text-sm font-medium text-destructive hover:bg-destructive/10"
         >
           <Siren className="size-4" aria-hidden="true" /> Emergency — view incident

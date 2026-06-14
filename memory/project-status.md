@@ -1011,17 +1011,20 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 
 **DECISION (Kumar): BUILD NOW** — before Phase 4. Kumar then added a requirement during the brainstorm: the **admin in-call screen must MATCH the agent's**. They were completely different — same shared `Softphone` widget, but the agent mounts it in a **320px right rail** (`app/(agent)/layout.tsx`) while admin uses a **full-width top strip** (`app/(admin)/layout.tsx`), and the softphone card has no max-width so it stretched. Key insight: **video already matched** across portals (it uses a full-screen `VideoCallHost` overlay); only **audio** diverged (inline controls in differently-shaped containers). Chosen fix: a **unified in-call overlay** (option "exactly like video"), **~25% call-info rail / ~75% playbook** (wider than video's 40/60 — audio has no video to fill the left).
 
-### BUILT THIS SESSION (2026-06-13) — branch `feat/audio-incall-overlay-playbook`, prod voice smoke PENDING
+### BUILT + SHIPPED (2026-06-13) — merged to `main` + prod voice smoke PASS
 
 Full superpowers chain: brainstorm → spec → plan → subagent-driven (per-task spec+quality review, **opus whole-branch = GO**). Spec `docs/specs/2026-06-13-audio-incall-overlay-playbook-design.md` · plan `docs/plans/2026-06-13-audio-incall-overlay-playbook.md`.
 
 - **New `AudioCallOverlay`** (`components/softphone/audio-call-overlay.tsx`) — presentational `fixed inset-0 z-50` overlay rendered by the shared `Softphone` on `phase==="in-call"` (replacing the inline in-call card). Identical in agent + admin by construction. Mirrors the video overlay chrome (header strip + deep-navy `--color-call` stage + control bar); coral Hang up, red 911, mint live dot. Body = `basis-1/4` call-info rail + `<PlaybookPanel basis="basis-3/4">`.
 - **`PlaybookPanel` moved** `components/video-call/` → `components/call/` + gained a `basis` prop (default `basis-3/5` → **video output unchanged**). `GET /api/calls/[id]/playbook` reused as-is.
 - **All state/handlers stay in `Softphone`** → the 6c emergency-conference control routing (`toggleMute`/`endCall`/`triggerEmergency` branch on `emergencyActive`) and the `pendingNotes` notes-durability banner are **preserved** (opus-verified byte-identical handlers; notes-fail regression test green). Incoming/ring stays the inline Accept/Decline.
-- Commits: `0de6f19` (move+prop), `11a95ea` (overlay+tests), `a0be40e` (wire into Softphone+tests), `9983ca9` (final-review polish: CallShell seam comments in both files, re-added 911 notify forward-compat seam, empty-propertyName guard). **414 tests + typecheck + lint + `next build` all green. Zero migrations / new routes / RLS.**
+- Commits: `0de6f19` (move+prop), `11a95ea` (overlay+tests), `a0be40e` (wire into Softphone+tests), `9983ca9` (final-review polish: CallShell seam comments in both files, re-added 911 notify forward-compat seam, empty-propertyName guard). **414 tests + typecheck + lint + `next build` all green. Zero migrations / new routes / RLS.** Merged `--no-ff` to `main` **`edef163`** + pushed (prod auto-deployed); feature branch deleted.
 - Non-goals (explicit): idle-state parity (admin has no Ready/Away — intentional), overlay minimize, refactoring the video overlay, recording. `CallShell` shared-chrome extraction left as a noted seam in both overlays.
 
-**PICK UP HERE:**
-1. **Merge** `feat/audio-incall-overlay-playbook` (finishing-a-development-branch was offered) → push → Vercel auto-deploys.
-2. **Prod voice smoke** (voice is prod-only): call `+14058750410`, answer as agent → full-screen overlay + playbook (75%) appears; **repeat as admin → identical overlay**; 911 dialog still conferences; Hang up tears down + saves Room#/notes; a property with no playbook shows "No playbook uploaded yet."
-3. Then **Audit Phase 4** (scale invariants P4-1…P4-10), re-validating against the 2026-06-10 triage first.
+**STATUS: DONE + SHIPPED.** Merged `edef163` → prod auto-deployed; **prod voice smoke PASS** (Kumar, 2026-06-13: "everything seems to be working"). Agent + admin in-call overlays confirmed working with the playbook.
+
+**Deferred — minor UI tweaks:** Kumar noted a couple of small UI changes on the audio in-call overlay (specifics not captured this session) to fold into the **page-by-page UI/UX final-polish pass** (the standing follow-up first requested in session 12) rather than a one-off fix now.
+
+**PICK UP HERE (new chat):**
+1. **Page-by-page UI/UX final-polish pass** (session-12 follow-up) — include the audio in-call overlay minor tweaks Kumar flagged.
+2. **Audit Phase 4** (scale invariants P4-1…P4-10), re-validating against the 2026-06-10 triage first.

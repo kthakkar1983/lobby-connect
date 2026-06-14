@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import {
   validateFullName,
   validatePassword,
@@ -75,7 +76,7 @@ export async function onboardingAction(
 
   await logAuditEvent({
     actorUserId: user.id,
-    action: "user.onboarded",
+    action: AUDIT_ACTIONS.USER_ONBOARDED,
     entityType: "user",
     entityId: user.id,
     details: { name_changed: nameChanged },

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Route-cast guard
+        run: pnpm check:routes
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pinned to the CLI that generated database.generated.ts. Newer CLIs
+          # require an access token even for `gen types --local` (CI has none, by
+          # design — no prod coupling), and a version change alters the generated
+          # output (false drift). Bump this in lockstep with a `pnpm gen:types`.
+          version: 2.101.0
+      - name: Start local Supabase (for type drift check)
+        # Plain `supabase start` is reliable; it pulls the local stack via Docker
+        # (~1-2 min). To trim time later, add `-x <comma,services>` to exclude
+        # services the drift check doesn't need — but only with names valid for
+        # the pinned CLI version (a wrong name fails the step).
+        run: supabase start
+
+      - name: DB types drift check
+        run: pnpm gen:types:check

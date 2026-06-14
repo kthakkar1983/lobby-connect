@@ -42,24 +42,27 @@ export async function GET(request: Request): Promise<NextResponse> {
     .select("id, created_at, answered_at")
     .eq("channel", "VIDEO")
     .eq("state", "IN_PROGRESS");
-  for (const row of (inProgressRows ?? []) as Array<{
+  const staleInProgress = ((inProgressRows ?? []) as Array<{
     id: string;
     created_at: string;
     answered_at: string | null;
-  }>) {
-    if (!inProgressIsStale(row, now)) continue;
-    await admin
-      .from("calls")
-      .update({
-        state: "FAILED",
-        ended_at: endedAt,
-        duration_seconds: reapDurationSeconds(row.answered_at, now),
-        flagged_for_review: true,
-        notes: "Auto-closed by reaper: kiosk disconnected mid-call.",
-      })
-      .eq("id", row.id)
-      .eq("state", "IN_PROGRESS");
-  }
+  }>).filter((row) => inProgressIsStale(row, now));
+
+  await Promise.all(
+    staleInProgress.map((row) =>
+      admin
+        .from("calls")
+        .update({
+          state: "FAILED",
+          ended_at: endedAt,
+          duration_seconds: reapDurationSeconds(row.answered_at, now),
+          flagged_for_review: true,
+          notes: "Auto-closed by reaper: kiosk disconnected mid-call.",
+        })
+        .eq("id", row.id)
+        .eq("state", "IN_PROGRESS"),
+    ),
+  );
 
   // Video calls stuck ringing far past the 120s window → kiosk died before the
   // agent answered. Close as NO_ANSWER (no duration: never connected).
@@ -72,9 +75,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   // Self-report cron liveness for /status (per operator — multi-tenant-safe).
   const { data: operators } = await admin.from("operators").select("id");
-  for (const op of operators ?? []) {
-    await recordHeartbeat(op.id, "cron_reap_stale_calls");
-  }
+  await Promise.all(
+    (operators ?? []).map((op) => recordHeartbeat(op.id, "cron_reap_stale_calls")),
+  );
 
   return NextResponse.json({ ok: true });
 }

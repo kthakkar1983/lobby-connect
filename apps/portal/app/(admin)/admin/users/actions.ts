@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
+import type { AuditDetails } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { requireRole } from "@/lib/auth/require-role";
 import { provisionUser } from "@/lib/users/provision";
 import { identityForRole } from "@/lib/users/twilio-identity";
@@ -59,7 +61,7 @@ export async function createUserAction(input: {
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "user.created",
+    action: AUDIT_ACTIONS.USER_CREATED,
     entityType: "user",
     entityId: result.userId,
     details: {
@@ -134,7 +136,7 @@ export async function updateUserAction(
     twilio_identity?: string | null;
   };
   const updates: ProfileUpdates = {};
-  const auditEvents: Array<{ action: string; details: unknown }> = [];
+  const auditEvents: Array<{ action: string; details: AuditDetails }> = [];
 
   if (
     patch.full_name !== undefined &&
@@ -142,7 +144,7 @@ export async function updateUserAction(
   ) {
     updates.full_name = patch.full_name;
     auditEvents.push({
-      action: "user.profile_edited",
+      action: AUDIT_ACTIONS.USER_PROFILE_EDITED,
       details: {
         field: "full_name",
         from: target.full_name,
@@ -160,7 +162,7 @@ export async function updateUserAction(
       updates.twilio_identity = identityForRole(patch.role, target.id);
     }
     auditEvents.push({
-      action: "user.role_changed",
+      action: AUDIT_ACTIONS.USER_ROLE_CHANGED,
       details: { from: target.role, to: patch.role },
     });
   }
@@ -168,7 +170,7 @@ export async function updateUserAction(
   if (patch.active !== undefined && patch.active !== target.active) {
     updates.active = patch.active;
     auditEvents.push({
-      action: "user.active_toggled",
+      action: AUDIT_ACTIONS.USER_ACTIVE_TOGGLED,
       details: { from: target.active, to: patch.active },
     });
   }
@@ -193,7 +195,7 @@ export async function updateUserAction(
       action: evt.action,
       entityType: "user",
       entityId: input.targetUserId,
-      details: evt.details as never,
+      details: evt.details,
     });
   }
 
@@ -250,7 +252,7 @@ export async function hardDeleteUserAction(input: {
   // target snapshot was captured above, so the row is complete and truthful.
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "user.deleted",
+    action: AUDIT_ACTIONS.USER_DELETED,
     entityType: "user",
     entityId: target.id,
     details: { email: target.email, full_name: target.full_name },
@@ -300,7 +302,7 @@ export async function resetPasswordAction(input: {
 
   await logAuditEvent({
     actorUserId: actor.id,
-    action: "user.password_reset_by_admin",
+    action: AUDIT_ACTIONS.USER_PASSWORD_RESET_BY_ADMIN,
     entityType: "user",
     entityId: input.targetUserId,
     details: { email: target.email },

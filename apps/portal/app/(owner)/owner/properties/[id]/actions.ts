@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Database, Json } from "@lc/shared";
+import type { Database } from "@lc/shared";
+import type { AuditDetails } from "@/lib/auth/audit";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import {
   KIOSK_FIELDS,
   validateKioskFields,
@@ -51,8 +53,7 @@ export async function updateKioskContentAction(
   if (!current) return { ok: false, error: "Property not found." };
 
   const updates: PropertyUpdate = {};
-  const audits: Array<{ field: string; from: string | null; to: string | null }> =
-    [];
+  const audits: AuditDetails[] = [];
 
   for (const field of KIOSK_FIELDS) {
     const next = emptyToNull(input[field]);
@@ -81,10 +82,10 @@ export async function updateKioskContentAction(
   for (const a of audits) {
     await logAuditEvent({
       actorUserId: actor.id,
-      action: "property.kiosk_edited",
+      action: AUDIT_ACTIONS.PROPERTY_KIOSK_EDITED,
       entityType: "property",
       entityId: propertyId,
-      details: a as unknown as Json,
+      details: a,
     });
   }
 

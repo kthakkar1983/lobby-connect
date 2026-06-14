@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 
+import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 import {
   isStale,
   effectivePresence,
-  STALE_AFTER_MS,
   DEFAULT_LOGIN_STATUS,
   isLiveStatus,
   type PresenceStatus,
@@ -17,20 +17,20 @@ describe("isStale", () => {
   });
 
   it("is not stale within the window", () => {
-    const recent = new Date(now - (STALE_AFTER_MS - 1000)).toISOString();
+    const recent = new Date(now - (PRESENCE_STALE_AFTER_MS - 1000)).toISOString();
     expect(isStale(recent, now)).toBe(false);
   });
 
   it("is stale past the window", () => {
-    const old = new Date(now - (STALE_AFTER_MS + 1000)).toISOString();
+    const old = new Date(now - (PRESENCE_STALE_AFTER_MS + 1000)).toISOString();
     expect(isStale(old, now)).toBe(true);
   });
 });
 
 describe("effectivePresence", () => {
   const now = Date.parse("2026-05-31T12:00:00.000Z");
-  const fresh = new Date(now - (STALE_AFTER_MS - 1000)).toISOString();
-  const stale = new Date(now - (STALE_AFTER_MS + 1000)).toISOString();
+  const fresh = new Date(now - (PRESENCE_STALE_AFTER_MS - 1000)).toISOString();
+  const stale = new Date(now - (PRESENCE_STALE_AFTER_MS + 1000)).toISOString();
 
   it("returns the stored status when heartbeat is fresh", () => {
     expect(effectivePresence("AVAILABLE", fresh, now)).toBe("AVAILABLE");
