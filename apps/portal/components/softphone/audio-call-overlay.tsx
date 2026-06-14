@@ -43,11 +43,15 @@ export function AudioCallOverlay({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
+      {/* SHARED-CHROME SEAM: this overlay deliberately mirrors the video overlay's chrome
+          (components/video-call/video-call.tsx) — header strip + --color-call stage + control bar.
+          If the two drift, extract a shared <CallShell> consumed by both. See the spec:
+          docs/specs/2026-06-13-audio-incall-overlay-playbook-design.md → "Visual consistency with video". */}
       {/* Header strip — mirrors the video overlay's "On video · …". */}
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <span className="flex items-center gap-2 text-sm font-medium text-foreground">
           <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
-          On call · {propertyName}
+          On call{propertyName ? ` · ${propertyName}` : ""}
         </span>
       </div>
 
@@ -130,6 +134,9 @@ export function AudioCallOverlay({
             <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
             </div>
+            {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
+                "also alerts the admin, owner, and property GM" line above. Don't render it until the
+                backend actually sends those alerts. */}
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
