@@ -29,7 +29,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (status === "AVAILABLE") {
     // Only a *fresh* live video call counts. A leaked IN_PROGRESS row (crashed
     // kiosk, both finalizers missed) older than the reaper's cutoff is a phantom
-    // and must not pin the agent ON_CALL — mirrors the incoming-video bound (S3).
+    // and must not pin the agent ON_CALL — mirrors the staleness-bound pattern from incoming-video/route.ts.
     const freshSince = new Date(Date.now() - REAP_IN_PROGRESS_AFTER_MS).toISOString();
     const { data: liveVideo } = await admin
       .from("calls")

@@ -10,9 +10,9 @@
  */
 
 import { REAP_IN_PROGRESS_AFTER_MS, REAP_RINGING_AFTER_MS } from "@lc/shared";
-export { REAP_IN_PROGRESS_AFTER_MS, REAP_RINGING_AFTER_MS };
-
 import { computeDurationSeconds } from "./duration";
+
+export { REAP_IN_PROGRESS_AFTER_MS, REAP_RINGING_AFTER_MS };
 
 export interface ReapCutoffs {
   /** Reap IN_PROGRESS video rows whose `created_at` is before this ISO time. */

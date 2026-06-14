@@ -5,8 +5,7 @@
 //             green once ever seen, grey if never.
 
 import { CRON_SWEEP_INTERVAL_MS } from "@lc/shared";
-// BEFORE PUBLIC LAUNCH: flip CRON_SWEEP_INTERVAL_MS in @lc/shared/protocol to 60_000
-// (per-minute) and move to Vercel Pro — the thresholds below derive from it.
+// Pilot=daily. Pro-tier flip: see packages/shared/src/protocol.ts (constant) AND apps/portal/vercel.json (cron schedule).
 
 export type SignalStatus = "ok" | "warn" | "down" | "unknown";
 export type SignalMode = "liveness" | "info";

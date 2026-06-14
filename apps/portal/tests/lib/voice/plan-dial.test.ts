@@ -56,4 +56,22 @@ describe("planDial fan-out cap (S2)", () => {
     expect(plan.targets.map((t) => t.identity)).toEqual(["lc_1", "lc_2"]);
     expect(plan.droppedCount).toBe(0);
   });
+  it("primary agent is kept first at the cap boundary; last admin is dropped", () => {
+    const plan = planDial({
+      primaryAgent: cand(0),
+      availableAdmins: Array.from({ length: 10 }, (_, i) => cand(i + 1)),
+    });
+    // 11 unique candidates → capped at 10; primary (lc_0) stays first, last admin dropped
+    expect(plan.targets[0]!.identity).toBe("lc_0");
+    expect(plan.droppedCount).toBe(1);
+  });
+  it("exactly 10 unique candidates → no drop", () => {
+    const plan = planDial({
+      primaryAgent: cand(0),
+      availableAdmins: Array.from({ length: 9 }, (_, i) => cand(i + 1)),
+    });
+    // 10 unique candidates → exactly at the cap, nothing dropped
+    expect(plan.targets).toHaveLength(10);
+    expect(plan.droppedCount).toBe(0);
+  });
 });
