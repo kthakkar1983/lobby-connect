@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Database, Json } from "@lc/shared";
+import type { Database } from "@lc/shared";
+import type { AuditDetails } from "@/lib/auth/audit";
 import { createServerClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
@@ -264,7 +265,7 @@ export async function updatePropertyAction(
   };
 
   const updates: PropertyUpdate = {};
-  const auditEvents: Array<{ action: string; details: unknown }> = [];
+  const auditEvents: Array<{ action: string; details: AuditDetails }> = [];
 
   const TEXT_FIELDS = [
     "name",
@@ -323,7 +324,7 @@ export async function updatePropertyAction(
       action: evt.action,
       entityType: "property",
       entityId: input.propertyId,
-      details: evt.details as Json,
+      details: evt.details,
     });
   }
 
@@ -437,7 +438,7 @@ export async function setPrimaryAgentAction(
       primary_agent_id: agentId,
       previous_agent_id:
         plan.action === "reassign" ? (current?.primary_agent_id ?? null) : null,
-    } as Json,
+    },
   });
 
   revalidatePath(`/admin/properties/${propertyId}`);
@@ -481,7 +482,7 @@ export async function unassignPrimaryAgentAction(
     details: {
       property_id: propertyId,
       previous_agent_id: current.primary_agent_id,
-    } as Json,
+    },
   });
 
   revalidatePath(`/admin/properties/${propertyId}`);

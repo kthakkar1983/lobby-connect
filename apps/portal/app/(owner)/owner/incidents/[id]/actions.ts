@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Json } from "@lc/shared";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { logAuditEvent } from "@/lib/auth/audit";
@@ -49,7 +48,7 @@ export async function resolveIncidentAction(
     action: "incident.resolved",
     entityType: "incident",
     entityId: incidentId,
-    details: { note_present: Boolean(trimmed && trimmed.length > 0) } as Json,
+    details: { note_present: Boolean(trimmed && trimmed.length > 0) },
   });
 
   revalidatePath(`/owner/incidents/${incidentId}`);

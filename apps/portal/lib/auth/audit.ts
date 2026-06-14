@@ -7,12 +7,15 @@ import "server-only";
 import type { Json } from "@lc/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/** Audit detail payloads are always a JSON object (never a bare scalar/array). */
+export type AuditDetails = { [key: string]: Json };
+
 export type AuditEvent = {
   actorUserId: string;
   action: string;
   entityType: string;
   entityId?: string;
-  details?: Json;
+  details?: AuditDetails;
 };
 
 export async function logAuditEvent(event: AuditEvent): Promise<void> {

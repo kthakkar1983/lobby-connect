@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
+import type { AuditDetails } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { provisionUser } from "@/lib/users/provision";
 import { identityForRole } from "@/lib/users/twilio-identity";
@@ -134,7 +135,7 @@ export async function updateUserAction(
     twilio_identity?: string | null;
   };
   const updates: ProfileUpdates = {};
-  const auditEvents: Array<{ action: string; details: unknown }> = [];
+  const auditEvents: Array<{ action: string; details: AuditDetails }> = [];
 
   if (
     patch.full_name !== undefined &&
@@ -193,7 +194,7 @@ export async function updateUserAction(
       action: evt.action,
       entityType: "user",
       entityId: input.targetUserId,
-      details: evt.details as never,
+      details: evt.details,
     });
   }
 
