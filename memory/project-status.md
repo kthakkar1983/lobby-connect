@@ -993,3 +993,22 @@ Kumar ran a 54-agent comprehensive architecture audit (5 dimensions: architectur
 2. **After smoke passes:** tag `plan-phase3-perf-parallelization-complete`.
 3. **If the voice smoke regresses:** the restage is byte-identical to the old routing, so suspect deploy/env — old behavior is recoverable by reverting just `632d7e2` (P3-2).
 4. Prod emergency is **911** (untouched by Phase 3). **Audit Phase 4** (scale invariants: P4-1…P4-10) is the next remediation phase after the Phase-3 smoke — re-validate against the triage first.
+
+---
+
+## 2026-06-13 (session 20) — Phase 3 prod smoke PASS → tagged; playbook-on-audio gap surfaced
+
+**Phase 3 prod smoke = PASS** (Kumar: "everything working as it should"). Phase 3 (perf/caching/parallelization) fully closed: CLAUDE.md + this file flipped "smoke pending" → **confirmed 2026-06-13**; tag **`plan-phase3-perf-parallelization-complete`** created on the docs commit + pushed to origin. (Note: Phase 2 + the notes-and-errors interlude were never tagged — only Phase 3 was requested.)
+
+**Newly-noticed gap — the playbook is never shown on AUDIO (Twilio phone) calls.** The playbook PDF appears only in the video-call overlay (`components/video-call/playbook-panel.tsx`, Plan 6b). The agent softphone (audio path, Plan 5b) never got it — historical sequencing: 5b shipped *before* the playbook (6b), and 6b was built into the video overlay, which audio calls don't render. **Not in v2-backlog; this is a v1 want.**
+
+**Scoped this session (Explore agent) — plumbing is ~95% there:**
+- `calls.property_id` is NOT NULL and populated on AUDIO rows at the Twilio incoming webhook.
+- `GET /api/calls/[id]/playbook` is **call-type-agnostic** — needs only a callId + operator scope; uses `requireApiActor`, already rejects OWNER (AGENT|ADMIN only).
+- `PlaybookPanel` takes just `{ callId }` — zero video deps, self-contained.
+- The softphone already holds the live call's DB id in `callIdRef.current` (from the Twilio `callId` custom param at incoming ring).
+- **The only real work is a UX decision:** an audio call has no overlay, and the softphone sits in a fixed **320px** right-sidebar (agent `layout.tsx`) — too narrow for an 8.5×11 PDF. Options: modal/slide-over, expand the sidebar while in-call, or a collapsible in-widget panel. Zero migrations, zero new routes, UI-layer only.
+
+**DECISION PENDING (Kumar):** build now (small standalone feature, *before* Phase 4) vs. defer to after Phase 4. Claude's recommendation = **now** — it's pilot call-path functionality (phone routing is the core product), not hardening; Phase 4 is scale-invariants (much of it triage-marked ACCEPT-RISK/DEFER-V2). If we build: needs a short brainstorm on the UX surface, then wire `PlaybookPanel` into the softphone.
+
+**Next:** [per Kumar's decision above] → then **Audit Phase 4** (scale invariants P4-1…P4-10), re-validating against the 2026-06-10 triage first.
