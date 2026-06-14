@@ -25,9 +25,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   // Self-report cron liveness for /status (per operator — multi-tenant-safe).
   const { data: operators } = await admin.from("operators").select("id");
-  for (const op of operators ?? []) {
-    await recordHeartbeat(op.id, "cron_mark_stale_offline");
-  }
+  await Promise.all(
+    (operators ?? []).map((op) => recordHeartbeat(op.id, "cron_mark_stale_offline")),
+  );
 
   return NextResponse.json({ ok: true });
 }
