@@ -9,7 +9,7 @@ import type {
   IMicrophoneAudioTrack,
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
-import { PlaybookPanel } from "./playbook-panel";
+import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
@@ -167,6 +167,9 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         </span>
       </div>
 
+      {/* SHARED-CHROME SEAM: the audio in-call overlay (components/softphone/audio-call-overlay.tsx)
+          mirrors this chrome (header strip + --color-call stage + control bar + PlaybookPanel). If the
+          two drift, extract a shared <CallShell> consumed by both. */}
       <div className="flex flex-1 overflow-hidden">
         {/* 40% guest video (left) — deep-navy video stage */}
         <div className="relative basis-2/5 bg-[var(--color-call)]">
