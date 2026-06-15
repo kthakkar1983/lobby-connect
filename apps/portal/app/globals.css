@@ -6,51 +6,61 @@
    No hardcoded hex in components — everything routes through these.
    ============================================================ */
 @theme {
-  /* Color — see spec §2 */
-  --color-background: #F6F8FA;
-  --color-foreground: #2C425C;
+  /* Color — brand revision (navy / teal / mint / blaze). Source: docs/brand/brand-guidelines.md §3,§8 */
+  --color-background: #F4F7F7;          /* cool, faintly-teal page surface */
+  --color-foreground: #0F2D4B;          /* deep navy — the anchor: text, nav, headers */
   --color-card: #FFFFFF;
-  --color-card-foreground: #2C425C;
+  --color-card-foreground: #0F2D4B;
   --color-surface: #FFFFFF;
 
-  --color-primary: #2C425C;
+  /* Navy anchor — primary text, nav, sidebar. (Primary *actions* are mint; see --color-live.) */
+  --color-primary: #0F2D4B;
   --color-primary-foreground: #FFFFFF;
 
-  --color-secondary: #EAEEF2;
-  --color-secondary-foreground: #2C425C;
+  --color-secondary: #E5ECEC;           /* inert fill / secondary button */
+  --color-secondary-foreground: #0F2D4B;
 
-  --color-muted: #EAEEF2;
-  --color-muted-foreground: #5E6E85;  /* WCAG 1.4.3: 4.5:1 on the page bg (#F6F8FA) */
+  --color-muted: #E5ECEC;
+  --color-muted-foreground: #5C6B79;    /* captions/labels — 5.5:1 on the page bg */
 
-  --color-accent: #F0795B;            /* base coral — tints/rings/hover wash */
-  --color-accent-strong: #E05A39;     /* deep coral — CTA fills (white label must be large+bold, WCAG 1.4.3) */
-  --color-accent-text: #BE4B2F;       /* AA-safe coral for text/links on light (4.66:1 on page bg, 4.96:1 on white) */
-  --color-accent-foreground: #FFFFFF;
+  /* Ink — text/icons on bright (mint/teal/blaze) fills */
+  --color-ink: #14202F;
 
-  --color-live: #06D6A0;              /* connected/success */
-  --color-live-foreground: #048765;   /* mint as readable text (WCAG 1.4.3, 4.5:1 on white) */
+  /* Mint — connect / live / success AND every primary action button (brand: action == live) */
+  --color-live: #06D6A0;
+  --color-live-foreground: #048765;     /* deep mint — readable as text/link on white (4.5:1) */
   --color-live-glow: rgb(6 214 160 / 0.18); /* mint at 18% alpha — focus/glow ring */
 
-  --color-call: #14202F;              /* deep-navy video stage background */
+  /* Teal — links, secondary/interactive, active nav (the old coral 'accent' role, recoloured) */
+  --color-accent: #2EA6AA;
+  --color-accent-foreground: #14202F;   /* ink on a teal fill */
+  --color-accent-text: #248386;         /* deep teal — links/text on white (4.5:1) */
 
-  --color-destructive: #C81E1E;       /* 911 / deletes — distinct from coral */
+  /* Blaze — needs attention: open incident, missed, degraded, "new" (never decorative) */
+  --color-attention: #FD6734;
+  --color-attention-foreground: #14202F;/* ink on a blaze fill */
+  --color-attention-text: #C85129;      /* deep blaze — text on white (4.5:1) */
+
+  --color-call: #14202F;                /* deep-navy video stage background */
+
+  --color-destructive: #C81E1E;         /* 911 (live) / deletes / hard errors — reserved, distinct red */
   --color-destructive-foreground: #FFFFFF;
 
-  --color-border: #E1E7EC;            /* decorative hairlines / dividers / card edges */
-  --color-input: #919598;             /* form-control borders — WCAG 1.4.11 (3:1 vs white) */
-  --color-ring: #E05A39;              /* focus ring — deep coral */
+  --color-border: #DBE4E5;              /* hairlines / dividers / card edges */
+  --color-input: #7F8F90;               /* form-control borders — 3:1 vs white */
+  --color-ring: #048765;                /* focus ring — deep mint */
 
   /* Alias kept for existing call sites using text-text-muted */
   --color-text-muted: var(--color-muted-foreground);
 
-  /* Seam gradient — line/ring work only, never a large fill (spec §1) */
-  --gradient-seam: linear-gradient(135deg, #2C425C, #06D6A0, #F0795B);
+  /* Seam gradient — navy→teal→mint (blaze excluded). Line/ring work only, never a large fill. */
+  --gradient-seam: linear-gradient(90deg, #0F2D4B, #2EA6AA, #06D6A0);
 
-  /* Typography — families set by next/font in Task 3 via these vars */
+  /* Typography — Raleway (display + labels), Outfit (body/UI), JetBrains Mono (data); set by next/font. */
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: var(--font-atelier), Georgia, "Times New Roman", serif;
-  --font-label: var(--font-radon), var(--font-outfit), system-ui, sans-serif;
+  --font-display: var(--font-raleway), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-label: var(--font-raleway), ui-sans-serif, system-ui, sans-serif;
 
   /* Shape — spec §4 (one scale; kiosk rounds a step softer in its own file) */
   --radius-card: 12px;
@@ -108,7 +118,7 @@ body {
   to { --seam-angle: 495deg; } /* 135 + 360 */
 }
 .lc-seam-drift {
-  background: linear-gradient(var(--seam-angle), #2c425c, #06d6a0, #f0795b);
+  background: linear-gradient(var(--seam-angle), #0f2d4b, #2ea6aa, #06d6a0);
   animation: lc-seam-drift 8s linear infinite;
 }
 

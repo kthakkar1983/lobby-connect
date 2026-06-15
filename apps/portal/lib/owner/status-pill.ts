@@ -7,8 +7,8 @@ const CALL_PILL_CLASS: Record<CallState, string> = {
   COMPLETED: "bg-live/15 text-live-foreground",
   IN_PROGRESS: "bg-live/15 text-live-foreground",
   RINGING: "bg-muted text-muted-foreground",
-  NO_ANSWER: "bg-accent/15 text-accent-text",
-  FAILED: "bg-accent/15 text-accent-text",
+  NO_ANSWER: "bg-attention/15 text-attention-text",
+  FAILED: "bg-attention/15 text-attention-text",
 };
 
 export function callPill(state: CallState): Pill {

@@ -3,10 +3,13 @@ import type { KioskConfig } from "../types";
 import { SeamTop, LogoMark } from "../components/brand";
 import { greetingForHour } from "@lc/shared";
 
+// Owner-selectable Home CTA looks. Brand revision interim — coral retired:
+// warm = mint connect panel, accent = navy + mint CTA text, classic = navy + deep-mint greet.
+// Final per-style art direction is a kiosk page-pass item (with the owner's design notes).
 const CTA_STYLES = {
-  warm:    { panel: "bg-accent-strong", text: "text-white",  sub: "text-white/80", greet: "text-foreground" },
-  accent:  { panel: "bg-primary",       text: "text-accent", sub: "text-white/70", greet: "text-foreground" },
-  classic: { panel: "bg-primary",       text: "text-white",  sub: "text-white/80", greet: "text-accent-strong" },
+  warm:    { panel: "bg-live",    text: "text-ink",   sub: "text-ink/70",   greet: "text-foreground" },
+  accent:  { panel: "bg-primary", text: "text-live",  sub: "text-white/70", greet: "text-foreground" },
+  classic: { panel: "bg-primary", text: "text-white", sub: "text-white/80", greet: "text-live-foreground" },
 } as const;
 
 function InfoItem({ label, value }: { label: string; value: string | null }) {

@@ -25,9 +25,9 @@ const LABELS: Record<(typeof KIOSK_FIELDS)[number], string> = {
 const LONG_FIELDS = new Set(["kiosk_welcome_message", "kiosk_apology_message"]);
 
 const STYLE_META: Record<KioskCtaStyle, { name: string; panel: string; greet: string }> = {
-  warm: { name: "Warm", panel: "bg-accent-strong", greet: "text-foreground" },
+  warm: { name: "Warm", panel: "bg-live", greet: "text-foreground" },
   accent: { name: "Accent", panel: "bg-primary", greet: "text-foreground" },
-  classic: { name: "Classic", panel: "bg-primary", greet: "text-accent-text" },
+  classic: { name: "Classic", panel: "bg-primary", greet: "text-live-foreground" },
 };
 
 type Props = { propertyId: string; initial: KioskContentInput; initialStyle: KioskCtaStyle };
@@ -93,7 +93,7 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
                   onClick={() => setStyle(s)}
                   aria-pressed={selected}
                   className={`flex-1 rounded-input border-2 p-1.5 text-left transition-colors disabled:cursor-default ${
-                    selected ? "border-accent-strong" : "border-border"
+                    selected ? "border-accent" : "border-border"
                   } ${editing ? "cursor-pointer" : ""}`}
                 >
                   <span className="flex aspect-[16/10] overflow-hidden rounded-[6px] border border-border">

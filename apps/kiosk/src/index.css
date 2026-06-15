@@ -2,15 +2,10 @@
 
 /* Brand faces — self-hosted (kiosk has no next/font) */
 @font-face {
-  font-family: "Atelier";
-  src: url("/fonts/Atelier-Regular.woff2") format("woff2");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Radon";
-  src: url("/fonts/Radon.woff2") format("woff2");
-  /* Single outline declared across 400–700 so font-semibold labels don't faux-bold. */
-  font-weight: 400 700;
+  font-family: "Raleway";
+  src: url("/fonts/Raleway.woff2") format("woff2");
+  /* Variable wght 100–900 — display + all-caps labels. Default instance is Thin(100); headings/labels set >=500. */
+  font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
@@ -30,37 +25,43 @@
    Kiosk shape overrides: radius rounds one step softer for touch.
    ============================================================ */
 @theme {
-  --color-background: #F6F8FA;
-  --color-foreground: #2C425C;
+  /* Brand revision (navy / teal / mint / blaze) — mirror of portal globals.css §3,§8. */
+  --color-background: #F4F7F7;
+  --color-foreground: #0F2D4B;
   --color-card: #FFFFFF;
   --color-surface: #FFFFFF;
 
-  --color-primary: #2C425C;
+  --color-primary: #0F2D4B;
   --color-primary-foreground: #FFFFFF;
 
-  --color-muted: #EAEEF2;
-  --color-muted-foreground: #5E6E85;  /* WCAG 1.4.3 (mirror of portal) */
+  --color-muted: #E5ECEC;
+  --color-muted-foreground: #5C6B79;
 
-  --color-accent: #F0795B;
-  --color-accent-strong: #E05A39;
-  --color-accent-text: #BE4B2F;       /* AA-safe coral text on light (mirror) */
-  --color-accent-foreground: #FFFFFF;
+  --color-ink: #14202F;               /* text/icons on bright (mint/teal/blaze) fills */
 
-  --color-live: #06D6A0;
-  --color-live-foreground: #048765;   /* WCAG 1.4.3 (mirror) */
+  --color-live: #06D6A0;              /* connect / live + primary action */
+  --color-live-foreground: #048765;
+
+  --color-accent: #2EA6AA;            /* teal — secondary/interactive */
+  --color-accent-foreground: #14202F;
+  --color-accent-text: #248386;
+
+  --color-attention: #FD6734;         /* blaze — needs attention (kiosk uses sparingly) */
+  --color-attention-foreground: #14202F;
+  --color-attention-text: #C85129;
 
   --color-destructive: #C81E1E;
   --color-destructive-foreground: #FFFFFF;
 
-  --color-border: #E1E7EC;
-  --color-ring: #E05A39;
+  --color-border: #DBE4E5;
+  --color-ring: #048765;              /* deep mint focus ring */
 
-  --gradient-seam: linear-gradient(135deg, #2C425C, #06D6A0, #F0795B);
+  --gradient-seam: linear-gradient(90deg, #0F2D4B, #2EA6AA, #06D6A0);
 
   --font-sans: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: "Atelier", Georgia, "Times New Roman", serif;
-  --font-label: "Radon", "Outfit", system-ui, sans-serif;
+  --font-display: "Raleway", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Raleway", "Outfit", system-ui, sans-serif;
 
   /* Kiosk shape — one step softer than portal (spec §4) */
   --radius-card: 16px;
@@ -123,7 +124,7 @@ html, body, #root {
 }
 @keyframes lc-seam-drift { to { --seam-angle: 495deg; } }
 .lc-seam-drift {
-  background: linear-gradient(var(--seam-angle), #2c425c, #06d6a0, #f0795b);
+  background: linear-gradient(var(--seam-angle), #0f2d4b, #2ea6aa, #06d6a0);
   animation: lc-seam-drift 8s linear infinite;
 }
 

@@ -9,7 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
+        // Primary action — mint fill + ink label (brand: mint carries all primary actions).
+        default: "bg-live text-ink shadow-sm hover:bg-live/90",
+        // Secondary solid — navy. Lower-emphasis confirms and "end / close" actions on light surfaces.
+        neutral: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 focus-visible:ring-destructive",
         outline:
@@ -17,11 +20,10 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-muted hover:text-foreground",
-        // White-on-coral is 3.69:1 — only AA at large text. If you use this
-        // variant, give the label large+bold sizing (>=18.66px bold) or pick a
-        // navy/destructive variant instead (WCAG 1.4.3; audit §6 D1).
+        // Teal fill — informational / secondary interactive (ink label on teal).
         accent:
-          "bg-accent-strong text-accent-foreground shadow-sm hover:bg-accent-strong/90",
+          "bg-accent text-accent-foreground shadow-sm hover:bg-accent/90",
+        // Teal text link — deep teal, AA on white.
         link: "text-accent-text underline-offset-4 hover:underline",
       },
       size: {

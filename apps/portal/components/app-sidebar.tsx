@@ -12,7 +12,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { NavItem } from "@/components/nav-item";
-import { Wordmark } from "@/components/brand/wordmark";
+import { LogoMark, Wordmark } from "@/components/brand/wordmark";
 
 const NAV_ITEMS = [
   { href: "/admin/users", label: "Users", icon: Users },
@@ -30,7 +30,9 @@ export function AppSidebar() {
           aria-label="Lobby Connect home"
           className="flex h-10 items-center px-2"
         >
-          <Wordmark hideTextWhenCollapsed />
+          {/* Expanded: full lockup. Collapsed (icon rail): just the mark. */}
+          <Wordmark title="" className="group-data-[collapsible=icon]:hidden" />
+          <LogoMark className="hidden group-data-[collapsible=icon]:block" />
         </Link>
       </SidebarHeader>
       <SidebarContent>

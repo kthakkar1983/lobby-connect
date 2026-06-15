@@ -47,7 +47,7 @@ export default function SignInPage() {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+        className="rounded-md bg-live px-4 py-2 text-sm font-medium text-ink disabled:opacity-60"
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>

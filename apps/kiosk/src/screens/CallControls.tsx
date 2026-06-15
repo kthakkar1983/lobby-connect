@@ -13,7 +13,7 @@ function Ctrl({
     "grid size-14 place-items-center rounded-pill transition-transform active:scale-95 [&_svg]:size-6";
   const skin =
     variant === "end"
-      ? "bg-accent-strong text-accent-foreground"
+      ? "bg-card text-call" // neutral solid reads on the dark video stage (red stays 911-only)
       : "border border-white/25 bg-white/10 text-white";
   return (
     <button type="button" onClick={onClick} aria-label={label} className="flex flex-col items-center gap-1.5">

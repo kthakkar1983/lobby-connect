@@ -15,9 +15,9 @@ type, layout, and usage rules. Update this as decisions land; it should always d
 | Section | Status |
 |---|---|
 | 1. Brand thesis | ✅ Locked |
-| 2. Logo | ✅ Locked |
-| 3. Color | ✅ Locked |
-| 4. Typography | ✅ Locked |
+| 2. Logo | ✅ Locked · components built |
+| 3. Color | ✅ Locked · tokens implemented |
+| 4. Typography | ✅ Locked · fonts wired |
 | 5. Layout | ⏸ Deferred to a dedicated follow-up chat |
 | 6. Shape · elevation · motion | ◻︎ Baseline carried from current system (revisit if needed) |
 | 7. Voice & tone | ✅ Carried (unchanged) |
@@ -47,17 +47,18 @@ alarmist. Confidence is carried by clarity and restraint, not decoration.
 
 ### Assets
 - **Mark** — the icon: an **entrance** — a portal / doorway / gateway — with a **person inside
-  it**. Three brand anchors: navy + mint forms shape the opening, a **teal** figure stands
+  it**. Three brand anchors: navy + teal forms shape the opening, a **mint** figure stands
   within. A literal nod to the *lobby*. Colors: navy `#0F2D4B` · teal `#2EA6AA` · mint `#06D6A0`.
-- **Wordmark** — "LOBBY" (uppercase) over "connect" (lowercase) in deep navy, with a **teal**
-  dot–line–dot connector threading "connect". Colors: navy `#0F2D4B` · teal `#2EA6AA`.
+- **Wordmark** — "LOBBY" (uppercase) over "connect" (lowercase) in deep navy, with a **mint**
+  dot–line–dot connector threading "connect". Colors: navy `#0F2D4B` · mint `#06D6A0`.
 - **Repo home:** committed SVGs live at `apps/portal/public/brand/mark.svg` and
   `apps/portal/public/brand/wordmark.svg` (portal only — the kiosk has no logo).
 
 > **Logo SVGs are committed** at `apps/portal/public/brand/{mark,wordmark}.svg` (vector, brand
 > palette). The old `artboard 5.svg` (muted teal + grey + uppercase "CONNECT") is superseded.
-> **One open confirm:** the wordmark connector is **teal** `#2EA6AA` — an earlier PNG looked
-> mint, so verify teal is the intended color.
+> **Resolved (2026-06-15):** the wordmark connector is **mint** `#06D6A0`. The partner's
+> preferred wordmark (navy letters + mint dot–line–dot) was swapped in during implementation;
+> the committed `wordmark.svg` is the source of truth.
 
 ### Usage
 - **Mark** — tight spots: collapsed icon sidebar, favicon, mobile header, avatars.
@@ -281,3 +282,16 @@ tokens only (`bg-primary`, `text-accent`, etc.), never raw hex.
 - **2026-06-14** — Logo SVGs committed (`apps/portal/public/brand/{mark,wordmark}.svg`). Mark now
   navy/teal/mint (teal figure); wordmark navy + teal connector. Doc descriptions corrected to
   match. Open confirm: wordmark connector teal vs mint. Committed to branch `brand-revision`.
+- **2026-06-15** — **Implementation (foundation).** Color tokens swapped in both apps
+  (`apps/portal/app/globals.css` + `apps/kiosk/src/index.css`): coral retired; navy/teal/mint/blaze
+  + ink + deep variants + cool neutrals live. `--color-accent` = teal, new `--color-attention` = blaze,
+  primary action = mint. Three fonts wired (Raleway via `next/font` + kiosk `@font-face`; Atelier +
+  Radon files removed). Shared `LogoMark`/`Wordmark` rebuilt from SVGO-optimised assets (mark 0.66 KB,
+  wordmark 2.1 KB; Adobe PGF metadata stripped; viewBoxes tightened; reproducible via
+  `pnpm -F @lc/portal optimize:svg`). Partner's new **mint-connector** wordmark swapped in —
+  supersedes the teal-connector note above; the mark's figure is **mint**, the right jamb **teal**.
+  Fixed: portal middleware now serves `/brand/*` static assets (was redirecting to /sign-in);
+  auth-form primary CTAs → mint; missed / degraded / pending-setup → blaze. Verified: portal
+  typecheck + lint + 428 tests + build, kiosk build, sign-in render (logo, Raleway, mint CTA).
+  **Deferred to page-by-page passes:** §5 layout; full kiosk repaint + no-logo-on-kiosk; per-surface
+  logo sizing; final "end / hang-up" treatment; and the §3.2 "open incident = blaze" remap (still red).
