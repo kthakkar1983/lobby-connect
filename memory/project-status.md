@@ -1052,3 +1052,61 @@ Full superpowers chain: brainstorm → spec → plan → subagent-driven (per-ta
 1. **Page-by-page UI/UX final-polish pass** (session-12 follow-up) — include the audio in-call overlay minor tweaks Kumar flagged. **This is now the main open work item** (all audit phases 0–4 done).
 2. *(optional)* Phase 4 prod smoke (above).
 3. Audit DEFER-V2 items remain parked (S4/S6/P3/etc. — real scale work, not pilot-blocking).
+
+> **Superseded by the Brand Revision (below).** The "page-by-page UI/UX final-polish pass" above is
+> now folded into the brand revision's **Layout phase** — same comprehensive per-page UI redo, under
+> the new locked brand.
+
+---
+
+## Brand Revision — design LOCKED + FOUNDATION SHIPPED (on branch), layout phase NEXT (2026-06-14 → 2026-06-15)
+
+A system-wide rebrand. **Canonical brand spec: `docs/brand/brand-guidelines.md`** (living doc;
+logo/color/type/shape ✅ Locked). Impeccable design context now lives at **`docs/PRODUCT.md` +
+`docs/DESIGN.md`** (the loader auto-discovers them in `docs/`). Memory pointer: [[brand-revision]].
+
+### Design (2026-06-14) — locked
+Retired coral. Four anchors: **navy `#0F2D4B` / teal `#2EA6AA` / mint `#06D6A0` / blaze `#FD6734`**
+over cool neutrals + reserved red `#C81E1E`. Roles: mint = connect/live + **primary buttons** (ink
+`#14202F` text); teal = links/nav/secondary; blaze = needs-attention; navy = text/nav; red =
+911/destructive only. Type = **Raleway** (display + labels) / Outfit (body) / JetBrains Mono (data).
+Real **logo** (mark = doorway + figure; wordmark = LOBBY/connect) — portal only, never kiosk.
+
+### Foundation IMPLEMENTATION — DONE on branch `brand-revision` (2026-06-15), NOT merged, NOT deployed
+Done via the `impeccable` skill. Two commits on `brand-revision` (a `feat` + a `docs` handoff commit):
+- **Color tokens swapped** in `apps/portal/app/globals.css` + `apps/kiosk/src/index.css` (mirrored):
+  coral retired; `--color-accent` = teal, new **`--color-attention`** = blaze, `--color-ink`, deep
+  variants, cool neutrals; `--color-ring` = deep mint; seam = navy→teal→mint (blaze excluded). The
+  coral→3-way split was applied to every call site (missed/degraded/pending-setup → **blaze**;
+  links/active-nav/hover/filters → **teal**; primary actions → **mint**; end/hang-up → navy on light,
+  neutral-white on the dark video stage; 911 stays red).
+- **Three fonts wired** — Raleway (variable, verified) via `next/font` (`app/fonts.ts`) + kiosk
+  `@font-face`; Atelier + Radon removed (files deleted).
+- **Shared `LogoMark`/`Wordmark`** (`components/brand/wordmark.tsx`) render the real assets via `<img>`;
+  sidebar swaps wordmark↔mark on collapse. **SVGO** added (`apps/portal/svgo.config.mjs` +
+  `pnpm -F @lc/portal optimize:svg`): mark **106 KB → 0.66 KB**, wordmark **109 KB → 2.1 KB** (Adobe
+  PGF metadata stripped; viewBoxes tightened). Partner's preferred **mint-connector** wordmark swapped
+  in (resolves the doc's teal-vs-mint open confirm → mint; mark figure is mint, right jamb teal).
+- **`Button` default = mint** (+ navy `neutral`, teal `accent`); `Badge` gained `attention`; auth-form
+  primary CTAs → mint. **Middleware bug fixed** — it was redirecting `/brand/*` static assets to
+  `/sign-in` (broken logo); now excludes file-extension paths.
+- **Verified:** portal typecheck + lint + **428 tests** + `next build`; kiosk build; live `/sign-in`
+  render (logo loads, Raleway confirmed, mint CTA, new tokens). Zero migrations / new routes / RLS.
+
+### NEXT — the Layout phase (§5 of the brand doc) — the real design work
+Kumar's problem statement: current dashboards look **"flat and uninspiring"**; wants real depth +
+hierarchy, **not a re-skin**. Scope: unify the **agent + admin** shells, rework navs, revisit
+density/depth, per-page structure. **Recommended order: agent/admin dashboards first** → owner
+refinements → kiosk last. Kumar will bring **per-page design `.md` files / prompts / screenshots**.
+A fresh chat should: invoke `impeccable` (context auto-loads from `docs/`), capture a current-state
+"before" baseline of the authed dashboards (needs a local/prod login — sign in as admin), then go
+page-by-page (shape → build → verify).
+
+### Deferred decisions / follow-ups (flagged, NOT done)
+- **Open decision:** brand §3.2 lists "open incident" under **blaze**, but incidents still render
+  **red** everywhere (prior stages chose red). Decide when incident screens come up.
+- Full **kiosk repaint** + the **no-logo-on-kiosk** rule (kiosk still shows an "LC" mark; CTA styles
+  got a coherent interim only). Per-surface **logo sizing** (sign-in wordmark is default h-7).
+  Final **end/hang-up** treatment. A real **favicon** from `mark.svg` (live 404 today).
+- First action in the fresh chat: **commit/PR not yet merged to `main`** — `brand-revision` holds the
+  foundation; decide merge vs keep-building-on-branch before/with the layout work.
