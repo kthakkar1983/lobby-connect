@@ -18,7 +18,7 @@ type, layout, and usage rules. Update this as decisions land; it should always d
 | 2. Logo | ✅ Locked · components built |
 | 3. Color | ✅ Locked · tokens implemented |
 | 4. Typography | ✅ Locked · fonts wired |
-| 5. Layout | ⏸ Deferred to a dedicated follow-up chat |
+| 5. Layout | 🚧 In progress — sign-in / auth ✅ done; dashboards + shells next |
 | 6. Shape · elevation · motion | ◻︎ Baseline carried from current system (revisit if needed) |
 | 7. Voice & tone | ✅ Carried (unchanged) |
 | 8. Implementation map | ✅ Tracks locked sections |
@@ -189,28 +189,52 @@ Headings lean on Raleway **Medium (500)** and up (Raleway runs slightly light at
 
 ## 5. Layout 🚧
 
-**Deferred to a dedicated follow-up session.** This is the largest, most structural part, and
-the user has per-page design notes (`*-design.md`) to bring in — so it gets its own chat.
+The largest, most structural part. Built **surface by surface** via the `impeccable` skill.
 
-**Problem statement (user):** the current dashboards look *flat and uninspiring* next to good
-dashboard examples. Goal is a more elevated, considered layout with real depth and hierarchy —
-not just a re-skin of the existing shells.
+### 5.1 Sign-in / auth — ✅ DONE (2026-06-15)
 
-**Scope (all of the below):**
+The front door, redesigned as a **split** that makes the brand thesis physical: a navy brand panel
+(the human / hospitality side) joined to an elevated form card (the dependable-technology side) by
+the seam.
+
+- **`apps/portal/app/(auth)/layout.tsx`** — `lg:grid-cols-[5fr_6fr]`. **Left** = navy `bg-primary`
+  panel (desktop only) carrying a drifting **connection-lines** field, the *"The front desk, after
+  hours."* headline anchored bottom-left, and a 3px **vertical seam** down the join. **Right** =
+  cool-surface (`bg-background`) panel holding a centered, **elevated white card** (radius 16,
+  two-layer `shadow-xl`) with the **seam gradient across its top edge**, the **wordmark centered** as
+  the home link (`h-12`), a divider, then the page's form. Mobile collapses to the card alone.
+- **`components/brand/floating-paths.tsx`** — the animated line field (the efferd "Background Paths"
+  pattern, reworked for us): brand colour via `currentColor` (a **teal** layer + a **mint** layer on
+  navy = the seam colours), a `useReducedMotion()` guard (the global CSS net can't stop motion's JS
+  animation), deterministic durations (no SSR hydration drift), `aria-hidden`. Uses the **`motion`**
+  package — the one JS-animation dependency, added to the portal for this.
+- **New tokens** (`globals.css`): `--gradient-seam-vertical` (the split join) and `--shadow-xl`
+  (two-layer, navy-tinted card lift).
+- Shared by every `(auth)` page (sign-in, forgot-password, onboarding) through the layout.
+- **Deferred to the final copy pass:** the navy headline + subline are placeholder copy; the
+  forgot-password / onboarding headings can be centered to match sign-in then.
+
+### 5.2 Dashboards + shells — ⏳ NEXT (the core layout work)
+
+**Problem statement (user):** the current dashboards look *flat and uninspiring*. Goal is an
+elevated, considered layout with real depth and hierarchy — **not a re-skin**. Carry the sign-in
+vocabulary forward (navy panels, the seam, elevated cards, real shadow).
+
+**Scope:**
 - Unify the **agent + admin** shells into one consistent structure.
 - Rework navs — admin sidebar, agent right-rail, owner tabs.
 - Revisit **density / spacing**, depth, and visual interest.
-- Per-page structure changes, driven by the user's per-page design `.md` files.
+- Per-page structure changes, driven by the user's per-page design notes.
 
 Current shells (baseline to improve on): admin = collapsed icon sidebar; agent = top header +
 right softphone rail; owner = mobile-first top header + bottom tab bar; kiosk = full-screen
 state machine.
 
-**Resume checklist for the next session:**
-1. Bring the per-page design `.md` files.
-2. Confirm logo SVGs are dropped in `apps/portal/public/brand/` (`mark.svg` + `wordmark.svg`),
-   and supply the corrected **wordmark as SVG**.
-3. Treat logo + color + type (this doc, §1–4) as **locked inputs**; build layout on top.
+**Resume checklist for the dashboards session:**
+1. Invoke `impeccable` (context auto-loads from `docs/`); bring per-page design notes / screenshots.
+2. Sign in (seed admin) and capture a current-state "before" baseline of the agent + admin dashboards.
+3. Treat logo + color + type (§1–4) **and the sign-in vocabulary (§5.1)** as **locked inputs**.
+4. Go page-by-page: shape → build → verify in-browser (dev server + screenshots).
 
 ---
 
@@ -295,3 +319,9 @@ tokens only (`bg-primary`, `text-accent`, etc.), never raw hex.
   typecheck + lint + 428 tests + build, kiosk build, sign-in render (logo, Raleway, mint CTA).
   **Deferred to page-by-page passes:** §5 layout; full kiosk repaint + no-logo-on-kiosk; per-surface
   logo sizing; final "end / hang-up" treatment; and the §3.2 "open incident = blaze" remap (still red).
+- **2026-06-15** — **Layout phase begins — sign-in / auth (§5.1).** Split front door: navy brand
+  panel (animated connection-lines + vertical seam + headline) beside an elevated form card (top seam
+  gradient, centered wordmark home-link, `--shadow-xl` lift). New `components/brand/floating-paths.tsx`
+  (efferd "Background Paths" reworked: brand teal+mint on navy, `useReducedMotion`, deterministic
+  durations) on the new `motion` dep; new tokens `--gradient-seam-vertical` + `--shadow-xl`. Field
+  placeholders added. Copy deferred to the final pass. On `brand-revision`; dashboards next.

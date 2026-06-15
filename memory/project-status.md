@@ -1093,7 +1093,29 @@ Done via the `impeccable` skill. Two commits on `brand-revision` (a `feat` + a `
 - **Verified:** portal typecheck + lint + **428 tests** + `next build`; kiosk build; live `/sign-in`
   render (logo loads, Raleway confirmed, mint CTA, new tokens). Zero migrations / new routes / RLS.
 
-### NEXT — the Layout phase (§5 of the brand doc) — the real design work
+### Layout phase — Sign-in / auth DONE (2026-06-15)
+First Layout-phase surface, built via `impeccable` (shape → explore both directions → build → verify
+in-browser). **Sign-in redesigned as a split** (the brand thesis made physical): a **navy brand
+panel** (drifting **connection-lines** + "The front desk, after hours." headline + a 3px vertical
+seam down the join) beside an **elevated form card** (radius 16, two-layer `--shadow-xl`, the **seam
+gradient across its top**, the **wordmark centered** as the home link `h-12`, a divider, then the form).
+- `apps/portal/app/(auth)/layout.tsx` is the split shell → inherited by sign-in / forgot-password /
+  onboarding; mobile collapses to the card alone.
+- New `apps/portal/components/brand/floating-paths.tsx` — efferd's "Background Paths" reworked: brand
+  colour via `currentColor` (teal + mint layers on navy), `useReducedMotion()` guard (the global CSS
+  reduced-motion net can't stop motion's JS animation), deterministic durations (no SSR hydration
+  drift), `aria-hidden`. Uses the new **`motion`** dep (the one JS-animation pkg; in `package.json`).
+- New `globals.css` tokens: `--gradient-seam-vertical` + `--shadow-xl`. Email/password **placeholders**
+  added on the sign-in form.
+- typecheck + lint + 420 portal tests green. **Zero migrations / new routes / RLS.** Committed on
+  `brand-revision` (not merged, not deployed).
+- **Provenance note:** Kumar pointed at the efferd `@efferd/auth-5` shadcn block for its floating-paths
+  animation; we inspected the registry manifest, took **only** that one component (no social-login
+  cascade, no registry entry), and reworked it on-brand.
+- **Deferred to the final copy pass:** navy headline/subline copy is placeholder; the forgot-password /
+  onboarding headings can be centered to match sign-in.
+
+### NEXT — Dashboards (agent/admin) — the core layout work
 Kumar's problem statement: current dashboards look **"flat and uninspiring"**; wants real depth +
 hierarchy, **not a re-skin**. Scope: unify the **agent + admin** shells, rework navs, revisit
 density/depth, per-page structure. **Recommended order: agent/admin dashboards first** → owner
@@ -1106,7 +1128,7 @@ page-by-page (shape → build → verify).
 - **Open decision:** brand §3.2 lists "open incident" under **blaze**, but incidents still render
   **red** everywhere (prior stages chose red). Decide when incident screens come up.
 - Full **kiosk repaint** + the **no-logo-on-kiosk** rule (kiosk still shows an "LC" mark; CTA styles
-  got a coherent interim only). Per-surface **logo sizing** (sign-in wordmark is default h-7).
+  got a coherent interim only). Per-surface **logo sizing** (sign-in wordmark is now `h-12` in the new card).
   Final **end/hang-up** treatment. A real **favicon** from `mark.svg` (live 404 today).
 - First action in the fresh chat: **commit/PR not yet merged to `main`** — `brand-revision` holds the
   foundation; decide merge vs keep-building-on-branch before/with the layout work.
