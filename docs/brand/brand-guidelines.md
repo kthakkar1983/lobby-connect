@@ -47,16 +47,17 @@ alarmist. Confidence is carried by clarity and restraint, not decoration.
 
 ### Assets
 - **Mark** — the icon: an **entrance** — a portal / doorway / gateway — with a **person inside
-  it**. The deep-navy and mint forms shape the opening; the central figure (head + body) stands
-  within. A literal nod to the *lobby*. Source: `Lobby Connect artboard 1.svg`.
-- **Wordmark** — "LOBBY" (uppercase) over "connect" (lowercase), with a mint dot–line–dot
-  connector threading "connect". Source: corrected file `Lobby Connect (1).png`.
+  it**. Three brand anchors: navy + mint forms shape the opening, a **teal** figure stands
+  within. A literal nod to the *lobby*. Colors: navy `#0F2D4B` · teal `#2EA6AA` · mint `#06D6A0`.
+- **Wordmark** — "LOBBY" (uppercase) over "connect" (lowercase) in deep navy, with a **teal**
+  dot–line–dot connector threading "connect". Colors: navy `#0F2D4B` · teal `#2EA6AA`.
 - **Repo home:** committed SVGs live at `apps/portal/public/brand/mark.svg` and
   `apps/portal/public/brand/wordmark.svg` (portal only — the kiosk has no logo).
 
-> **Action item:** obtain the corrected wordmark as **SVG** (current corrected copy is PNG only)
-> before shipping — UI needs crisp vector at all sizes. The original `artboard 5.svg` predates
-> the correction (muted teal + grey + uppercase "CONNECT") and should not be used.
+> **Logo SVGs are committed** at `apps/portal/public/brand/{mark,wordmark}.svg` (vector, brand
+> palette). The old `artboard 5.svg` (muted teal + grey + uppercase "CONNECT") is superseded.
+> **One open confirm:** the wordmark connector is **teal** `#2EA6AA` — an earlier PNG looked
+> mint, so verify teal is the intended color.
 
 ### Usage
 - **Mark** — tight spots: collapsed icon sidebar, favicon, mobile header, avatars.
@@ -277,3 +278,6 @@ tokens only (`bg-primary`, `text-accent`, etc.), never raw hex.
   Outfit (body) / JetBrains Mono (data); Radon retired. Raleway variable font converted to
   woff2 and staged in `apps/portal/app/fonts/` + `apps/kiosk/public/fonts/` (code wiring during
   implementation).
+- **2026-06-14** — Logo SVGs committed (`apps/portal/public/brand/{mark,wordmark}.svg`). Mark now
+  navy/teal/mint (teal figure); wordmark navy + teal connector. Doc descriptions corrected to
+  match. Open confirm: wordmark connector teal vs mint. Committed to branch `brand-revision`.
