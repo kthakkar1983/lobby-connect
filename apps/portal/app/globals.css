@@ -154,6 +154,23 @@ body {
     0 0 0 11px color-mix(in srgb, var(--color-live) 8%, transparent);
 }
 
+/* Error shake — a short, decaying horizontal nudge for rejected input
+   (e.g. a failed sign-in), paired with the red invalid-border. Translate
+   only (GPU, no layout thrash); the reduced-motion net below neutralizes
+   the movement while the red border still carries the meaning. */
+@keyframes lc-shake {
+  0%,
+  100% { transform: translate3d(0, 0, 0); }
+  15% { transform: translate3d(-5px, 0, 0); }
+  30% { transform: translate3d(4px, 0, 0); }
+  45% { transform: translate3d(-3px, 0, 0); }
+  60% { transform: translate3d(2px, 0, 0); }
+  75% { transform: translate3d(-1px, 0, 0); }
+}
+.lc-shake {
+  animation: lc-shake 360ms var(--ease-out) both;
+}
+
 /* Accessibility — universal reduced-motion safety net (spec §3.5).
    Neutralizes movement/looping app-wide so no animation (incl. future
    ones) can violate the user's preference. Comprehension cues that are

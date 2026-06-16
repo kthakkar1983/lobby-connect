@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { logSignIn } from "@/lib/auth/audit";
-import { mapSignInError } from "@/lib/auth/sign-in-errors";
+import { mapSignInError, validateSignInInput } from "@/lib/auth/sign-in-errors";
 
 export type SignInState = {
   error: string | null;
@@ -16,8 +16,9 @@ export async function signInAction(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
-    return { error: "Enter your email and password." };
+  const inputError = validateSignInInput(email, password);
+  if (inputError) {
+    return { error: inputError };
   }
 
   const supabase = await createServerClient();

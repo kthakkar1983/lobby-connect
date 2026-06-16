@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { mapSignInError } from "@/lib/auth/sign-in-errors";
+import { mapSignInError, validateSignInInput } from "@/lib/auth/sign-in-errors";
+
+describe("validateSignInInput", () => {
+  it("requires both fields with one combined message", () => {
+    expect(validateSignInInput("", "")).toBe("Email and password are required.");
+    expect(validateSignInInput("user@example.com", "")).toBe(
+      "Email and password are required.",
+    );
+    expect(validateSignInInput("", "secret")).toBe(
+      "Email and password are required.",
+    );
+    expect(validateSignInInput("   ", "secret")).toBe(
+      "Email and password are required.",
+    );
+  });
+
+  it("rejects a malformed or incomplete email", () => {
+    expect(validateSignInInput("user", "secret")).toBe(
+      "Enter a valid email address.",
+    );
+    expect(validateSignInInput("user@", "secret")).toBe(
+      "Enter a valid email address.",
+    );
+    expect(validateSignInInput("user@example", "secret")).toBe(
+      "Enter a valid email address.",
+    );
+  });
+
+  it("passes well-formed input", () => {
+    expect(validateSignInInput("user@example.com", "secret")).toBeNull();
+  });
+});
 
 describe("mapSignInError", () => {
   it("maps a 429 status to a rate-limit message", () => {

@@ -68,6 +68,11 @@ export const copy = {
    *  the generic default is a deliberate security choice — don't reveal which
    *  field is wrong). `mapSignInError` reads from here. */
   auth: {
+    // Input validation — the sign-in form sets `noValidate`, so these plain
+    // messages replace the browser's native bubbles (no icons, no step-by-step).
+    required: "Email and password are required.",
+    invalidEmail: "Enter a valid email address.",
+    // Server responses.
     rateLimit: "Too many attempts. Please wait a few minutes and try again.",
     notConfirmed:
       "Your account isn't fully set up yet. Please contact your administrator.",
