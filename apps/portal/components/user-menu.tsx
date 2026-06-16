@@ -26,6 +26,9 @@ type Props = {
 // fires. Instead we render a hidden form and trigger it via requestSubmit() in
 // the item's onSelect (with preventDefault so Radix doesn't close + unmount the
 // menu before navigation starts).
+//
+// This is the owner portal's account menu. The agent/admin shell uses the
+// header `AccountMenu` (the "boarding pass") instead.
 export function UserMenu({ fullName, email, role }: Props) {
   const initials = fullName
     .split(/\s+/)

@@ -1,14 +1,5 @@
 import { requireRole } from "@/lib/auth/require-role";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SkipLink } from "@/components/skip-link";
-import { UserMenu } from "@/components/user-menu";
-import { Softphone } from "@/components/softphone/softphone";
-import { VideoCallHost } from "@/components/video-call/video-call-host";
+import { AppShell } from "@/components/app-shell";
 
 export default async function AdminLayout({
   children,
@@ -18,27 +9,8 @@ export default async function AdminLayout({
   const profile = await requireRole("ADMIN");
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <SkipLink />
-        <header className="border-b border-border bg-card">
-          <div className="flex h-14 items-center justify-between px-4">
-            <SidebarTrigger />
-            <UserMenu
-              fullName={profile.full_name}
-              email={profile.email}
-              role="ADMIN"
-            />
-          </div>
-          <div className="h-px w-full bg-[image:var(--gradient-seam)]" aria-hidden="true" />
-        </header>
-        <div className="border-b border-border px-4 pb-4 pt-3">
-          <Softphone role="ADMIN" />
-          <VideoCallHost />
-        </div>
-        <main id="main" className="p-6">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <AppShell role="ADMIN" fullName={profile.full_name} email={profile.email}>
+      {children}
+    </AppShell>
   );
 }

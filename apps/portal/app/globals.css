@@ -86,16 +86,17 @@
   --duration-standard: 220ms; /* default UI: dropdowns, toggles */
   --duration-slow: 320ms;     /* dialogs / sheets */
 
-  /* Sidebar — aliases to brand tokens so the shadcn sidebar primitive resolves.
-     Neutral surface for foundation; Stage 2 admin polish may choose a navy rail. */
-  --color-sidebar: var(--color-card);
-  --color-sidebar-foreground: var(--color-foreground);
-  --color-sidebar-primary: var(--color-primary);
-  --color-sidebar-primary-foreground: var(--color-primary-foreground);
-  --color-sidebar-accent: var(--color-muted);
-  --color-sidebar-accent-foreground: var(--color-foreground);
-  --color-sidebar-border: var(--color-border);
-  --color-sidebar-ring: var(--color-ring);
+  /* Sidebar — the navy rail (the shell's value anchor; carries the sign-in's
+     navy-panel vocabulary into the app). Cream ink, lifted-navy hover, mint focus.
+     Active-nav teal lives in nav-item.tsx; the reversed logo lives on the rail. */
+  --color-sidebar: #0F2D4B;             /* navy rail */
+  --color-sidebar-foreground: #F4F7F7;  /* cool near-white ink */
+  --color-sidebar-primary: #06D6A0;     /* mint — primary accent on the rail */
+  --color-sidebar-primary-foreground: #14202F; /* ink on mint */
+  --color-sidebar-accent: #1C3E5D;      /* lifted navy — hover/active fill */
+  --color-sidebar-accent-foreground: #F4F7F7;  /* cream on hover/active */
+  --color-sidebar-border: #1E4062;      /* subtle lifted-navy hairline */
+  --color-sidebar-ring: #06D6A0;        /* mint focus ring (pops on navy) */
 }
 
 html,
@@ -142,6 +143,15 @@ body {
   background-size: 150% 100%;
   background-repeat: no-repeat;
   animation: lc-skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+/* Connection-ring halo for the account avatar — the brand "reached through a
+   screen" motif: a soft teal ring fading into a softer mint one. Token-based
+   (color-mix on the brand tokens, so no raw hex leaks in). */
+.lc-avatar-halo {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--color-accent) 16%, transparent),
+    0 0 0 11px color-mix(in srgb, var(--color-live) 8%, transparent);
 }
 
 /* Accessibility — universal reduced-motion safety net (spec §3.5).

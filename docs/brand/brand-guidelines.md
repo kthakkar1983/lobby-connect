@@ -214,27 +214,53 @@ the seam.
 - **Deferred to the final copy pass:** the navy headline + subline are placeholder copy; the
   forgot-password / onboarding headings can be centered to match sign-in then.
 
-### 5.2 Dashboards + shells — ⏳ NEXT (the core layout work)
+### 5.2 Unified agent/admin shell — ✅ DONE (2026-06-16)
 
-**Problem statement (user):** the current dashboards look *flat and uninspiring*. Goal is an
-elevated, considered layout with real depth and hierarchy — **not a re-skin**. Carry the sign-in
-vocabulary forward (navy panels, the seam, elevated cards, real shadow).
+The agent + admin portals now share **one** shell (`apps/portal/components/app-shell.tsx`,
+role-parameterised; both `(agent)`/`(admin)` layouts are thin auth-and-delegate wrappers).
+Composition + tokens only — every call/video/auth surface is mounted verbatim.
 
-**Scope:**
-- Unify the **agent + admin** shells into one consistent structure.
-- Rework navs — admin sidebar, agent right-rail, owner tabs.
-- Revisit **density / spacing**, depth, and visual interest.
-- Per-page structure changes, driven by the user's per-page design notes.
+- **Navy rail** — the shell's value anchor, carrying the sign-in's navy-panel vocabulary. Built by
+  recolouring the `--color-sidebar-*` tokens (`globals.css`), **not** by forking the shadcn sidebar.
+  A 2px **vertical seam** runs the navy-rail | workspace join (on the `SidebarInset` left edge).
+- **Reversed logo on the rail** — `LogoMark`/`Wordmark` + new `LogoLockup` gained an `onDark` prop.
+  New assets: `mark-on-dark.svg` + `wordmark-on-dark.svg` (mechanical navy→`#F4F7F7` reverse), and
+  the partner's **`mark+wordmark{,-on-dark}.svg`** lockup (SVGO'd 244 KB→2.8 KB; viewBox cropped to
+  the artwork, `12 336 990 376`). Expanded rail = the lockup; collapsed = the mark. A bespoke
+  dark-bg logo can swap those two files anytime.
+- **Hover-expand** (locked decision #5) — the rail rests collapsed and expands on hover with a
+  ~220 ms **intent delay** + keyboard focus-expand; the header toggle button was removed.
+- **Role-aware nav** (`app-sidebar.tsx`) — admin: Overview/Users/Properties/Audit/Status; agent:
+  Dashboard. `NavItem` gained an `exact` prop so an index route (`/admin`, `/agent`) doesn't match
+  all its children. Dark-context active state = teal wash + teal icon (no side-stripe).
+- **3-column** — navy rail │ workspace │ persistent 320px right call-rail (softphone + video for
+  both roles; agent adds a coverage card). Admin's old horizontal softphone strip retired.
+- **Account menu** — an avatar-only trigger (top-right header) opens a **"boarding pass"**
+  (`apps/portal/components/account-menu.tsx`): a credential beside a perforated tear-off Sign-out
+  stub, the avatar wearing a teal→mint **connection-ring halo** (`.lc-avatar-halo`, token
+  `color-mix`). **Agent/admin only** — the **owner portal keeps its own `UserMenu`** (the simple
+  pill, restored unchanged).
 
-Current shells (baseline to improve on): admin = collapsed icon sidebar; agent = top header +
-right softphone rail; owner = mobile-first top header + bottom tab bar; kiosk = full-screen
-state machine.
+428 tests + typecheck + lint green; verified in-browser (admin + agent; collapsed / expanded / hover).
 
-**Resume checklist for the dashboards session:**
-1. Invoke `impeccable` (context auto-loads from `docs/`); bring per-page design notes / screenshots.
-2. Sign in (seed admin) and capture a current-state "before" baseline of the agent + admin dashboards.
-3. Treat logo + color + type (§1–4) **and the sign-in vocabulary (§5.1)** as **locked inputs**.
-4. Go page-by-page: shape → build → verify in-browser (dev server + screenshots).
+**Tried and rejected:** putting the account menu in the **rail footer** — it fought the hover-expand
+(every interaction over the footer re-triggered expand/collapse, and the avatar shifted). Reverted to
+the header. The footer relocation is **off the table.**
+
+### 5.3 Dashboard content + softphone position — ⏳ NEXT (new chat)
+
+The shell is the frame; the **content** inside it is still the Stage-2 "flat and uninspiring" work.
+
+- **Open issue carried in:** the header account-menu dropdown **overlaps the softphone** card. Solve
+  it during this pass — options floated: a **left-anchored** menu panel (shifted off the call-rail);
+  **relocate / restyle the softphone**; or an **inset gap** atop the call-rail. (The footer move is
+  out.)
+- Redesign the **agent dashboard** (greeting / stats / recent-calls) and the **admin overview**
+  (stat strip + properties ops table) with real depth + hierarchy, *inside* the new shell.
+
+**Resume checklist:** invoke `impeccable` (context auto-loads from `docs/`); bring per-page notes;
+treat logo + colour + type (§1–4) + the sign-in (§5.1) + this shell (§5.2) as **locked inputs**; go
+page-by-page (shape → build → verify in-browser).
 
 ---
 
