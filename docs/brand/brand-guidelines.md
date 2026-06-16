@@ -18,7 +18,7 @@ type, layout, and usage rules. Update this as decisions land; it should always d
 | 2. Logo | ✅ Locked · components built |
 | 3. Color | ✅ Locked · tokens implemented |
 | 4. Typography | ✅ Locked · fonts wired |
-| 5. Layout | 🚧 In progress — sign-in / auth ✅ done; dashboards + shells next |
+| 5. Layout | 🚧 In progress — sign-in ✅ · shells ✅ · dashboard + shared-header **design ✅ locked** (impl + owner next) |
 | 6. Shape · elevation · motion | ◻︎ Baseline carried from current system (revisit if needed) |
 | 7. Voice & tone | ✅ Carried (unchanged) |
 | 8. Implementation map | ✅ Tracks locked sections |
@@ -247,20 +247,40 @@ Composition + tokens only — every call/video/auth surface is mounted verbatim.
 (every interaction over the footer re-triggered expand/collapse, and the avatar shifted). Reverted to
 the header. The footer relocation is **off the table.**
 
-### 5.3 Dashboard content + softphone position — ⏳ NEXT (new chat)
+### 5.3 Dashboards + shared header — ✅ DESIGN LOCKED (2026-06-16), impl pending
 
-The shell is the frame; the **content** inside it is still the Stage-2 "flat and uninspiring" work.
+Full spec: [`docs/specs/2026-06-16-stage5.3-dashboards-shared-header-design.md`](../specs/2026-06-16-stage5.3-dashboards-shared-header-design.md).
+The answer to the "flat and uninspiring" problem: real depth + hierarchy, **channel-aware**
+operational data (Twilio audio vs kiosk/Agora video), in a bento. Locked via `impeccable` (shape →
+iterate visuals → lock). **Not yet implemented.**
 
-- **Open issue carried in:** the header account-menu dropdown **overlaps the softphone** card. Solve
-  it during this pass — options floated: a **left-anchored** menu panel (shifted off the call-rail);
-  **relocate / restyle the softphone**; or an **inset gap** atop the call-rail. (The footer move is
-  out.)
-- Redesign the **agent dashboard** (greeting / stats / recent-calls) and the **admin overview**
-  (stat strip + properties ops table) with real depth + hierarchy, *inside* the new shell.
+- **Shared gradient header (all three portals):** a navy→teal band
+  (`linear-gradient(112deg,#0E2A45,#13495E,#237E84)`) filled with a **static** (no-motion) field of
+  staggered connection-lines (the sign-in `floating-paths`, rendered static) in the centre-right dead
+  space; the Raleway greeting (cream, no subtitle) left, the account menu right, a seam hairline along
+  the bottom edge (continuous with the rail's seam → rail + header frame the workspace in an "L").
+  Owner inherits this header (mobile-adapted, keeps its `UserMenu`).
+- **The 320px call-rail is removed.** The **softphone becomes a card** — center-right in the agent
+  bento; a home card on admin (with the Device mounted in the admin layout + an incoming-call toast so
+  admins stay reachable on other tabs). All call/notes/**emergency** logic + the full-screen in-call
+  overlay are preserved verbatim (composition only). Idle restyle: a `Line ready` pill + seam ring +
+  agent-only `Accepting calls` toggle.
+- **Agent dashboard** (pod-scoped bento): header · 4 stats (Answered/Missed/Avg pickup/**Avg call
+  length**) · `Hourly Call Volume` chart (+ total call duration) + Recent calls · the softphone card ·
+  a full-width **`Your pod`** panel (up to 5 properties, phone/video volume bars).
+- **Admin command center** (operator-wide, level bentos): header · a pulse row (Live calls / Agents
+  online / Open incidents / **Phone health** rollup) · a Tonight card (operator-wide Hourly Call Volume
+  + Answered/Missed/Failed/Avg pickup/Avg call) over the Properties board · softphone card + Team on now
+  + an operator-wide Recent-calls feed. **Phone health is a scale-aware rollup** ("48 / 50 · 2 need
+  attention" blaze / "lines OK" mint / "phone path down" red) so one bad hotel out of fifty surfaces as
+  a drill-in count, never hidden behind a single green heartbeat.
+- **Channel colours:** teal = phone/audio, navy = video (categorical, always legended). Outcomes:
+  mint = answered, blaze = missed, muted = failed (red stays 911-only).
+- **Constraints unchanged:** light only; **no migrations / new routes / RLS / call-logic changes** —
+  every field exists. New work = read queries + TDD'd pure aggregation helpers + composition.
 
-**Resume checklist:** invoke `impeccable` (context auto-loads from `docs/`); bring per-page notes;
-treat logo + colour + type (§1–4) + the sign-in (§5.1) + this shell (§5.2) as **locked inputs**; go
-page-by-page (shape → build → verify in-browser).
+**Next:** implement agent + admin (build order in the spec §7), then the **owner** dashboard content
+(fresh chat — owner inherits only the header above), then **audio in-call** + **kiosk**.
 
 ---
 

@@ -1149,15 +1149,50 @@ failed attempt:**
 - 423 portal tests; verified in-browser (empty / bad-format / wrong-creds all shake + red + plain
   message). Zero migrations/routes/RLS. Committed on `brand-revision`.
 
-### NEXT — Dashboards (agent/admin) — the core layout work
-Kumar's problem statement: current dashboards look **"flat and uninspiring"**; wants real depth +
-hierarchy, **not a re-skin**. The **shells + navs are now unified** (subsections above); the remaining
-work is dashboard **content + structure** (real depth/hierarchy) + the softphone-overlap (brand §5.3).
-**Recommended order: agent/admin dashboards first** → owner
-refinements → kiosk last. Kumar will bring **per-page design `.md` files / prompts / screenshots**.
-A fresh chat should: invoke `impeccable` (context auto-loads from `docs/`), capture a current-state
-"before" baseline of the authed dashboards (needs a local/prod login — sign in as admin), then go
-page-by-page (shape → build → verify).
+### Layout phase — Dashboards (agent/admin) + shared header — DESIGN LOCKED (2026-06-16), impl pending
+Full design, data spec, helper list, build order: **`docs/specs/2026-06-16-stage5.3-dashboards-shared-header-design.md`**
+(+ brand doc §5.3). Locked via `impeccable` (shape → many in-chat visual iterations → lock). **No code
+written yet** — this session produced the locked *design*; the implementation is the next focused build.
+
+**What's locked:**
+- **Shared gradient header (all 3 portals):** navy→teal band (`linear-gradient(112deg,#0E2A45,#13495E,#237E84)`)
+  + a **static** (no-motion) staggered **connection-lines** field (the sign-in `floating-paths` rendered
+  static) in the centre-right; Raleway greeting (cream, **no subtitle**) left; account menu right; a 2px
+  seam hairline on the bottom edge (continuous with the rail seam → "L" frame). Owner inherits it
+  (mobile, keeps `UserMenu`).
+- **Call-rail (320px) REMOVED.** Softphone → a **card**: center-right in the agent bento; a home card on
+  admin (Device mounted in the admin **layout** + incoming-call **toast** so admins stay reachable on
+  other tabs). **All call/notes/emergency logic + the full-screen `AudioCallOverlay` preserved verbatim**
+  — composition only. Idle restyle: `Line ready` pill + seam ring + agent-only `Accepting calls` toggle.
+- **Agent dashboard (pod-scoped bento):** header · 4 stats (Answered / Missed / Avg pickup / **Avg call
+  length**) · `Hourly Call Volume` chart (+ Total call duration) + Recent calls (channel icon + outcome
+  + duration) · softphone card · full-width **`Your pod`** (≤5 properties, **phone/video volume bars**).
+- **Admin command center (operator-wide, level bentos):** header · pulse row (Live calls / Agents online
+  / Open incidents / **Phone health**) · a Tonight card (operator-wide `Hourly Call Volume` +
+  Answered/Missed/Failed/Avg pickup/Avg call) over the Properties board · softphone card + Team-on-now +
+  operator-wide **Recent calls** feed (fills the bottom-right, columns bottom-align). **Phone health =
+  scale-aware rollup** ("48/50 · 2 need attention" blaze / "lines OK" mint / "phone path down" red) —
+  answers Kumar's "1 of 50 hotels down?" (the single `health_signals` heartbeat only proves the whole
+  Twilio path is up; per-hotel issues derive from FAILED-calls/coverage gaps + flag the board rows).
+- **Channel colours:** teal = phone/AUDIO, navy = video (categorical, legended). Outcomes: mint =
+  answered, blaze = missed, muted = failed (**red stays 911-only**).
+
+**Data:** everything is real (`calls.channel` AUDIO/VIDEO is the spine). **Agent = pod-scoped; admin =
+operator-wide aggregate** (explicit Kumar correction — the hourly chart is all agents, not the viewer).
+**No migrations / new routes / RLS / call-logic changes** — new work = read queries + ~7 TDD'd pure
+helpers (`avgCallLengthSeconds`, `countByOutcome`, `splitByChannel`, `hourlyVolume`, `countLiveCalls`,
+`phoneHealthRollup`, + per-property channel counts). Spec §6.
+
+**Rejected along the way:** light `#F4F7F7` mixed into the header gradient (reverted to navy→teal);
+floating softphone dock + header-anchored softphone (→ a card instead); stretching the softphone/team
+cards or moving a pulse tile to kill the admin bottom-right dead space (→ filled it with the Recent
+calls feed instead).
+
+**NEXT (fresh chats):** (1) **implement** agent + admin from the spec (build order §7: TDD helpers →
+shared header → drop the rail + mount softphone → agent page → admin page → verify in-browser, incl.
+"a call still rings while on another tab"). (2) **Owner** dashboard content — its own fresh chat (owner
+inherits only the shared header). (3) **Audio in-call** + **kiosk** screens — later. Agent + admin +
+the shared header are design-**locked**; treat §1–4 + sign-in (§5.1) + shell (§5.2) as locked inputs.
 
 ### Deferred decisions / follow-ups (flagged, NOT done)
 - **Open decision:** brand §3.2 lists "open incident" under **blaze**, but incidents still render
