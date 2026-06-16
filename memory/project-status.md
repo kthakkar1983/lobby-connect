@@ -1115,10 +1115,45 @@ gradient across its top**, the **wordmark centered** as the home link `h-12`, a 
 - **Deferred to the final copy pass:** navy headline/subline copy is placeholder; the forgot-password /
   onboarding headings can be centered to match sign-in.
 
+### Layout phase — Unified agent/admin shell DONE (2026-06-16)
+Second Layout-phase surface, via `impeccable`. One shared `apps/portal/components/app-shell.tsx`
+(role-param) now backs both `(agent)`/`(admin)` layouts (thin auth-and-delegate wrappers). **Navy
+rail** (recoloured `--color-sidebar-*` tokens, not a shadcn fork) + a 2px vertical **seam** on the
+`SidebarInset` left edge; **reversed logo** on the rail (`LogoMark`/`Wordmark`/new `LogoLockup` gained
+an `onDark` prop + new on-dark SVGs, the lockup SVGO'd 244KB→2.8KB); **hover-expand** (220ms intent
+delay + keyboard focus; header toggle removed); role-aware nav (`NavItem` `exact` fix for index routes,
+teal-wash active); **3-col** with a persistent 320px right call-rail (admin's softphone strip retired
+into it); **account menu** = avatar → "boarding pass" dropdown (`components/account-menu.tsx`,
+`.lc-avatar-halo`) for agent/admin only (owner keeps its `UserMenu`). 428 tests + typecheck + lint;
+verified in-browser. Rejected the rail-footer placement (fought hover-expand). Zero migrations/routes/
+RLS. Full detail: CLAUDE.md build-status row + brand doc §5.2. Committed on `brand-revision`.
+
+### Layout phase — Sign-in error states DONE (2026-06-16)
+Small polish on the sign-in form, via `impeccable`. **Field shake + red invalid outline on every
+failed attempt:**
+- New reusable `.lc-shake` keyframe in `globals.css` — a short decaying `translate3d` (360ms,
+  `--ease-out`), replays per-submit via a class-toggle reset on `onAnimationEnd` (robust: the submit
+  button is disabled during the request, far longer than the animation); the universal reduced-motion
+  net neutralises the movement while the red border still carries the meaning.
+- Red outline via `aria-invalid` → the shared `Input`'s existing `border-destructive`. The email field
+  was a hand-rolled `<input>`; **routed it through the shared `Input`** so both boxes share one
+  vocabulary and both get the red state.
+- **Native HTML5 validation retired** (`<form noValidate>`) — it was firing the browser's own bubble
+  (with the warning icon) and **blocking submit before the action ran**, so empty/format errors never
+  reached the shake/red/custom-message path (only wrong-creds did). Now every error takes one path: a
+  plain custom message + shake, no browser bubbles/icons.
+- New tested `validateSignInInput` (`lib/auth/sign-in-errors.ts`, reuses the now-exported `EMAIL_RE`
+  from `lib/users/validate.ts`); copy `auth.required` ("Email and password are required.") +
+  `auth.invalidEmail` ("Enter a valid email address.") in `lib/copy.ts`; `invalidCredentials`
+  ("Invalid email or password.") unchanged. Kept "email" (not "user ID") to match the field label.
+- 423 portal tests; verified in-browser (empty / bad-format / wrong-creds all shake + red + plain
+  message). Zero migrations/routes/RLS. Committed on `brand-revision`.
+
 ### NEXT — Dashboards (agent/admin) — the core layout work
 Kumar's problem statement: current dashboards look **"flat and uninspiring"**; wants real depth +
-hierarchy, **not a re-skin**. Scope: unify the **agent + admin** shells, rework navs, revisit
-density/depth, per-page structure. **Recommended order: agent/admin dashboards first** → owner
+hierarchy, **not a re-skin**. The **shells + navs are now unified** (subsections above); the remaining
+work is dashboard **content + structure** (real depth/hierarchy) + the softphone-overlap (brand §5.3).
+**Recommended order: agent/admin dashboards first** → owner
 refinements → kiosk last. Kumar will bring **per-page design `.md` files / prompts / screenshots**.
 A fresh chat should: invoke `impeccable` (context auto-loads from `docs/`), capture a current-state
 "before" baseline of the authed dashboards (needs a local/prod login — sign in as admin), then go
