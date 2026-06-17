@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   phoneHealthRollup,
+  failureSummaryToday,
   type PhoneHealthProperty,
   type PhoneHealthCall,
 } from "@/lib/dashboard/phone-health";
@@ -47,5 +48,48 @@ describe("phoneHealthRollup", () => {
 
   it("is all-ok when there are no calls", () => {
     expect(phoneHealthRollup(PROPS, [], NOW)).toEqual({ ok: 2, total: 2, needAttention: [] });
+  });
+});
+
+describe("failureSummaryToday", () => {
+  it("counts today's FAILED calls per property and tracks the latest failure time", () => {
+    const calls: PhoneHealthCall[] = [
+      { property_id: "a", state: "FAILED", ring_started_at: "2026-06-08T01:00:00Z", timeZone: "America/Chicago" },
+      { property_id: "a", state: "FAILED", ring_started_at: "2026-06-08T01:30:00Z", timeZone: "America/Chicago" },
+      { property_id: "b", state: "FAILED", ring_started_at: "2026-06-08T00:15:00Z", timeZone: "America/Chicago" },
+    ];
+    const map = failureSummaryToday(calls, NOW);
+    expect(map.get("a")).toEqual({ count: 2, lastFailureAt: "2026-06-08T01:30:00Z" });
+    expect(map.get("b")).toEqual({ count: 1, lastFailureAt: "2026-06-08T00:15:00Z" });
+  });
+
+  it("tracks the latest failure time regardless of input order", () => {
+    const calls: PhoneHealthCall[] = [
+      { property_id: "a", state: "FAILED", ring_started_at: "2026-06-08T01:30:00Z", timeZone: "America/Chicago" },
+      { property_id: "a", state: "FAILED", ring_started_at: "2026-06-08T01:00:00Z", timeZone: "America/Chicago" },
+    ];
+    expect(failureSummaryToday(calls, NOW).get("a")).toEqual({
+      count: 2,
+      lastFailureAt: "2026-06-08T01:30:00Z",
+    });
+  });
+
+  it("ignores non-FAILED states (answered / missed never count)", () => {
+    const calls: PhoneHealthCall[] = [
+      { property_id: "a", state: "COMPLETED", ring_started_at: "2026-06-08T01:00:00Z", timeZone: "America/Chicago" },
+      { property_id: "a", state: "NO_ANSWER", ring_started_at: "2026-06-08T01:10:00Z", timeZone: "America/Chicago" },
+    ];
+    expect(failureSummaryToday(calls, NOW).size).toBe(0);
+  });
+
+  it("ignores FAILED calls from earlier days (property timezone)", () => {
+    const calls: PhoneHealthCall[] = [
+      { property_id: "a", state: "FAILED", ring_started_at: "2026-06-06T01:00:00Z", timeZone: "America/Chicago" },
+    ];
+    expect(failureSummaryToday(calls, NOW).size).toBe(0);
+  });
+
+  it("returns an empty map when there are no calls", () => {
+    expect(failureSummaryToday([], NOW).size).toBe(0);
   });
 });
