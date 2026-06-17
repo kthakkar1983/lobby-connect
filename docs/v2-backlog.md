@@ -64,3 +64,23 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 - **Revoke** the old token (`sntryu_2eed…`) in Sentry — it should then 401 on the issues API.
 
 **Acceptance.** `/admin/status` "Recent errors" still shows a count after the swap; old token revoked + returns 401.
+
+---
+
+## UI / UX
+
+### Admin off-tab incoming-video nudge
+
+**Status:** open · **Raised:** 2026-06-17 (session 22 dashboard polish; Kumar OK'd as-is for now) · **Pilot workaround:** none needed — the ringtone still fires, and the always-home agent is unaffected.
+
+**Problem.** Incoming **video** calls render as a persistent "Video" card in the right-hand softphone column (directly under the softphone), per Kumar's placement preference. That card lives inside the dashboard-workspace aside, which is `hidden` when the user is **off the dashboard home**. So an **admin who has navigated to another tab** (Users / Properties / Audit / Status) won't see a visible incoming-video card there — they only **hear the ringtone** (still plays) and must return home to see/accept it. Audio has an equivalent off-home nudge (the bottom-right `IncomingCallToast`); video does not.
+
+**Why it matters.** Agents only have the one dashboard route, so they're never off-home — for them this is a non-issue. But an **admin covering calls** can wander to another tab and miss the *visual* of an incoming video call (the audio ring is the only cue). Low impact for the single-hotel pilot; grows with more admins/properties.
+
+**Where it lives.** `apps/portal/components/dashboard-workspace.tsx` (aside is `onHome ? "flex …" : "hidden"`, and `VideoCallHost` now renders inside it); `apps/portal/components/video-call/{video-call-host,incoming-video-banner}.tsx`; compare the audio pattern in `apps/portal/components/dashboard/incoming-call-toast.tsx`.
+
+**Fix sketch.**
+- Mirror the audio pattern: render a fixed off-home **video** nudge (small corner toast — "Incoming video — go to your dashboard") when `pathname !== home` and a video call is ringing, routing the admin home to accept. The poll + ringtone already run; the nudge just needs the incoming state.
+- OR lift the incoming-video state out of `VideoCallHost` so the banner can render in the aside on home **and** as a fixed fallback off-home (the active `VideoCall` is already fixed full-screen and escapes any container).
+
+**Acceptance.** An admin on a non-home tab sees a visible incoming-video nudge (not just the ring) and can reach the call in one click; the agent/home experience is unchanged.
