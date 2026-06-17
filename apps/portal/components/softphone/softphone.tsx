@@ -9,6 +9,7 @@ import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
+import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -314,10 +315,12 @@ export function Softphone({ role }: SoftphoneProps) {
   }, [ready]);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 text-sm">
+    <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
       <div className="flex items-center justify-between">
-        <span className="font-medium text-foreground">Softphone</span>
-        <ConnectionDot phase={phase} />
+        <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+          Softphone
+        </span>
+        <LinePill phase={phase} />
       </div>
 
       {pendingNotes && (
@@ -347,10 +350,10 @@ export function Softphone({ role }: SoftphoneProps) {
         </div>
       )}
 
-      {role === "AGENT" && phase !== "in-call" && phase !== "incoming" && (
-        <>
-          {/* Idle glow ring — decorative anchor, not a status indicator */}
-          <div className="relative mx-auto mt-2 h-16 w-16">
+      {phase !== "in-call" && phase !== "incoming" && phase !== "error" && (
+        <div className="mt-2 flex flex-col items-center">
+          {/* Seam-ring idle brand moment — decorative anchor, not a status light. */}
+          <div className="relative mx-auto mt-1 h-16 w-16">
             <span
               aria-hidden="true"
               className="lc-seam-drift absolute -inset-1 rounded-full opacity-40 blur-md"
@@ -359,14 +362,27 @@ export function Softphone({ role }: SoftphoneProps) {
               <Phone size={20} className="text-primary" />
             </span>
           </div>
-          <button
-            type="button"
-            onClick={toggleReady}
-            className="mt-3 w-full rounded-button border border-border px-3 py-2 text-foreground"
-          >
-            {ready ? "Ready — accepting calls" : "Away — not accepting"}
-          </button>
-        </>
+          <p className="mt-3 text-center text-text-muted">Incoming calls ring here.</p>
+          {role === "AGENT" ? (
+            <button
+              type="button"
+              onClick={toggleReady}
+              aria-pressed={ready}
+              className={cn(
+                "mt-3 w-full rounded-button border px-3 py-2 font-medium transition-colors",
+                ready
+                  ? "border-transparent bg-live/15 text-live-foreground"
+                  : "border-border text-text-muted",
+              )}
+            >
+              {ready ? "Accepting calls" : "Not accepting calls"}
+            </button>
+          ) : (
+            <p className="mt-3 text-center text-xs text-text-muted">
+              You&apos;re dialed in for properties set to Covering.
+            </p>
+          )}
+        </div>
       )}
 
       {phase === "incoming" && (
@@ -419,14 +435,33 @@ export function Softphone({ role }: SoftphoneProps) {
   );
 }
 
-function ConnectionDot({ phase }: { readonly phase: Phase }) {
+function LinePill({ phase }: { readonly phase: Phase }) {
   const ok = phase === "ready" || phase === "incoming" || phase === "in-call";
+  const label =
+    phase === "in-call"
+      ? "On call"
+      : phase === "incoming"
+        ? "Incoming"
+        : phase === "ready"
+          ? "Line ready"
+          : phase === "error"
+            ? "Offline"
+            : "Connecting";
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${
-        ok ? "bg-live" : "bg-muted-foreground/40"
-      }`}
-      aria-label={ok ? "connected" : "disconnected"}
-    />
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        ok ? "bg-live/15 text-live-foreground" : "bg-muted text-text-muted",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          ok ? "bg-live" : "bg-muted-foreground/50",
+        )}
+      />
+      {label}
+    </span>
   );
 }

@@ -57,6 +57,9 @@
   --gradient-seam: linear-gradient(90deg, #0F2D4B, #2EA6AA, #06D6A0);
   /* Vertical variant — the join down a split surface (e.g. the sign-in brand seam). */
   --gradient-seam-vertical: linear-gradient(180deg, #0F2D4B, #2EA6AA, #06D6A0);
+  /* Dashboard header field — teal→navy (left→right), the shared greeting band (spec §5.3).
+     248deg is the horizontal mirror of the original 112deg (360-112), so teal sits left. */
+  --gradient-header: linear-gradient(248deg, #0E2A45 0%, #13495E 52%, #237E84 100%);
 
   /* Typography — Raleway (display + labels), Outfit (body/UI), JetBrains Mono (data); set by next/font. */
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

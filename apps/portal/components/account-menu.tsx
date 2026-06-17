@@ -49,7 +49,7 @@ export function AccountMenu({ fullName, email, role }: Props) {
           <button
             type="button"
             aria-label={`Account menu, ${fullName}`}
-            className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground outline-none transition-shadow hover:ring-2 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="lc-avatar-halo inline-flex size-9 items-center justify-center rounded-full bg-background text-sm font-medium text-foreground outline-none transition-shadow hover:ring-2 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {initials || "?"}
           </button>

@@ -54,7 +54,7 @@ export function AppSidebar({ role }: { readonly role: "ADMIN" | "AGENT" }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schedule = (next: boolean) => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setOpen(next), next ? 220 : 180);
+    timer.current = setTimeout(() => setOpen(next), next ? 450 : 180);
   };
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);

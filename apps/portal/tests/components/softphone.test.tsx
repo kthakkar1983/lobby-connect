@@ -115,7 +115,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
 
     // Wait for Device.register() to fire "registered" → phase = "ready".
     await waitFor(() =>
-      screen.getByText(/Ready — accepting calls/i),
+      screen.getByText(/Accepting calls/i),
     );
 
     // Simulate an incoming call.
@@ -165,7 +165,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
     });
 
     render(<Softphone role="AGENT" />);
-    await waitFor(() => screen.getByText(/Ready — accepting calls/i));
+    await waitFor(() => screen.getByText(/Accepting calls/i));
     await act(async () => twilio.fireIncoming());
     await user.click(screen.getByText("Accept"));
     await user.type(screen.getByPlaceholderText("Room #"), "507");
@@ -192,7 +192,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
   it("renders the unified in-call overlay (with the playbook) after answering", async () => {
     const user = userEvent.setup();
     render(<Softphone role="AGENT" />);
-    await waitFor(() => screen.getByText(/Ready — accepting calls/i));
+    await waitFor(() => screen.getByText(/Accepting calls/i));
     await act(async () => twilio.fireIncoming());
     await user.click(screen.getByText("Accept"));
 
