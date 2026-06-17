@@ -74,8 +74,9 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
         {hasNotes && (
           <StickyNote size={13} className="shrink-0 text-text-muted" role="img" aria-label="Has notes" />
         )}
-        <span className="min-w-0 flex-1 truncate text-foreground">
-          {where} · {call.propertyName}
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-medium text-foreground">{where}</span>
+          <span className="text-text-muted"> · {call.propertyName}</span>
         </span>
         <span className="flex shrink-0 items-center gap-3 font-mono text-xs text-text-muted">
           <span>{formatDuration(call.duration_seconds)}</span>

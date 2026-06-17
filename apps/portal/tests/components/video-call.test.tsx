@@ -35,14 +35,23 @@ const agora = vi.hoisted(() => {
     play: vi.fn(),
     close: vi.fn(),
   };
-  return { client, audioTrack, videoTrack };
+  // vi.fn wrappers so a test can make a device fail (e.g. webcam busy).
+  const createMicrophoneAudioTrack = vi.fn(async () => audioTrack);
+  const createCameraVideoTrack = vi.fn(async () => videoTrack);
+  return {
+    client,
+    audioTrack,
+    videoTrack,
+    createMicrophoneAudioTrack,
+    createCameraVideoTrack,
+  };
 });
 
 vi.mock("agora-rtc-sdk-ng", () => ({
   default: {
     createClient: () => agora.client,
-    createMicrophoneAudioTrack: async () => agora.audioTrack,
-    createCameraVideoTrack: async () => agora.videoTrack,
+    createMicrophoneAudioTrack: agora.createMicrophoneAudioTrack,
+    createCameraVideoTrack: agora.createCameraVideoTrack,
   },
 }));
 
@@ -125,5 +134,30 @@ describe("VideoCall — stale-closure regression (H1)", () => {
     };
     expect(body.roomNumber).toBe("204");
     expect(body.notes).toBe("extra pillows requested");
+  });
+
+  // Regression: a busy webcam (held by another app) must NOT abandon the call.
+  // Previously createCameraVideoTrack() threw into the catch → onClose(), so the
+  // agent dropped while the guest kept ringing and the call logged as missed.
+  it("stays connected audio-only when the camera is busy, instead of abandoning the call", async () => {
+    const onClose = vi.fn();
+    agora.createCameraVideoTrack.mockRejectedValueOnce(
+      new Error("NotReadableError: Could not start video source"),
+    );
+
+    render(
+      <VideoCall callId="call-busycam" onClose={onClose} propertyName="The Sample Hotel" />,
+    );
+
+    // Joined and published despite the camera failure.
+    await waitFor(() => expect(agora.client.join).toHaveBeenCalled());
+    await waitFor(() => expect(agora.client.publish).toHaveBeenCalled());
+
+    // Published audio only — no camera track.
+    expect(agora.client.publish.mock.calls.at(-1)?.[0]).toEqual([agora.audioTrack]);
+    // The call was NOT abandoned.
+    expect(onClose).not.toHaveBeenCalled();
+    // The agent is told they're audio-only.
+    expect(screen.getByText(/camera is unavailable/i)).toBeTruthy();
   });
 });
