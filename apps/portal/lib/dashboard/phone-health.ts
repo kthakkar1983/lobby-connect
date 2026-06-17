@@ -1,23 +1,25 @@
 import type { CallState } from "@lc/shared";
 
 /**
- * Scale-aware phone-health rollup for the admin command center (spec §3.1).
+ * Per-property phone-health rollup for the admin command center (spec §3.1).
  *
- * The single operator `health_signals.twilio_webhook` heartbeat only proves our whole
- * Twilio path is up; it cannot see a single failing hotel. So per-property "needs
- * attention" is derived from two signals the data already carries:
- *   - recent_failures: >= 1 FAILED call today (in the property's own timezone)
- *   - coverage_gap:    the property is accepting calls but its primary agent is not live
- * Staleness of the global heartbeat is computed by the caller (the status page owns the
- * timing threshold, per the Phase-4 single-source rule) and passed in as `heartbeat`.
+ * "Needs attention" fires only on a CONCRETE failure: >= 1 FAILED call today (a real
+ * Twilio/path error), in the property's own timezone. FAILED is unambiguous, post-hoc,
+ * and window-independent, so the tile never false-alarms.
+ *
+ * v2 refinements (deliberately NOT done here):
+ *   - coverage_gap: an earlier version flagged "Covering ON but primary agent offline",
+ *     but that IS the normal after-hours setup (an admin covering for an off agent), so
+ *     it false-alarmed. Doing it right needs covered-window awareness + operator-wide
+ *     admin availability/presence (we only have one admin's toggle), so it's deferred.
+ *   - path_down (red): the only global signal (`twilio_webhook`) is info-mode (a quiet
+ *     pilot has no calls → can't tell "down" from "quiet"); needs a real outage probe.
  */
 
 export type PhoneHealthProperty = {
   readonly id: string;
   readonly name: string;
   readonly timeZone: string;
-  readonly accepting: boolean;
-  readonly agentLive: boolean;
 };
 
 export type PhoneHealthCall = {
@@ -27,10 +29,7 @@ export type PhoneHealthCall = {
   readonly timeZone: string;
 };
 
-/** `null` = the heartbeat has never reported (treated as down). */
-export type PhoneHealthHeartbeat = { readonly stale: boolean } | null;
-
-export type PhoneHealthReason = "coverage_gap" | "recent_failures";
+export type PhoneHealthReason = "recent_failures";
 
 export type PhoneHealthAttention = {
   id: string;
@@ -39,7 +38,6 @@ export type PhoneHealthAttention = {
 };
 
 export type PhoneHealthRollupResult = {
-  pathDown: boolean;
   ok: number;
   total: number;
   needAttention: PhoneHealthAttention[];
@@ -59,7 +57,6 @@ function isToday(iso: string, timeZone: string, now: Date): boolean {
 export function phoneHealthRollup(
   properties: ReadonlyArray<PhoneHealthProperty>,
   calls: ReadonlyArray<PhoneHealthCall>,
-  heartbeat: PhoneHealthHeartbeat,
   now: Date,
 ): PhoneHealthRollupResult {
   const failedToday = new Set<string>();
@@ -69,16 +66,11 @@ export function phoneHealthRollup(
     }
   }
 
-  const needAttention: PhoneHealthAttention[] = [];
-  for (const p of properties) {
-    const reasons: PhoneHealthReason[] = [];
-    if (p.accepting && !p.agentLive) reasons.push("coverage_gap");
-    if (failedToday.has(p.id)) reasons.push("recent_failures");
-    if (reasons.length > 0) needAttention.push({ id: p.id, name: p.name, reasons });
-  }
+  const needAttention: PhoneHealthAttention[] = properties
+    .filter((p) => failedToday.has(p.id))
+    .map((p) => ({ id: p.id, name: p.name, reasons: ["recent_failures"] }));
 
   return {
-    pathDown: heartbeat == null || heartbeat.stale,
     total: properties.length,
     ok: properties.length - needAttention.length,
     needAttention,

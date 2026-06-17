@@ -28,7 +28,7 @@ import {
 } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
-import { presenceDotClass, presenceLabel, isLivePresence, formatDuration, formatTimeOnly } from "@/lib/owner/format";
+import { presenceDotClass, presenceLabel, formatDuration, formatTimeOnly } from "@/lib/owner/format";
 import { isStale } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
 
@@ -135,26 +135,14 @@ export default async function AdminOverviewPage() {
   const todayTotal = countToday(calls, now);
   const recent = calls.slice(0, 8);
 
-  const agentLive = (id: string): boolean => {
-    const a = agentByProperty.get(id);
-    return !!a && !isStale(a.last_seen_at, now.getTime()) && isLivePresence(a.status);
-  };
-
-  // Phone health: per-property attention from FAILED-today / coverage gap. The
-  // global "path down" red state is a v2 seam — our only global signal
-  // (twilio_webhook) is info-mode (a quiet pilot legitimately has no calls), so
-  // it can't tell "down" from "quiet". We never raise a false outage here; a
-  // real breakage surfaces per-property via FAILED calls.
+  // Phone health: a property "needs attention" only on a concrete failure — >= 1
+  // FAILED call today. Presence-based coverage-gap and a global "path down" are v2
+  // seams (see lib/dashboard/phone-health.ts): the old coverage-gap rule
+  // false-alarmed on a covered property whose primary agent simply happened to be
+  // offline, which is the normal after-hours setup.
   const health = phoneHealthRollup(
-    props.map((p) => ({
-      id: p.id,
-      name: p.name,
-      timeZone: tzById.get(p.id) ?? "UTC",
-      accepting: !!acceptingMap.get(p.id),
-      agentLive: agentLive(p.id),
-    })),
+    props.map((p) => ({ id: p.id, name: p.name, timeZone: tzById.get(p.id) ?? "UTC" })),
     calls,
-    { stale: false },
     now,
   );
   const attentionIds = new Set(health.needAttention.map((p) => p.id));

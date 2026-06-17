@@ -1228,9 +1228,11 @@ board, team-on-now, recent). New TDD'd helpers in `lib/dashboard/calls.ts` (+ `s
 1. **Agent dashboard is agent-scoped, not pod-wide.** RLS `calls_select` (0004) only exposes the agent's
    own `handled_by` calls and the spec barred RLS changes; pilot-equivalent (the primary agent handles
    the calls). True pod-scope = a v2 RLS branch. **Admin IS operator-wide** (RLS allows ADMIN).
-2. **Phone-health "path down" red = v2 seam.** The only global signal (`twilio_webhook`) is info-mode
-   (a quiet pilot legitimately has no calls → can't tell down from quiet). The tile shows mint "lines
-   OK" / blaze "k need attention" from per-property FAILED-today + coverage-gap.
+2. **Phone-health "needs attention" = recent FAILED calls only.** Flags a property only on a concrete
+   failure (>= 1 `FAILED` call today). The presence-based **coverage-gap** was removed (it false-alarmed
+   on a covered property whose primary agent was offline — the normal after-hours setup); coverage-gap +
+   the global "path down" (twilio_webhook info-mode) are v2 seams. (Corrected post-merge 2026-06-17 on
+   prod-test feedback.)
 
 **NEXT:** **owner portal LAYOUT redesign** (fresh chat — inherits the shared gradient header, keeps its
 own `UserMenu`, mobile-first; its dashboard content is a fresh `impeccable` effort), then **kiosk
