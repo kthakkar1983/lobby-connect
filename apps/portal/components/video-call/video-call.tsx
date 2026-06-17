@@ -15,6 +15,7 @@ import { reliableFetch } from "@/lib/http/reliable-fetch";
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [mediaWarning, setMediaWarning] = useState<"camera" | "mic" | "both" | null>(null);
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -78,18 +79,37 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
 
         await c.join(tok.appId, tok.channelName, tok.token, tok.uid);
         if (cancelled) return; // do NOT publish on an abandoned (e.g. StrictMode) mount
-        audio = await AgoraRTC.createMicrophoneAudioTrack();
-        video = await AgoraRTC.createCameraVideoTrack();
+
+        // Acquire mic + camera INDEPENDENTLY and resiliently. A device that's
+        // busy (e.g. the webcam held by another app) or permission-denied must
+        // NOT abandon the call — otherwise the agent silently drops while the
+        // guest keeps ringing and the call lands as missed. Join with whatever
+        // media is available (audio-only is fine) so the guest always connects.
+        try {
+          audio = await AgoraRTC.createMicrophoneAudioTrack();
+        } catch {
+          audio = null;
+        }
+        try {
+          video = await AgoraRTC.createCameraVideoTrack();
+        } catch {
+          video = null;
+        }
         if (cancelled) {
-          audio.close();
-          video.close();
+          audio?.close();
+          video?.close();
           return;
         }
         audioRef.current = audio;
         videoRef.current = video;
-        await c.publish([audio, video]);
+        if (!video) setCameraOff(true);
+        setMediaWarning(!audio && !video ? "both" : !audio ? "mic" : !video ? "camera" : null);
+        const tracks = [audio, video].filter(
+          (t): t is IMicrophoneAudioTrack | ICameraVideoTrack => t != null,
+        );
+        if (tracks.length > 0) await c.publish(tracks);
         if (cancelled) return;
-        if (localRef.current) video.play(localRef.current);
+        if (video && localRef.current) video.play(localRef.current);
       } catch {
         if (!cancelled) onClose();
       }
@@ -166,6 +186,16 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           On video · {propertyName}
         </span>
       </div>
+
+      {mediaWarning && (
+        <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
+          {mediaWarning === "camera"
+            ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
+            : mediaWarning === "mic"
+              ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
+              : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
+        </div>
+      )}
 
       {/* SHARED-CHROME SEAM: the audio in-call overlay (components/softphone/audio-call-overlay.tsx)
           mirrors this chrome (header strip + --color-call stage + control bar + PlaybookPanel). If the
