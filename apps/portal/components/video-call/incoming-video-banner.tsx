@@ -87,31 +87,35 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
   if (calls.length === 0) return null;
   const call = calls[0];
 
-  // Prominent fixed top-center overlay — an incoming video call must never be
-  // buried at the bottom of a scrolled dashboard (VideoCallHost renders this at
-  // the end of the workspace column).
+  // Renders in-flow in the right column, directly under the softphone card (see
+  // DashboardWorkspace) — using the dead space there rather than floating over
+  // the screen. Prominent (mint ring + ping) so it's hard to miss.
   return (
-    <div role="alert" aria-live="assertive" className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <div className="flex w-full max-w-md items-center gap-3 rounded-card border border-live/40 bg-card p-4 text-sm shadow-lg ring-1 ring-live/20">
-        <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-live/15 text-primary">
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="rounded-card border border-live/40 bg-card p-4 text-sm shadow-md ring-1 ring-live/20"
+    >
+      <div className="flex items-center gap-3">
+        <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-live/15 text-primary">
           <span
             aria-hidden="true"
             className="absolute inset-0 animate-ping rounded-full bg-live/20 motion-reduce:animate-none"
           />
-          <Video size={20} className="relative" />
+          <Video size={18} className="relative" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">Incoming video call</p>
           <p className="truncate text-text-muted">{call!.propertyName}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => onAccept(call!)}
-          className="shrink-0 rounded-button bg-live px-4 py-2 font-medium text-primary"
-        >
-          Accept
-        </button>
       </div>
+      <button
+        type="button"
+        onClick={() => onAccept(call!)}
+        className="mt-3 w-full rounded-button bg-live px-3 py-2 font-medium text-primary"
+      >
+        Accept video call
+      </button>
     </div>
   );
 }
