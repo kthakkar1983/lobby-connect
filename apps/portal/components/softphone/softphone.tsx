@@ -385,26 +385,42 @@ export function Softphone({ role }: SoftphoneProps) {
         </div>
       )}
 
+      {/* Incoming rings as a prominent fixed overlay (top-center) so a
+          time-critical call is never buried at the bottom of a scrolled
+          dashboard. Escapes the softphone card via `fixed`; visible whenever the
+          softphone is mounted-and-shown (agent always-home; admin on home — admin
+          off-home is covered by IncomingCallToast). */}
       {phase === "incoming" && (
-        <div className="mt-3 space-y-2">
-          <p className="text-text-muted">
-            {incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call…"}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void acceptCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 font-medium text-primary"
-            >
-              <Phone size={16} /> Accept
-            </button>
-            <button
-              type="button"
-              onClick={declineCall}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
-            >
-              <PhoneOff size={16} /> Decline
-            </button>
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="fixed inset-x-0 top-4 z-50 flex justify-center px-4"
+        >
+          <div className="flex w-full max-w-md items-center gap-3 rounded-card border border-live/40 bg-card p-4 shadow-lg ring-1 ring-live/20">
+            <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-live/15 text-primary">
+              <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full bg-live/20" />
+              <Phone size={20} className="relative" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-foreground">Incoming call</p>
+              <p className="truncate text-text-muted">{incomingProperty || "Connecting…"}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => void acceptCall()}
+                className="flex items-center justify-center gap-2 rounded-button bg-live px-4 py-2 font-medium text-primary"
+              >
+                <Phone size={16} /> Accept
+              </button>
+              <button
+                type="button"
+                onClick={declineCall}
+                className="flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
+              >
+                <PhoneOff size={16} /> Decline
+              </button>
+            </div>
           </div>
         </div>
       )}
