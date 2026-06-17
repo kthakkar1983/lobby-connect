@@ -1149,7 +1149,7 @@ failed attempt:**
 - 423 portal tests; verified in-browser (empty / bad-format / wrong-creds all shake + red + plain
   message). Zero migrations/routes/RLS. Committed on `brand-revision`.
 
-### Layout phase — Dashboards (agent/admin) + shared header — DESIGN LOCKED (2026-06-16), impl pending
+### Layout phase — Dashboards (agent/admin) + shared header — DESIGN LOCKED (2026-06-16) → BUILT + SHIPPED to main + prod (2026-06-17; see session 21 at end)
 Full design, data spec, helper list, build order: **`docs/specs/2026-06-16-stage5.3-dashboards-shared-header-design.md`**
 (+ brand doc §5.3). Locked via `impeccable` (shape → many in-chat visual iterations → lock). **No code
 written yet** — this session produced the locked *design*; the implementation is the next focused build.
@@ -1188,11 +1188,11 @@ floating softphone dock + header-anchored softphone (→ a card instead); stretc
 cards or moving a pulse tile to kill the admin bottom-right dead space (→ filled it with the Recent
 calls feed instead).
 
-**NEXT (fresh chats):** (1) **implement** agent + admin from the spec (build order §7: TDD helpers →
-shared header → drop the rail + mount softphone → agent page → admin page → verify in-browser, incl.
-"a call still rings while on another tab"). (2) **Owner** dashboard content — its own fresh chat (owner
-inherits only the shared header). (3) **Audio in-call** + **kiosk** screens — later. Agent + admin +
-the shared header are design-**locked**; treat §1–4 + sign-in (§5.1) + shell (§5.2) as locked inputs.
+**NEXT (fresh chats):** (1) **DONE 2026-06-17** — agent + admin dashboards + shared header **BUILT +
+SHIPPED** (merged `60911a7` → prod; see session 21 at end). (2) **Owner portal LAYOUT redesign** — its
+own fresh chat (owner inherits the shared gradient header, keeps its own `UserMenu`, mobile-first).
+(3) **Kiosk LAYOUT** + **audio in-call** overlay — later. The brand foundation + sign-in (§5.1) + shell
+(§5.2) + dashboards (§5.3) are **shipped, locked inputs**.
 
 ### Deferred decisions / follow-ups (flagged, NOT done)
 - **Open decision:** brand §3.2 lists "open incident" under **blaze**, but incidents still render
@@ -1200,5 +1200,39 @@ the shared header are design-**locked**; treat §1–4 + sign-in (§5.1) + shell
 - Full **kiosk repaint** + the **no-logo-on-kiosk** rule (kiosk still shows an "LC" mark; CTA styles
   got a coherent interim only). Per-surface **logo sizing** (sign-in wordmark is now `h-12` in the new card).
   Final **end/hang-up** treatment. A real **favicon** from `mark.svg` (live 404 today).
-- First action in the fresh chat: **commit/PR not yet merged to `main`** — `brand-revision` holds the
-  foundation; decide merge vs keep-building-on-branch before/with the layout work.
+- **RESOLVED 2026-06-17:** `brand-revision` is **merged to `main` + deployed to prod** — the whole
+  layout phase (foundation + sign-in + shell + error-states + dashboards) is live. Owner + kiosk inherit
+  the new brand tokens but NOT yet the layout treatment. Continue owner/kiosk from `main` (branch per surface).
+
+## 2026-06-17 (session 21) — Dashboards (agent/admin) + shared header BUILT + SHIPPED → merged to `main` + prod
+
+Implemented the locked Stage 5.3 design via `impeccable` craft (browser-verified, agent + admin).
+**Merged `60911a7` (`--no-ff`) → `main`; tag `brand-stage5.3-dashboards-complete`; Vercel prod deploy
+`dpl_8jqbN8dj…` state READY; CI green.** This merge ships the whole brand-revision layout phase to prod
+(owner + kiosk get the new tokens but keep their old layouts until their redesigns).
+
+**Built:** shared gradient `DashboardHeader` — tall, **top-aligned**, **teal→navy** left→right (gradient
+flipped 112°→248°; static connection-lines flipped to match; cream time-aware greeting; **light avatar +
+`.lc-avatar-halo`**; bottom seam). The taller top-aligned layout lets the account dropdown open *into the
+header*, not onto a card. Shell: **320px call-rail removed** → softphone stays **mounted in the shared
+layout for BOTH roles** (the line persists on every route; per Kumar), shown as a card on the dashboard
+home + hidden (display:none, still mounted) + `IncomingCallToast` off-home (new `dashboard-workspace.tsx`);
+**all call/notes/911 logic untouched** (idle restyle only: Line-ready pill, seam ring, Accepting toggle).
+Agent bento (4 stats incl Avg-call-length, hourly phone/video chart + talk time, recent, pod bars) +
+admin command center (pulse [Live/Online/Incidents/Phone-health], Tonight card + outcomes, properties
+board, team-on-now, recent). New TDD'd helpers in `lib/dashboard/calls.ts` (+ `splitTodayByChannel`) +
+`phone-health.ts`; shared `channel-viz`/`DashTile`; bento `shadow-md` lift; rail hover-intent 220→450ms.
+448 portal tests (490 repo-wide); typecheck + lint + check:routes + gen:types:check all green.
+
+**Two implementation resolutions (deviations from the spec — also recorded in the §5.3 spec):**
+1. **Agent dashboard is agent-scoped, not pod-wide.** RLS `calls_select` (0004) only exposes the agent's
+   own `handled_by` calls and the spec barred RLS changes; pilot-equivalent (the primary agent handles
+   the calls). True pod-scope = a v2 RLS branch. **Admin IS operator-wide** (RLS allows ADMIN).
+2. **Phone-health "path down" red = v2 seam.** The only global signal (`twilio_webhook`) is info-mode
+   (a quiet pilot legitimately has no calls → can't tell down from quiet). The tile shows mint "lines
+   OK" / blaze "k need attention" from per-property FAILED-today + coverage-gap.
+
+**NEXT:** **owner portal LAYOUT redesign** (fresh chat — inherits the shared gradient header, keeps its
+own `UserMenu`, mobile-first; its dashboard content is a fresh `impeccable` effort), then **kiosk
+LAYOUT** + **audio in-call** overlay polish. Minor cosmetics noted in the browser pass: empty states on
+a quiet night; admin right-column whitespace below the softphone; seed admin is named "Local Admin".
