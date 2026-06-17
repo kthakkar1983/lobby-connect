@@ -54,6 +54,42 @@ function isToday(iso: string, timeZone: string, now: Date): boolean {
   return key(new Date(iso)) === key(now);
 }
 
+/**
+ * Per-property summary of today's FAILED calls — drives the "needs attention"
+ * reason line on the phone-health detail page ("N failed call(s) today, last at
+ * HH:MM"). Same FAILED-today predicate as {@link phoneHealthRollup}, so the two
+ * never disagree about which properties are flagged.
+ *
+ * Only properties with >= 1 failure today appear as keys; absent => no failures.
+ */
+export type FailureSummary = {
+  /** Count of today's FAILED calls. */
+  readonly count: number;
+  /** `ring_started_at` of the most recent FAILED call today (ISO). */
+  readonly lastFailureAt: string;
+};
+
+export function failureSummaryToday(
+  calls: ReadonlyArray<PhoneHealthCall>,
+  now: Date,
+): Map<string, FailureSummary> {
+  const out = new Map<string, FailureSummary>();
+  for (const c of calls) {
+    if (c.state !== "FAILED" || !isToday(c.ring_started_at, c.timeZone, now)) continue;
+    const prev = out.get(c.property_id);
+    if (!prev) {
+      out.set(c.property_id, { count: 1, lastFailureAt: c.ring_started_at });
+    } else {
+      const later =
+        new Date(c.ring_started_at) > new Date(prev.lastFailureAt)
+          ? c.ring_started_at
+          : prev.lastFailureAt;
+      out.set(c.property_id, { count: prev.count + 1, lastFailureAt: later });
+    }
+  }
+  return out;
+}
+
 export function phoneHealthRollup(
   properties: ReadonlyArray<PhoneHealthProperty>,
   calls: ReadonlyArray<PhoneHealthCall>,

@@ -194,7 +194,13 @@ export default async function AdminOverviewPage() {
           label="Open incidents"
           tone={(openIncidents ?? 0) > 0 ? "attention" : "default"}
         />
-        <DashTile value={healthTile.value} label="Phone health" sub={healthTile.sub} tone={healthTile.tone} />
+        <DashTile
+          value={healthTile.value}
+          label="Phone health"
+          sub={healthTile.sub}
+          tone={healthTile.tone}
+          href="/admin/phone-health"
+        />
       </div>
 
       <Card className="gap-3 p-5 shadow-md">
