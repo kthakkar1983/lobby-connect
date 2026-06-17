@@ -50,10 +50,14 @@ export function DashboardWorkspace({
         <main id="main">{children}</main>
         <aside className={onHome ? "flex flex-col gap-3" : "hidden"}>
           <Softphone role={role} />
+          {/* Incoming-video banner sits here, in the dead space directly under the
+              softphone, instead of floating over the screen. The active VideoCall
+              is fixed full-screen (it escapes this container and blocks nav, so
+              the aside never hides mid-call). */}
+          <VideoCallHost />
         </aside>
       </div>
 
-      <VideoCallHost />
       <IncomingCallToast home={home} />
     </div>
   );

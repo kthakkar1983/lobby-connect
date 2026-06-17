@@ -32,8 +32,10 @@ describe("RecentCallRow", () => {
     const user = userEvent.setup();
     renderRow(base);
 
-    // Collapsed: property visible, note icon present, notes/detail not yet shown.
-    expect(screen.getByText(/Super 8 by Wyndham Oklahoma City/)).toBeTruthy();
+    // Collapsed: hotel name is the title (no room/Lobby), note icon present,
+    // notes/detail not yet shown.
+    expect(screen.getByText("Super 8 by Wyndham Oklahoma City")).toBeTruthy();
+    expect(screen.queryByText(/Room/i)).toBeNull();
     expect(screen.getByRole("img", { name: "Has notes" })).toBeTruthy();
     expect(screen.queryByText("Guest needed extra towels.")).toBeNull();
     expect(screen.queryByText("Caller")).toBeNull();
