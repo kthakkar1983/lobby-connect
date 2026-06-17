@@ -43,13 +43,16 @@ export function HourlyVolumeChart({
 
   return (
     <div className={className}>
-      <div className="flex h-28 items-end gap-[3px]" role="img" aria-label="Calls by hour, phone and video">
+      <div className="flex h-28 items-stretch gap-[3px]" role="img" aria-label="Calls by hour, phone and video">
         {data.map((b) => {
           const total = b.audio + b.video;
           return (
+            // `h-full` gives each column a definite height so the bar's percentage
+            // height resolves (with `items-end`/auto-height columns the bars
+            // collapse to 0 and nothing renders); `justify-end` bottom-aligns them.
             <div
               key={b.hour}
-              className="flex flex-1 flex-col justify-end"
+              className="flex h-full flex-1 flex-col justify-end"
               title={`${hourLabel(b.hour)}: ${b.audio} phone, ${b.video} video`}
             >
               {total > 0 && (
