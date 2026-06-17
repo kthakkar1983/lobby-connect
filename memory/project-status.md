@@ -1052,3 +1052,153 @@ Full superpowers chain: brainstorm → spec → plan → subagent-driven (per-ta
 1. **Page-by-page UI/UX final-polish pass** (session-12 follow-up) — include the audio in-call overlay minor tweaks Kumar flagged. **This is now the main open work item** (all audit phases 0–4 done).
 2. *(optional)* Phase 4 prod smoke (above).
 3. Audit DEFER-V2 items remain parked (S4/S6/P3/etc. — real scale work, not pilot-blocking).
+
+> **Superseded by the Brand Revision (below).** The "page-by-page UI/UX final-polish pass" above is
+> now folded into the brand revision's **Layout phase** — same comprehensive per-page UI redo, under
+> the new locked brand.
+
+---
+
+## Brand Revision — design LOCKED + FOUNDATION SHIPPED (on branch), layout phase NEXT (2026-06-14 → 2026-06-15)
+
+A system-wide rebrand. **Canonical brand spec: `docs/brand/brand-guidelines.md`** (living doc;
+logo/color/type/shape ✅ Locked). Impeccable design context now lives at **`docs/PRODUCT.md` +
+`docs/DESIGN.md`** (the loader auto-discovers them in `docs/`). Memory pointer: [[brand-revision]].
+
+### Design (2026-06-14) — locked
+Retired coral. Four anchors: **navy `#0F2D4B` / teal `#2EA6AA` / mint `#06D6A0` / blaze `#FD6734`**
+over cool neutrals + reserved red `#C81E1E`. Roles: mint = connect/live + **primary buttons** (ink
+`#14202F` text); teal = links/nav/secondary; blaze = needs-attention; navy = text/nav; red =
+911/destructive only. Type = **Raleway** (display + labels) / Outfit (body) / JetBrains Mono (data).
+Real **logo** (mark = doorway + figure; wordmark = LOBBY/connect) — portal only, never kiosk.
+
+### Foundation IMPLEMENTATION — DONE on branch `brand-revision` (2026-06-15), NOT merged, NOT deployed
+Done via the `impeccable` skill. Two commits on `brand-revision` (a `feat` + a `docs` handoff commit):
+- **Color tokens swapped** in `apps/portal/app/globals.css` + `apps/kiosk/src/index.css` (mirrored):
+  coral retired; `--color-accent` = teal, new **`--color-attention`** = blaze, `--color-ink`, deep
+  variants, cool neutrals; `--color-ring` = deep mint; seam = navy→teal→mint (blaze excluded). The
+  coral→3-way split was applied to every call site (missed/degraded/pending-setup → **blaze**;
+  links/active-nav/hover/filters → **teal**; primary actions → **mint**; end/hang-up → navy on light,
+  neutral-white on the dark video stage; 911 stays red).
+- **Three fonts wired** — Raleway (variable, verified) via `next/font` (`app/fonts.ts`) + kiosk
+  `@font-face`; Atelier + Radon removed (files deleted).
+- **Shared `LogoMark`/`Wordmark`** (`components/brand/wordmark.tsx`) render the real assets via `<img>`;
+  sidebar swaps wordmark↔mark on collapse. **SVGO** added (`apps/portal/svgo.config.mjs` +
+  `pnpm -F @lc/portal optimize:svg`): mark **106 KB → 0.66 KB**, wordmark **109 KB → 2.1 KB** (Adobe
+  PGF metadata stripped; viewBoxes tightened). Partner's preferred **mint-connector** wordmark swapped
+  in (resolves the doc's teal-vs-mint open confirm → mint; mark figure is mint, right jamb teal).
+- **`Button` default = mint** (+ navy `neutral`, teal `accent`); `Badge` gained `attention`; auth-form
+  primary CTAs → mint. **Middleware bug fixed** — it was redirecting `/brand/*` static assets to
+  `/sign-in` (broken logo); now excludes file-extension paths.
+- **Verified:** portal typecheck + lint + **428 tests** + `next build`; kiosk build; live `/sign-in`
+  render (logo loads, Raleway confirmed, mint CTA, new tokens). Zero migrations / new routes / RLS.
+
+### Layout phase — Sign-in / auth DONE (2026-06-15)
+First Layout-phase surface, built via `impeccable` (shape → explore both directions → build → verify
+in-browser). **Sign-in redesigned as a split** (the brand thesis made physical): a **navy brand
+panel** (drifting **connection-lines** + "The front desk, after hours." headline + a 3px vertical
+seam down the join) beside an **elevated form card** (radius 16, two-layer `--shadow-xl`, the **seam
+gradient across its top**, the **wordmark centered** as the home link `h-12`, a divider, then the form).
+- `apps/portal/app/(auth)/layout.tsx` is the split shell → inherited by sign-in / forgot-password /
+  onboarding; mobile collapses to the card alone.
+- New `apps/portal/components/brand/floating-paths.tsx` — efferd's "Background Paths" reworked: brand
+  colour via `currentColor` (teal + mint layers on navy), `useReducedMotion()` guard (the global CSS
+  reduced-motion net can't stop motion's JS animation), deterministic durations (no SSR hydration
+  drift), `aria-hidden`. Uses the new **`motion`** dep (the one JS-animation pkg; in `package.json`).
+- New `globals.css` tokens: `--gradient-seam-vertical` + `--shadow-xl`. Email/password **placeholders**
+  added on the sign-in form.
+- typecheck + lint + 420 portal tests green. **Zero migrations / new routes / RLS.** Committed on
+  `brand-revision` (not merged, not deployed).
+- **Provenance note:** Kumar pointed at the efferd `@efferd/auth-5` shadcn block for its floating-paths
+  animation; we inspected the registry manifest, took **only** that one component (no social-login
+  cascade, no registry entry), and reworked it on-brand.
+- **Deferred to the final copy pass:** navy headline/subline copy is placeholder; the forgot-password /
+  onboarding headings can be centered to match sign-in.
+
+### Layout phase — Unified agent/admin shell DONE (2026-06-16)
+Second Layout-phase surface, via `impeccable`. One shared `apps/portal/components/app-shell.tsx`
+(role-param) now backs both `(agent)`/`(admin)` layouts (thin auth-and-delegate wrappers). **Navy
+rail** (recoloured `--color-sidebar-*` tokens, not a shadcn fork) + a 2px vertical **seam** on the
+`SidebarInset` left edge; **reversed logo** on the rail (`LogoMark`/`Wordmark`/new `LogoLockup` gained
+an `onDark` prop + new on-dark SVGs, the lockup SVGO'd 244KB→2.8KB); **hover-expand** (220ms intent
+delay + keyboard focus; header toggle removed); role-aware nav (`NavItem` `exact` fix for index routes,
+teal-wash active); **3-col** with a persistent 320px right call-rail (admin's softphone strip retired
+into it); **account menu** = avatar → "boarding pass" dropdown (`components/account-menu.tsx`,
+`.lc-avatar-halo`) for agent/admin only (owner keeps its `UserMenu`). 428 tests + typecheck + lint;
+verified in-browser. Rejected the rail-footer placement (fought hover-expand). Zero migrations/routes/
+RLS. Full detail: CLAUDE.md build-status row + brand doc §5.2. Committed on `brand-revision`.
+
+### Layout phase — Sign-in error states DONE (2026-06-16)
+Small polish on the sign-in form, via `impeccable`. **Field shake + red invalid outline on every
+failed attempt:**
+- New reusable `.lc-shake` keyframe in `globals.css` — a short decaying `translate3d` (360ms,
+  `--ease-out`), replays per-submit via a class-toggle reset on `onAnimationEnd` (robust: the submit
+  button is disabled during the request, far longer than the animation); the universal reduced-motion
+  net neutralises the movement while the red border still carries the meaning.
+- Red outline via `aria-invalid` → the shared `Input`'s existing `border-destructive`. The email field
+  was a hand-rolled `<input>`; **routed it through the shared `Input`** so both boxes share one
+  vocabulary and both get the red state.
+- **Native HTML5 validation retired** (`<form noValidate>`) — it was firing the browser's own bubble
+  (with the warning icon) and **blocking submit before the action ran**, so empty/format errors never
+  reached the shake/red/custom-message path (only wrong-creds did). Now every error takes one path: a
+  plain custom message + shake, no browser bubbles/icons.
+- New tested `validateSignInInput` (`lib/auth/sign-in-errors.ts`, reuses the now-exported `EMAIL_RE`
+  from `lib/users/validate.ts`); copy `auth.required` ("Email and password are required.") +
+  `auth.invalidEmail` ("Enter a valid email address.") in `lib/copy.ts`; `invalidCredentials`
+  ("Invalid email or password.") unchanged. Kept "email" (not "user ID") to match the field label.
+- 423 portal tests; verified in-browser (empty / bad-format / wrong-creds all shake + red + plain
+  message). Zero migrations/routes/RLS. Committed on `brand-revision`.
+
+### Layout phase — Dashboards (agent/admin) + shared header — DESIGN LOCKED (2026-06-16), impl pending
+Full design, data spec, helper list, build order: **`docs/specs/2026-06-16-stage5.3-dashboards-shared-header-design.md`**
+(+ brand doc §5.3). Locked via `impeccable` (shape → many in-chat visual iterations → lock). **No code
+written yet** — this session produced the locked *design*; the implementation is the next focused build.
+
+**What's locked:**
+- **Shared gradient header (all 3 portals):** navy→teal band (`linear-gradient(112deg,#0E2A45,#13495E,#237E84)`)
+  + a **static** (no-motion) staggered **connection-lines** field (the sign-in `floating-paths` rendered
+  static) in the centre-right; Raleway greeting (cream, **no subtitle**) left; account menu right; a 2px
+  seam hairline on the bottom edge (continuous with the rail seam → "L" frame). Owner inherits it
+  (mobile, keeps `UserMenu`).
+- **Call-rail (320px) REMOVED.** Softphone → a **card**: center-right in the agent bento; a home card on
+  admin (Device mounted in the admin **layout** + incoming-call **toast** so admins stay reachable on
+  other tabs). **All call/notes/emergency logic + the full-screen `AudioCallOverlay` preserved verbatim**
+  — composition only. Idle restyle: `Line ready` pill + seam ring + agent-only `Accepting calls` toggle.
+- **Agent dashboard (pod-scoped bento):** header · 4 stats (Answered / Missed / Avg pickup / **Avg call
+  length**) · `Hourly Call Volume` chart (+ Total call duration) + Recent calls (channel icon + outcome
+  + duration) · softphone card · full-width **`Your pod`** (≤5 properties, **phone/video volume bars**).
+- **Admin command center (operator-wide, level bentos):** header · pulse row (Live calls / Agents online
+  / Open incidents / **Phone health**) · a Tonight card (operator-wide `Hourly Call Volume` +
+  Answered/Missed/Failed/Avg pickup/Avg call) over the Properties board · softphone card + Team-on-now +
+  operator-wide **Recent calls** feed (fills the bottom-right, columns bottom-align). **Phone health =
+  scale-aware rollup** ("48/50 · 2 need attention" blaze / "lines OK" mint / "phone path down" red) —
+  answers Kumar's "1 of 50 hotels down?" (the single `health_signals` heartbeat only proves the whole
+  Twilio path is up; per-hotel issues derive from FAILED-calls/coverage gaps + flag the board rows).
+- **Channel colours:** teal = phone/AUDIO, navy = video (categorical, legended). Outcomes: mint =
+  answered, blaze = missed, muted = failed (**red stays 911-only**).
+
+**Data:** everything is real (`calls.channel` AUDIO/VIDEO is the spine). **Agent = pod-scoped; admin =
+operator-wide aggregate** (explicit Kumar correction — the hourly chart is all agents, not the viewer).
+**No migrations / new routes / RLS / call-logic changes** — new work = read queries + ~7 TDD'd pure
+helpers (`avgCallLengthSeconds`, `countByOutcome`, `splitByChannel`, `hourlyVolume`, `countLiveCalls`,
+`phoneHealthRollup`, + per-property channel counts). Spec §6.
+
+**Rejected along the way:** light `#F4F7F7` mixed into the header gradient (reverted to navy→teal);
+floating softphone dock + header-anchored softphone (→ a card instead); stretching the softphone/team
+cards or moving a pulse tile to kill the admin bottom-right dead space (→ filled it with the Recent
+calls feed instead).
+
+**NEXT (fresh chats):** (1) **implement** agent + admin from the spec (build order §7: TDD helpers →
+shared header → drop the rail + mount softphone → agent page → admin page → verify in-browser, incl.
+"a call still rings while on another tab"). (2) **Owner** dashboard content — its own fresh chat (owner
+inherits only the shared header). (3) **Audio in-call** + **kiosk** screens — later. Agent + admin +
+the shared header are design-**locked**; treat §1–4 + sign-in (§5.1) + shell (§5.2) as locked inputs.
+
+### Deferred decisions / follow-ups (flagged, NOT done)
+- **Open decision:** brand §3.2 lists "open incident" under **blaze**, but incidents still render
+  **red** everywhere (prior stages chose red). Decide when incident screens come up.
+- Full **kiosk repaint** + the **no-logo-on-kiosk** rule (kiosk still shows an "LC" mark; CTA styles
+  got a coherent interim only). Per-surface **logo sizing** (sign-in wordmark is now `h-12` in the new card).
+  Final **end/hang-up** treatment. A real **favicon** from `mark.svg` (live 404 today).
+- First action in the fresh chat: **commit/PR not yet merged to `main`** — `brand-revision` holds the
+  foundation; decide merge vs keep-building-on-branch before/with the layout work.

@@ -9,9 +9,9 @@ describe("callPill", () => {
   it("neutral for ringing", () => {
     expect(callPill("RINGING").className).toBe("bg-muted text-muted-foreground");
   });
-  it("coral for missed/failed", () => {
-    expect(callPill("NO_ANSWER")).toEqual({ label: "Missed", className: "bg-accent/15 text-accent-text" });
-    expect(callPill("FAILED").className).toBe("bg-accent/15 text-accent-text");
+  it("blaze (attention) for missed/failed", () => {
+    expect(callPill("NO_ANSWER")).toEqual({ label: "Missed", className: "bg-attention/15 text-attention-text" });
+    expect(callPill("FAILED").className).toBe("bg-attention/15 text-attention-text");
   });
 });
 

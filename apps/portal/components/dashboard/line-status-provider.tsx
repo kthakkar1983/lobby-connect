@@ -5,12 +5,14 @@ import {
   LineStatusContext,
   lineStatusFromPhase,
   type LinePhase,
-  type LineStatus,
 } from "@/lib/dashboard/line-status";
 
 export function LineStatusProvider({ children }: { readonly children: React.ReactNode }) {
-  const [status, setStatus] = useState<LineStatus>("down");
-  const report = useCallback((phase: LinePhase) => setStatus(lineStatusFromPhase(phase)), []);
-  const value = useMemo(() => ({ status, report }), [status, report]);
+  const [phase, setPhase] = useState<LinePhase>("connecting");
+  const report = useCallback((next: LinePhase) => setPhase(next), []);
+  const value = useMemo(
+    () => ({ status: lineStatusFromPhase(phase), phase, report }),
+    [phase, report],
+  );
   return <LineStatusContext.Provider value={value}>{children}</LineStatusContext.Provider>;
 }

@@ -547,7 +547,7 @@ export function UsersTable({ users, actorId }: Props) {
                         Deactivated
                       </span>
                     ) : u.must_change_password ? (
-                      <span className="inline-flex items-center rounded-pill bg-accent/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-text">
+                      <span className="inline-flex items-center rounded-pill bg-attention/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-attention-text">
                         Pending setup
                       </span>
                     ) : (

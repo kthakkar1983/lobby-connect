@@ -8,6 +8,20 @@
 // profile-existence pre-check in signInAction and extend this mapper — no UI
 // changes required.
 import { copy } from "@/lib/copy";
+import { EMAIL_RE } from "@/lib/users/validate";
+
+// Validates the sign-in input before the Supabase call. The form sets
+// `noValidate`, so this is the only gate before the credential check — every
+// failure stays on one path (a plain custom message + the field shake), with
+// no native browser bubbles. Returns the first problem, or null when well-formed.
+export function validateSignInInput(
+  email: string,
+  password: string,
+): string | null {
+  if (!email.trim() || !password) return copy.auth.required;
+  if (!EMAIL_RE.test(email.trim())) return copy.auth.invalidEmail;
+  return null;
+}
 
 export function mapSignInError(e: { code?: string; status?: number }): string {
   if (e.status === 429 || e.code === "over_request_rate_limit") {

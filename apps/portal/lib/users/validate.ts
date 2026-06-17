@@ -1,6 +1,6 @@
 import type { Role } from "@lc/shared";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES: ReadonlyArray<Role> = ["ADMIN", "AGENT", "OWNER"];
 
 export function validateEmail(input: string): string | null {

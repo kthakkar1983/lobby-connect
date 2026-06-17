@@ -2,7 +2,7 @@ import type { SignalStatus } from "@/lib/status/signals";
 
 const DOT: Record<SignalStatus, string> = {
   ok: "bg-live",
-  warn: "bg-accent",
+  warn: "bg-attention",
   down: "bg-destructive",
   unknown: "bg-muted-foreground/40",
 };

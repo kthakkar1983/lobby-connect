@@ -13,28 +13,23 @@ export const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
 });
 
-/** Display serif — headings across every surface. Single weight (400), like the design it replaces. */
-export const atelier = localFont({
-  src: "./fonts/Atelier-Regular.woff2",
-  display: "swap",
-  variable: "--font-atelier",
-});
-
 /**
- * Label face — all-caps UI labels. Radon ships a single outline; declaring it across the
- * 400–700 range lets `font-semibold` (600) labels use that outline directly instead of
- * faux-bolding it.
+ * Display + label face — Raleway, a variable sans (wght 100–900, self-hosted woff2).
+ * Replaces both Atelier (display serif) and Radon (label face): one family now covers
+ * headings and all-caps labels (the latter via letter-spacing), so the system is three
+ * fonts, not four. The variable file's default instance is Thin (100), so headings/labels
+ * set weight >=500 at the usage site (Raleway runs light at small sizes).
  */
-export const radon = localFont({
-  src: [{ path: "./fonts/Radon.woff2", weight: "400 700", style: "normal" }],
+export const raleway = localFont({
+  src: "./fonts/Raleway.woff2",
+  weight: "100 900",
   display: "swap",
-  variable: "--font-radon",
+  variable: "--font-raleway",
 });
 
 /** Attach to <html> so every --font-* var (and thus --font-sans/mono/display/label) resolves. */
 export const fontVars = [
   outfit.variable,
   jetbrainsMono.variable,
-  atelier.variable,
-  radon.variable,
+  raleway.variable,
 ].join(" ");

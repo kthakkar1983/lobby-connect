@@ -37,6 +37,8 @@ export const config = {
     //   - forgot-password (must be reachable for unauthed users — Plan 3 bug)
     //   - onboarding (invitee landing; always has a session, but kept explicit)
     //   - auth/* (sign-out POST + password-reset/callback routes)
-    "/((?!_next/static|_next/image|favicon.ico|api/|_vercel|sign-in|forgot-password|onboarding|auth/).*)",
+    //   - any path with a file extension (static /public assets: /brand/*.svg,
+    //     /sounds/*, etc.) — these must serve the file, never the /sign-in HTML.
+    "/((?!_next/static|_next/image|favicon.ico|api/|_vercel|sign-in|forgot-password|onboarding|auth/|.*\\.[\\w]+$).*)",
   ],
 };

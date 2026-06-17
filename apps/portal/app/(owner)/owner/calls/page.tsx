@@ -165,7 +165,7 @@ export default async function OwnerCallsPage({
             href={buildHref({ property: null }) as Route}
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
-              !activeProperty ? "border-accent-strong bg-accent/10 text-accent-text" : "border-border text-text-muted",
+              !activeProperty ? "border-accent bg-accent/10 text-accent-text" : "border-border text-text-muted",
             )}
           >
             All
@@ -177,7 +177,7 @@ export default async function OwnerCallsPage({
               className={cn(
                 "rounded-pill border px-3 py-1 text-sm",
                 activeProperty === p.id
-                  ? "border-accent-strong bg-accent/10 text-accent-text"
+                  ? "border-accent bg-accent/10 text-accent-text"
                   : "border-border text-text-muted",
               )}
             >
@@ -201,7 +201,7 @@ export default async function OwnerCallsPage({
             className={cn(
               "rounded-pill border px-3 py-1 text-sm",
               activeChannel === opt.value
-                ? "border-accent-strong bg-accent/10 text-accent-text"
+                ? "border-accent bg-accent/10 text-accent-text"
                 : "border-border text-text-muted",
             )}
           >

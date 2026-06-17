@@ -22,7 +22,7 @@ export function RecordingNotice({
 
       <div className="flex h-full items-center justify-center p-9">
         <div className="max-w-[78%] rounded-card border border-border bg-card p-11 text-center shadow-md">
-          <ShieldCheck className="mx-auto mb-4 size-10 text-accent-strong" strokeWidth={1.6} />
+          <ShieldCheck className="mx-auto mb-4 size-10 text-accent" strokeWidth={1.6} />
           <h1 className="font-display text-2xl leading-snug text-foreground">
             {copy.recording.heading}
           </h1>
@@ -32,7 +32,7 @@ export function RecordingNotice({
           <button
             type="button"
             onClick={onOk}
-            className="mt-6 rounded-button bg-accent-strong px-11 py-4 text-xl font-bold text-accent-foreground transition-transform active:scale-[0.98]"
+            className="mt-6 rounded-button bg-live px-11 py-4 text-xl font-bold text-ink transition-transform active:scale-[0.98]"
           >
             {copy.recording.action}
           </button>
