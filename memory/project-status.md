@@ -1238,3 +1238,83 @@ board, team-on-now, recent). New TDD'd helpers in `lib/dashboard/calls.ts` (+ `s
 own `UserMenu`, mobile-first; its dashboard content is a fresh `impeccable` effort), then **kiosk
 LAYOUT** + **audio in-call** overlay polish. Minor cosmetics noted in the browser pass: empty states on
 a quiet night; admin right-column whitespace below the softphone; seed admin is named "Local Admin".
+
+## 2026-06-17 (session 22) — Dashboard polish (post-Stage-5.3) + new admin Phone-health page
+
+Follow-up on the just-shipped agent/admin dashboards, from Kumar's prod live-testing. All on `main`, all
+prod-deployed (5 `--no-ff` merges: `8460a5f` → `0ab2104` → `47aad68` → `29cbbbe` → `45d3a63`; final
+deploy `pbo0jgdxz…` READY). **Zero migrations / RLS / new deps.** 458 tests + typecheck + lint +
+check:routes + `next build` green each merge. Browser verification was **on prod** — the local Next dev
+server can't run under the harness sandbox (see the `dev-server-sandbox-hazard` auto-memory: do NOT
+`xargs kill -9` by port — it revoked project FS access for the whole session this time).
+
+**1) New admin Phone-health detail page (`/admin/phone-health`).** The command-center "Phone health"
+`DashTile` is now a link (teal hover + chevron) → a read-only, operator-wide page listing active
+properties: per-property **mint "Lines OK" / blaze "Needs attention"** status (reuses `phoneHealthRollup`
+so it matches the tile), the **routing DID** (+ muted front-desk / after-hours sublines — admins may see
+the DID, owners can't), and for a flagged row a derived reason ("N failed call(s) today · last at HH:MM").
+New TDD'd helper `failureSummaryToday` in `lib/dashboard/phone-health.ts` (5 tests). `DashTile` gained an
+optional `href`. Attention rows float to top + `bg-attention/5` tint; `EmptyState` for no properties.
+LEAN v1 — the **real Twilio failure reason** is a v2 seam (needs a `calls.failure_reason` column written
+from the status webhook). Files: `app/(admin)/admin/phone-health/{page,loading}.tsx`, `phone-health.ts`,
+`dash-tile.tsx`, admin `page.tsx`.
+
+**2) Recent-calls rows are now expandable (agent + admin).** New client
+`components/dashboard/recent-call-row.tsx` (`RecentCallRow`): collapsed shows **hotel name only**
+(room/Lobby removed from the title per Kumar — it read as part of the name), a channel icon + outcome
+dot, and a **note icon (StickyNote) in its own fixed-width column at the far right after the time** so
+every row stays column-aligned; clicking expands to started/duration/room/caller (+ **handled-by** on the
+operator-wide admin view) and the **notes text**. Agent + admin queries now also select `caller_number`,
+`notes` (admin also `handled_by_user_id` + resolves handler names via the 2-query merge). 4 component
+tests. Parity with the owner portal's `CallRow`/`CallDetailBody` but dashboard-scoped (no incident link —
+agent/admin have no incident detail route; v2 seam). Replaces the old plain non-expandable list (which
+never surfaced notes — that affordance had only ever existed in the owner portal).
+
+**3) Incoming-call placement (Kumar's call: in the softphone column, never center-screen).** Video now
+has its **own persistent "Video" card directly under the softphone** in the right column — `VideoCallHost`
+moved inside the aside (`dashboard-workspace.tsx`); `IncomingVideoBanner` rebuilt as a persistent card
+(idle "Video / Ready · Video calls ring here" seam-ring moment → mint "Accept video call" when a kiosk
+call rings). Audio incoming stays **in-card** in the softphone; off-home admin nudge is the bottom-right
+`IncomingCallToast`. (A first attempt this session wrongly made the **audio** softphone incoming a fixed
+top-center overlay — wrong component; reverted. The video path is separate: polled `IncomingVideoBanner`
++ ringtone, NOT the Twilio softphone. Recorded in the `voice-vs-video-incoming` auto-memory.)
+
+**4) Video reliability (two real bugs).** (a) **Ringtone "stopped ringing"** = browser autoplay policy
+blocks `audio.play()` before any user gesture → the ring is silently swallowed. Added **autoplay priming**
+on the first pointer/key interaction (guarded so it never cuts an active ring); the prominent visual card
+is the reliable signal regardless. (b) **Busy webcam dropped the call → logged missed** (Kumar: "thought
+we fixed this"): `createCameraVideoTrack()` threw (NotReadableError, another app holding the camera) →
+the old `catch` called `onClose()`, abandoning an already-answered call while the guest kept ringing.
+`video-call.tsx` now acquires mic + camera **independently** and joins with whatever's available
+(**audio-only** if the camera is busy; shows an "audio-only" notice), so the guest always connects.
+**Regression test added** (camera-track creation rejects → still joins + publishes audio, `onClose` NOT
+called).
+
+**5) Hourly-volume chart showed no bars (agent + admin).** Root cause: the bar columns sat in a flex row
+with `items-end`, so each column was content-sized (indefinite height); the inner bar's `height: N%` had
+no definite parent to resolve against and computed to 0 → empty chart even with calls today. Fixed by
+giving each column a definite height (`items-stretch` + `h-full`); `justify-end` keeps bars bottom-aligned
+(`components/dashboard/channel-viz.tsx`). Latent since Stage 5.3 (verified then with no data → EmptyState,
+so it was missed). Resolves the session-21 "admin right-column whitespace" + empty-chart cosmetics.
+
+**Deferred (future "maybe", Kumar OK'd as-is for now) — admin off-tab video nudge.** Because the video
+card lives in the softphone column, an **admin who has navigated off the dashboard** doesn't see it there
+(it still **rings** to pull them back, mirroring the audio off-home toast). The always-home agent is
+unaffected. If wanted later: a fixed off-home video nudge (like `IncomingCallToast`) or lift the video
+state so a fallback can render off-home. Logged in `docs/v2-backlog.md` → "UI/UX".
+
+---
+
+## NEXT UP (fresh chat) — Owner portal + Kiosk LAYOUT redesigns
+
+The brand-revision **layout phase is done for agent/admin** (foundation + sign-in + shell + error-states +
+dashboards + this polish — all on `main`/prod). Remaining brand-revision surfaces:
+
+1. **Owner portal LAYOUT redesign** — its own fresh `impeccable` effort. Owner **inherits the shared
+   gradient `DashboardHeader`** but **keeps its own `UserMenu`** (not the boarding-pass `AccountMenu`),
+   and stays **mobile-first**. Owner currently has the new brand COLORS but the OLD (Stage-2) layout.
+2. **Kiosk LAYOUT** redesign + **audio in-call overlay** polish — later.
+
+Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
+`docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
+auto-memories: `voice-vs-video-incoming`, `dev-server-sandbox-hazard`.
