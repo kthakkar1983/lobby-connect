@@ -51,7 +51,6 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
   const panelId = useId();
   const Icon = call.channel === "VIDEO" ? Video : Phone;
   const hasNotes = Boolean(call.notes?.trim());
-  const where = call.room_number ? `Room ${call.room_number}` : "Lobby";
 
   return (
     <li className="border-b border-border last:border-0">
@@ -60,7 +59,7 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 py-2 text-left text-sm transition-colors hover:text-accent-text"
+        className="flex w-full items-center gap-3 py-2 text-left text-sm transition-colors hover:text-accent-text"
       >
         <Icon
           size={14}
@@ -71,16 +70,19 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
           className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(call.state))}
           aria-hidden="true"
         />
-        {hasNotes && (
-          <StickyNote size={13} className="shrink-0 text-text-muted" role="img" aria-label="Has notes" />
-        )}
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-medium text-foreground">{where}</span>
-          <span className="text-text-muted"> · {call.propertyName}</span>
+        <span className="min-w-0 flex-1 truncate text-foreground">{call.propertyName}</span>
+        <span className="w-14 shrink-0 text-right font-mono text-xs text-text-muted tabular-nums">
+          {formatDuration(call.duration_seconds)}
         </span>
-        <span className="flex shrink-0 items-center gap-3 font-mono text-xs text-text-muted">
-          <span>{formatDuration(call.duration_seconds)}</span>
-          <span>{formatTimeOnly(call.ring_started_at, call.timeZone)}</span>
+        <span className="w-[4.5rem] shrink-0 text-right font-mono text-xs text-text-muted tabular-nums">
+          {formatTimeOnly(call.ring_started_at, call.timeZone)}
+        </span>
+        {/* Note flag in its own fixed column (after time) so rows always align,
+            whether or not a call has notes. */}
+        <span className="flex w-4 shrink-0 justify-center">
+          {hasNotes ? (
+            <StickyNote size={13} className="text-text-muted" role="img" aria-label="Has notes" />
+          ) : null}
         </span>
         <ChevronDown
           className={cn("size-4 shrink-0 text-text-muted transition-transform", expanded && "rotate-180")}
