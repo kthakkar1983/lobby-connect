@@ -1,5 +1,4 @@
-import { Phone, Video, Building2 } from "lucide-react";
-import type { CallState } from "@lc/shared";
+import { Phone, Building2 } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { getAgentCoverage } from "@/lib/auth/agent-coverage";
@@ -21,17 +20,10 @@ import {
   splitTodayByChannel,
   countToday,
 } from "@/lib/dashboard/calls";
-import { formatDuration, formatTimeOnly } from "@/lib/owner/format";
-import { cn } from "@/lib/utils";
+import { formatDuration } from "@/lib/owner/format";
+import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
-
-function outcomeDotClass(state: CallState): string {
-  if (state === "COMPLETED") return "bg-live"; // answered
-  if (state === "NO_ANSWER") return "bg-attention"; // missed
-  if (state === "FAILED") return "bg-muted-foreground"; // system failure
-  return "bg-live"; // RINGING / IN_PROGRESS — still live
-}
 
 export default async function AgentDashboardPage() {
   const actor = await requireRole("AGENT");
@@ -48,7 +40,7 @@ export default async function AgentDashboardPage() {
   const since = new Date(now.getTime() - 48 * 3600_000).toISOString();
   const { data: raw } = await supabase
     .from("calls")
-    .select("id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number")
+    .select("id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes")
     .eq("handled_by_user_id", actor.id)
     .gte("ring_started_at", since)
     .order("ring_started_at", { ascending: false });
@@ -65,7 +57,18 @@ export default async function AgentDashboardPage() {
   const talkTime = sumTodayDurationSeconds(calls, now);
   const hourly = hourlyVolume(calls, now);
   const todayTotal = countToday(calls, now);
-  const recent = calls.slice(0, 6);
+  const recentRows: RecentCall[] = calls.slice(0, 6).map((c) => ({
+    id: c.id,
+    channel: c.channel,
+    state: c.state,
+    room_number: c.room_number,
+    caller_number: c.caller_number,
+    ring_started_at: c.ring_started_at,
+    duration_seconds: c.duration_seconds,
+    notes: c.notes,
+    propertyName: c.propertyName,
+    timeZone: c.timeZone,
+  }));
 
   const pod = covered.map((p) => {
     const split = splitTodayByChannel(
@@ -108,7 +111,7 @@ export default async function AgentDashboardPage() {
 
       <Card className="gap-2 p-5 shadow-md">
         <h2 className={LABEL}>Recent calls</h2>
-        {recent.length === 0 ? (
+        {recentRows.length === 0 ? (
           <EmptyState
             icon={Phone}
             title={copy.empty.agentCalls.title}
@@ -117,30 +120,8 @@ export default async function AgentDashboardPage() {
           />
         ) : (
           <ul className="flex flex-col">
-            {recent.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
-              >
-                <span className="flex min-w-0 items-center gap-2 text-foreground">
-                  {c.channel === "VIDEO" ? (
-                    <Video size={14} className="shrink-0 text-text-muted" aria-label="Video" />
-                  ) : (
-                    <Phone size={14} className="shrink-0 text-text-muted" aria-label="Phone" />
-                  )}
-                  <span
-                    className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(c.state))}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">
-                    {c.room_number ? `Room ${c.room_number}` : "Lobby"} · {c.propertyName}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3 font-mono text-xs text-text-muted">
-                  <span>{formatDuration(c.duration_seconds)}</span>
-                  <span>{formatTimeOnly(c.ring_started_at, c.timeZone)}</span>
-                </span>
-              </li>
+            {recentRows.map((c) => (
+              <RecentCallRow key={c.id} call={c} />
             ))}
           </ul>
         )}

@@ -1,5 +1,5 @@
-import { Phone, Video, Building2 } from "lucide-react";
-import type { ProfileStatus, CallState } from "@lc/shared";
+import { Phone, Building2 } from "lucide-react";
+import type { ProfileStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
@@ -28,20 +28,14 @@ import {
 } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
-import { presenceDotClass, presenceLabel, formatDuration, formatTimeOnly } from "@/lib/owner/format";
+import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/format";
 import { isStale } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
+import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
 type Tone = "default" | "live" | "attention" | "destructive";
-
-function outcomeDotClass(state: CallState): string {
-  if (state === "COMPLETED") return "bg-live";
-  if (state === "NO_ANSWER") return "bg-attention";
-  if (state === "FAILED") return "bg-muted-foreground";
-  return "bg-live";
-}
 
 export default async function AdminOverviewPage() {
   const actor = await requireRole("ADMIN");
@@ -85,7 +79,9 @@ export default async function AdminOverviewPage() {
       .is("effective_until", null),
     supabase
       .from("calls")
-      .select("id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number")
+      .select(
+        "id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id",
+      )
       .eq("operator_id", actor.operator_id)
       .gte("ring_started_at", since)
       .order("ring_started_at", { ascending: false }),
@@ -134,6 +130,31 @@ export default async function AdminOverviewPage() {
   const hourly = hourlyVolume(calls, now);
   const todayTotal = countToday(calls, now);
   const recent = calls.slice(0, 8);
+
+  // Resolve handler names for the operator-wide recent feed (2-query merge —
+  // direct join on auth users doesn't work). Handlers may be agents OR admins,
+  // so this is separate from the assigned-agent presence fetch above.
+  const handlerIds = [
+    ...new Set(recent.map((c) => c.handled_by_user_id).filter((id): id is string => !!id)),
+  ];
+  const handlerById = new Map<string, string>();
+  if (handlerIds.length > 0) {
+    const { data } = await supabase.from("profiles").select("id, full_name").in("id", handlerIds);
+    for (const p of data ?? []) handlerById.set(p.id, p.full_name);
+  }
+  const recentRows: RecentCall[] = recent.map((c) => ({
+    id: c.id,
+    channel: c.channel,
+    state: c.state,
+    room_number: c.room_number,
+    caller_number: c.caller_number,
+    ring_started_at: c.ring_started_at,
+    duration_seconds: c.duration_seconds,
+    notes: c.notes,
+    propertyName: c.propertyName,
+    timeZone: c.timeZone,
+    handlerName: c.handled_by_user_id ? (handlerById.get(c.handled_by_user_id) ?? "—") : "—",
+  }));
 
   // Phone health: a property "needs attention" only on a concrete failure — >= 1
   // FAILED call today. Presence-based coverage-gap and a global "path down" are v2
@@ -326,7 +347,7 @@ export default async function AdminOverviewPage() {
 
         <Card className="gap-2 p-5 shadow-md">
           <h2 className={LABEL}>Recent calls</h2>
-          {recent.length === 0 ? (
+          {recentRows.length === 0 ? (
             <EmptyState
               icon={Phone}
               title="No calls yet"
@@ -335,29 +356,8 @@ export default async function AdminOverviewPage() {
             />
           ) : (
             <ul className="flex flex-col">
-              {recent.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
-                >
-                  <span className="flex min-w-0 items-center gap-2 text-foreground">
-                    {c.channel === "VIDEO" ? (
-                      <Video size={14} className="shrink-0 text-text-muted" aria-label="Video" />
-                    ) : (
-                      <Phone size={14} className="shrink-0 text-text-muted" aria-label="Phone" />
-                    )}
-                    <span
-                      className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(c.state))}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">
-                      {c.room_number ? `Room ${c.room_number}` : "Lobby"} · {c.propertyName}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-xs text-text-muted">
-                    {formatTimeOnly(c.ring_started_at, c.timeZone)}
-                  </span>
-                </li>
+              {recentRows.map((c) => (
+                <RecentCallRow key={c.id} call={c} />
               ))}
             </ul>
           )}
