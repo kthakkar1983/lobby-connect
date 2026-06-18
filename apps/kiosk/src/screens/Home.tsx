@@ -1,81 +1,102 @@
 import { Video } from "lucide-react";
 import type { KioskConfig } from "../types";
-import { SeamTop, LogoMark } from "../components/brand";
+import { ConnectionLines } from "../components/brand";
 import { greetingForHour } from "@lc/shared";
-
-// Owner-selectable Home CTA looks. Brand revision interim — coral retired:
-// warm = mint connect panel, accent = navy + mint CTA text, classic = navy + deep-mint greet.
-// Final per-style art direction is a kiosk page-pass item (with the owner's design notes).
-const CTA_STYLES = {
-  warm:    { panel: "bg-live",    text: "text-ink",   sub: "text-ink/70",   greet: "text-foreground" },
-  accent:  { panel: "bg-primary", text: "text-live",  sub: "text-white/70", greet: "text-foreground" },
-  classic: { panel: "bg-primary", text: "text-white", sub: "text-white/80", greet: "text-live-foreground" },
-} as const;
 
 function InfoItem({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-label text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <span className="font-label text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </span>
-      <span className="font-mono text-base font-semibold text-foreground">{value}</span>
+      <span className="font-mono text-sm font-semibold text-foreground">{value}</span>
     </div>
   );
 }
 
 export function Home({ config, onCall }: { config: KioskConfig; onCall: () => void }) {
-  const wifi =
-    config.wifiNetwork && config.wifiPassword
-      ? `${config.wifiNetwork} / ${config.wifiPassword}`
-      : config.wifiNetwork;
-  const s = CTA_STYLES[config.ctaStyle] ?? CTA_STYLES.warm;
+  const hasInfo =
+    config.checkinTime || config.checkoutTime || config.wifiNetwork ||
+    config.wifiPassword || config.breakfastHours;
 
   return (
-    <div className="relative flex h-full">
-      <SeamTop />
-      {/* Left 55% — info */}
-      <div className="flex flex-[0_0_55%] flex-col px-12 py-11">
-        <div className="flex items-center gap-3">
-          {config.logoUrl ? (
-            <img src={config.logoUrl} alt="" className="size-9 rounded-input object-cover" />
-          ) : (
-            <LogoMark />
-          )}
-          <span className="font-label text-xs font-semibold uppercase tracking-[0.13em] text-foreground">
-            {config.welcomeHeading}
-          </span>
+    <button
+      type="button"
+      onClick={onCall}
+      aria-label="Tap to connect with the front desk"
+      className="relative flex h-full w-full text-left transition-transform active:scale-[0.997]"
+    >
+      {/* LEFT — navy, animated invitation (50%) */}
+      <div
+        className="relative flex flex-[0_0_50%] flex-col overflow-hidden px-12 py-11 text-white"
+        style={{ background: "var(--gradient-brand-panel)" }}
+      >
+        <ConnectionLines />
+
+        {/* Hotel name — text only, no logo (brand §2: never on the kiosk) */}
+        <span className="relative z-10 font-display text-xs font-semibold uppercase tracking-[0.14em] text-white/85">
+          {config.welcomeHeading}
+        </span>
+
+        <div className="relative z-10 mt-auto flex flex-col items-start">
+          <div className="relative mb-7 grid size-[88px] place-items-center">
+            <span className="lc-beacon-pulse absolute inset-0 rounded-pill border-2 border-live/55" aria-hidden />
+            <span
+              className="lc-beacon-pulse absolute inset-0 rounded-pill border-2 border-live/55"
+              style={{ animationDelay: "-1.3s" }}
+              aria-hidden
+            />
+            <span className="grid size-16 place-items-center rounded-pill bg-live/15 text-live">
+              <Video className="size-8" strokeWidth={1.8} />
+            </span>
+          </div>
+          <h1 className="max-w-[15ch] font-display text-[2.4rem] font-semibold leading-[1.08] tracking-tight">
+            Tap anywhere to connect with the <span className="text-live">front desk</span>
+          </h1>
         </div>
 
-        <h1 className={`mt-7 font-display text-5xl leading-[1.04] ${s.greet}`}>
-          {greetingForHour(new Date().getHours())}.
-        </h1>
-        {config.welcomeMessage ? (
-          <p className="mt-4 max-w-[92%] text-lg leading-relaxed text-muted-foreground">
-            {config.welcomeMessage}
-          </p>
-        ) : null}
-
-        <div className="mt-auto grid grid-cols-2 gap-x-8 gap-y-5">
-          <InfoItem label="Check-in" value={config.checkinTime} />
-          <InfoItem label="Check-out" value={config.checkoutTime} />
-          <InfoItem label="Wi-Fi" value={wifi ?? null} />
-          <InfoItem label="Breakfast" value={config.breakfastHours} />
-        </div>
+        {/* seam down the join */}
+        <div
+          className="absolute inset-y-0 right-0 z-10 w-[3px]"
+          style={{ background: "var(--gradient-seam)" }}
+          aria-hidden
+        />
       </div>
 
-      {/* Right 45% — action */}
-      <button
-        type="button"
-        onClick={onCall}
-        className={`relative flex flex-[0_0_45%] flex-col items-center justify-center gap-4 px-8 text-center transition-transform active:scale-[0.99] ${s.panel}`}
-      >
-        <Video className={`size-14 ${s.text}`} strokeWidth={1.75} />
-        <span className={`font-display text-3xl leading-tight ${s.text}`}>
-          Talk to the Front Desk
-        </span>
-        <span className={`text-sm ${s.sub}`}>One tap — a real person answers</span>
-      </button>
-    </div>
+      {/* RIGHT — light, greeting + small box (50%) */}
+      <div className="flex flex-1 flex-col justify-center gap-6 px-11 py-10">
+        <div>
+          <h2 className="font-display text-[2rem] font-semibold leading-tight tracking-tight text-foreground">
+            {greetingForHour(new Date().getHours())}.
+          </h2>
+          {config.welcomeMessage ? (
+            <p className="mt-2 max-w-[34ch] text-[15px] leading-relaxed text-muted-foreground">
+              {config.welcomeMessage}
+            </p>
+          ) : null}
+        </div>
+
+        {hasInfo ? (
+          <div className="relative overflow-hidden rounded-card border border-border bg-card p-6 shadow-md">
+            <span
+              className="absolute inset-x-0 top-0 h-[3px]"
+              style={{ background: "var(--gradient-seam)" }}
+              aria-hidden
+            />
+            <span className="font-label text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Good to know
+            </span>
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
+              <InfoItem label="Check-in" value={config.checkinTime} />
+              <InfoItem label="Check-out" value={config.checkoutTime} />
+              <InfoItem label="Wi-Fi" value={config.wifiNetwork} />
+              <InfoItem label="Password" value={config.wifiPassword} />
+              <InfoItem label="Breakfast" value={config.breakfastHours} />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </button>
   );
 }
