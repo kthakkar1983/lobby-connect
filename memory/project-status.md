@@ -1305,16 +1305,60 @@ state so a fallback can render off-home. Logged in `docs/v2-backlog.md` → "UI/
 
 ---
 
-## NEXT UP (fresh chat) — Owner portal + Kiosk LAYOUT redesigns
+## 2026-06-17 (session 23) — Owner portal LAYOUT redesign — SHIPPED to `main` + prod
 
-The brand-revision **layout phase is done for agent/admin** (foundation + sign-in + shell + error-states +
-dashboards + this polish — all on `main`/prod). Remaining brand-revision surfaces:
+Merged `c1638cc` (`--no-ff`) → prod deploy `lhquew8bs…` **READY**. The final brand-revision **portal**
+surface (kiosk remains). Built brainstorm (visual-companion) → spec → plan → **subagent-driven** (12 tasks;
+per-task spec + code-quality review; Opus whole-branch review = GO). 465 tests + typecheck + lint +
+`next build` + check:routes green. **Zero migrations / RLS / call-logic / service-role.**
 
-1. **Owner portal LAYOUT redesign** — its own fresh `impeccable` effort. Owner **inherits the shared
-   gradient `DashboardHeader`** but **keeps its own `UserMenu`** (not the boarding-pass `AccountMenu`),
-   and stays **mobile-first**. Owner currently has the new brand COLORS but the OLD (Stage-2) layout.
-2. **Kiosk LAYOUT** redesign + **audio in-call overlay** polish — later.
+**What shipped:**
+- **Adaptive owner Home (direction C):** 1 hotel → full single-hotel overview (`components/owner/property-overview.tsx`:
+  coverage strip · drill-through `DashTile`s · tonight `HourlyVolumeChart` + quiet-night state · recent /
+  incidents / manage); N hotels → rich per-hotel cards (the prior count-query grid, preserved). Gradient
+  `DashboardHeader` greeting on **Home only** (chrome **direction A** — owner keeps its own `UserMenu` in the
+  slim white bar; inner pages stay calm + a seam hairline).
+- **Metrics drill through:** Answered/Missed tiles → `/owner/calls?outcome=…`.
+- **New shared call layer:** `lib/calls/filters.ts` (`parseOutcome`/`statesForOutcome`/`buildCallsHref`, TDD) +
+  promoted `components/call/{call-row,call-detail-body}` (incident link now **injected** + blaze; owner passes a
+  link, admin none) + `components/call/call-filters.tsx`. Orphaned owner `greeting.tsx` removed.
+- **Owner Calls** gained an **outcome filter** (Answered/Missed/Failed) atop the existing channel filter; both
+  Calls pages share the keyset cursor + filters.
+- **Incidents → blaze** (`incidentPill` + incident-row + detail) with a factual **red `911`** tag — resolves
+  the long-open brand §3.2 red-vs-blaze decision (→ blaze). **FAILED call pill → muted** per brand §7 (missed
+  stays blaze).
+- **New admin route `/admin/calls`** (operator-wide history; same shared filters + a Hotel filter; sidebar
+  `Calls` entry) + admin dashboard tiles/recent feed **deep-link** into it (`StatTile` gained an optional `href`).
+
+**Decisions to remember:** single-hotel Home "Recent calls"/"Last call" are **today-bounded** (vs
+property-detail's last-5-ever) — intentional "tonight" framing. The `/admin/calls` rows omit any incident link
+(agent/admin have no incident route — a v2 seam). `incidentByCall` is last-write-wins if a call ever had >1
+incident (the 6c flow makes exactly one — informational).
+
+**ONE GATE PENDING — live browser pass on prod** (the harness sandbox can't run the Next dev server; verify on
+the prod deploy): single-hotel overview (quiet vs busy night), tile drill-throughs → correct pre-filtered Calls,
+blaze incidents + red 911 tag on mobile, gradient-on-Home-only chrome, `/admin/calls` filters + pagination + the
+dashboard deep-links.
+
+Spec: `docs/specs/2026-06-17-owner-portal-redesign-design.md` · Plan: `docs/plans/2026-06-17-owner-portal-redesign.md`.
+
+---
+
+## NEXT UP (fresh chat) — Kiosk LAYOUT redesign (the LAST brand-revision surface)
+
+Owner portal is shipped (above); agent/admin + sign-in + shell + dashboards already on `main`/prod. The only
+remaining brand-revision surface:
+
+- **Kiosk LAYOUT redesign** + **audio in-call overlay** polish — its own fresh `impeccable` effort.
+- **Must-fix: the no-logo-on-kiosk rule** — the kiosk still renders an "LC" `LogoMark` in
+  `apps/kiosk/src/components/brand.tsx` (Home + loading). Per brand §2, guest screens stay logo-free; the
+  hotel's own name leads.
+- Also: full kiosk repaint, per-CTA-style art direction (`kiosk_cta_style` warm/accent/classic), final
+  end/hang-up treatment, favicon from `mark.svg`.
+- Treat §1–4 + sign-in (§5.1) + shell (§5.2) + dashboards (§5.3) + the **owner portal** (now shipped) as
+  **locked inputs**.
 
 Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
-auto-memories: `voice-vs-video-incoming`, `dev-server-sandbox-hazard`.
+auto-memories: `voice-vs-video-incoming`, `dev-server-sandbox-hazard`, `build-quirks` (the new `.next`
+" 2"-dupe quirk).
