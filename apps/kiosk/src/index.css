@@ -141,19 +141,13 @@ html, body, #root {
   animation: lc-shimmer 1.4s ease-in-out infinite;
 }
 
-/* Connection-lines (kiosk-local, CSS — the dependency-free echo of the portal floating-paths) */
-@keyframes lc-cl-breathe { 0%, 100% { opacity: 0.28; } 50% { opacity: 0.55; } }
-@keyframes lc-cl-drift  { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(8px, -6px); } }
-.lc-cl-layer { animation: lc-cl-drift 9s ease-in-out infinite; transform-origin: center; }
-.lc-cl-path  { animation: lc-cl-breathe 6s ease-in-out infinite; }
-
 /* Connect beacon — expanding pulse rings on the Home invitation */
 @keyframes lc-beacon { 0% { transform: scale(0.7); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
 .lc-beacon-pulse { animation: lc-beacon 2.6s ease-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer, .lc-seam-drift,
-  .lc-cl-layer, .lc-cl-path, .lc-beacon-pulse {
+  .lc-beacon-pulse {
     animation: none !important;
   }
   *, *::before, *::after {
