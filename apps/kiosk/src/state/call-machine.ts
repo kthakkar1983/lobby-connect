@@ -45,7 +45,11 @@ export function reduce(state: KioskState, action: KioskAction): KioskState {
       // reports its ids via CALL_STARTED. No blocking consent screen.
       return state.screen === "home" ? { ...state, screen: "ringing" } : state;
     case "CALL_STARTED":
-      return { ...state, callId: action.callId, channelName: action.channelName };
+      // Guarded like the other transitions: if the call was cancelled mid-connect
+      // (screen already back to home), a late CALL_STARTED must not write stale ids.
+      return state.screen === "ringing"
+        ? { ...state, callId: action.callId, channelName: action.channelName }
+        : state;
     case "AGENT_JOINED":
       return state.screen === "ringing" ? { ...state, screen: "connected" } : state;
     case "RING_TIMEOUT":

@@ -29,6 +29,14 @@ describe("kiosk call machine", () => {
     expect(s.channelName).toBe("call_abc");
   });
 
+  it("CALL_STARTED is ignored once the call is no longer ringing (cancelled mid-connect)", () => {
+    const s: KioskState = { screen: "home", callId: null, channelName: null };
+    const next = reduce(s, { type: "CALL_STARTED", callId: "c1", channelName: "call_abc" });
+    expect(next.screen).toBe("home");
+    expect(next.callId).toBeNull();
+    expect(next.channelName).toBeNull();
+  });
+
   it("ringing → connected when the agent joins", () => {
     let s: KioskState = { screen: "ringing", callId: "c1", channelName: "call_abc" };
     s = reduce(s, { type: "AGENT_JOINED" });
