@@ -1,6 +1,6 @@
 import { Video } from "lucide-react";
 import type { KioskConfig } from "../types";
-import { ConnectionLines } from "../components/brand";
+import { FloatingPaths } from "../components/floating-paths";
 import { greetingForHour } from "@lc/shared";
 
 function InfoItem({ label, value }: { label: string; value: string | null }) {
@@ -32,7 +32,8 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
         className="relative flex flex-[0_0_50%] flex-col overflow-hidden px-12 py-11 text-white"
         style={{ background: "var(--gradient-brand-panel)" }}
       >
-        <ConnectionLines />
+        <FloatingPaths position={1} className="text-accent" />
+        <FloatingPaths position={-1} className="text-live" />
 
         {/* Hotel name — text only, no logo (brand §2: never on the kiosk) */}
         <span className="relative z-10 font-display text-xs font-semibold uppercase tracking-[0.14em] text-white/85">

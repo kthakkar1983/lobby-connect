@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ICameraVideoTrack } from "agora-rtc-sdk-ng";
 import { Phone, ShieldCheck } from "lucide-react";
-import { ConnectionLines } from "../components/brand";
+import { FloatingPaths } from "../components/floating-paths";
 import { CallControls } from "./CallControls";
 import { copy } from "../lib/copy";
 
@@ -22,7 +22,8 @@ export function Ringing({
 
   return (
     <div className="relative h-full overflow-hidden" style={{ background: "var(--gradient-call-stage)" }}>
-      <ConnectionLines />
+      <FloatingPaths position={1} className="text-accent" />
+      <FloatingPaths position={-1} className="text-live" />
 
       {/* self-view PiP — top-right (consistent across every call stage) */}
       <div className="absolute right-5 top-5 z-10 h-[104px] w-[152px] overflow-hidden rounded-card border-2 border-white/40">

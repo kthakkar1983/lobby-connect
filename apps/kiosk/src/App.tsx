@@ -114,15 +114,20 @@ export function App() {
   }, [teardown]);
 
   const onEnd = useCallback(async () => {
-    if (callIdRef.current) await endCall(callIdRef.current, "completed");
+    // End locally first — leave Agora + return home immediately — then notify the
+    // server in the background. The server round-trip must never gate the button:
+    // a slow/cold call-ended route was leaving End apparently unresponsive.
+    const id = callIdRef.current;
     await teardown();
     dispatch({ type: "END_CALL" });
+    if (id) void endCall(id, "completed");
   }, [teardown]);
 
   const onCancel = useCallback(async () => {
-    if (callIdRef.current) await endCall(callIdRef.current, "cancelled");
+    const id = callIdRef.current;
     await teardown();
     dispatch({ type: "CANCEL" });
+    if (id) void endCall(id, "cancelled");
   }, [teardown]);
 
   const toggleMute = useCallback(() => {
