@@ -7,10 +7,9 @@ import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } 
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
-import { LogoMark, SeamShimmer } from "./components/brand";
+import { SeamShimmer } from "./components/brand";
 import { copy } from "./lib/copy";
 import { Home } from "./screens/Home";
-import { RecordingNotice } from "./screens/RecordingNotice";
 import { Ringing } from "./screens/Ringing";
 import { Connected } from "./screens/Connected";
 import { Apology } from "./screens/Apology";
@@ -54,7 +53,8 @@ export function App() {
     setReconnecting(false);
   }, []);
 
-  const onAccept = useCallback(async () => {
+  const onStartCall = useCallback(async () => {
+    dispatch({ type: "TAP_CALL" }); // → ringing immediately (connecting); async setup follows
     try {
       const { callId, channelName } = await startCall();
       callIdRef.current = callId;
@@ -97,7 +97,7 @@ export function App() {
       sessionRef.current = session;
       localAudioRef.current = session.localAudio;
       setLocalVideo(session.localVideo);
-      dispatch({ type: "ACCEPT_DISCLOSURE", callId, channelName });
+      dispatch({ type: "CALL_STARTED", callId, channelName });
       timeoutRef.current = setTimeout(() => {
         // No-answer cutoff: only valid while still ringing. If the call has since
         // connected (and the clear above was somehow missed), stay inert rather
@@ -146,7 +146,6 @@ export function App() {
         role="status"
         aria-live="polite"
       >
-        <LogoMark className="size-12" />
         <SeamShimmer />
         <p className="text-sm text-muted-foreground">{copy.loading}</p>
       </div>
@@ -156,9 +155,7 @@ export function App() {
   const screen = (() => {
     switch (state.screen) {
       case "home":
-        return <Home config={config} onCall={() => dispatch({ type: "TAP_CALL" })} />;
-      case "disclosure":
-        return <RecordingNotice onOk={onAccept} onClose={() => dispatch({ type: "CLOSE_DISCLOSURE" })} />;
+        return <Home config={config} onCall={onStartCall} />;
       case "ringing":
         return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
       case "connected":
