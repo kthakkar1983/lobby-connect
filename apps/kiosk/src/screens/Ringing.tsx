@@ -33,7 +33,8 @@ export function Ringing({
         </span>
       </div>
 
-      <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 px-10 text-center text-white">
+      {/* Decorative — must NOT capture taps, or it covers the Cancel button below. */}
+      <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 px-10 text-center text-white">
         <div className="relative mb-2 grid size-32 place-items-center">
           <div className="seam-ring lc-anim-spin size-32 rounded-pill p-1" aria-hidden />
           <div className="absolute grid size-24 place-items-center rounded-pill bg-white/10">
