@@ -33,7 +33,7 @@ export function CallControls({
   primary: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-end gap-3 rounded-pill border border-white/10 bg-call/70 px-3 py-2.5 backdrop-blur-sm">
+    <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-end gap-3 rounded-pill border border-white/10 bg-call/70 px-3 py-2.5 backdrop-blur-sm">
       <Ctrl label={muted ? "Unmute" : "Mute"} onClick={onMute}>
         {muted ? <MicOff /> : <Mic />}
       </Ctrl>
