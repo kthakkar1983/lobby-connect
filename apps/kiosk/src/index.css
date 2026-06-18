@@ -129,7 +129,7 @@ html, body, #root {
 @keyframes lc-seam-drift { to { --seam-angle: 495deg; } }
 .lc-seam-drift {
   background: linear-gradient(var(--seam-angle), #0f2d4b, #2ea6aa, #06d6a0);
-  animation: lc-seam-drift 8s linear infinite;
+  animation: lc-seam-drift 13s linear infinite;
 }
 
 .lc-anim-spin    { animation: lc-spin 3.2s linear infinite; }
@@ -143,7 +143,7 @@ html, body, #root {
 
 /* Connect beacon — expanding pulse rings on the Home invitation */
 @keyframes lc-beacon { 0% { transform: scale(0.7); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
-.lc-beacon-pulse { animation: lc-beacon 2.6s ease-out infinite; }
+.lc-beacon-pulse { animation: lc-beacon 4.5s ease-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer, .lc-seam-drift,

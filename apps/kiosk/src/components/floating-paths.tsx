@@ -56,7 +56,7 @@ export function FloatingPaths({
               reduceMotion
                 ? undefined
                 : {
-                    duration: 20 + (path.id % 10),
+                    duration: 40 + (path.id % 16), // kiosk: ~2x slower than the login for a calmer feel
                     repeat: Number.POSITIVE_INFINITY,
                     ease: "linear",
                   }
