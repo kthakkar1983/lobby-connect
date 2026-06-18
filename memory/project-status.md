@@ -1344,19 +1344,35 @@ Spec: `docs/specs/2026-06-17-owner-portal-redesign-design.md` · Plan: `docs/pla
 
 ---
 
-## NEXT UP (fresh chat) — Kiosk LAYOUT redesign (the LAST brand-revision surface)
+## Kiosk LAYOUT redesign — SHIPPED 2026-06-18 (session 24)
 
-Owner portal is shipped (above); agent/admin + sign-in + shell + dashboards already on `main`/prod. The only
-remaining brand-revision surface:
+Merged `--no-ff` `bd15103` → `main`. The kiosk redesign (the brand layout phase's **final surface**) is done:
+- **Home = "tap anywhere to connect":** the whole screen is one `<button>`; 50/50 login-style split — animated
+  navy invitation (new pure-CSS `ConnectionLines` + pulsing connect beacon + the line) │ seam │ light greeting
+  over a small "Good to know" card (per-field). **Hotel name only — no logo** (resolves the brand §2 no-logo
+  rule; `LogoMark` deleted from the kiosk).
+- **Recording-consent screen removed** (no recording in v1) → folded into Ringing as a quiet line; the
+  `disclosure` state was collapsed out of the call-machine (`TAP_CALL`→ringing; new screen-guarded
+  `CALL_STARTED`). **All Agora/call logic byte-identical** (opus line-verified).
+- **Ringing** rebranded (connecting field + spinning seam ring + recording line); **self-view PiP top-right in
+  every call stage** (Connected PiP moved up); **Apology** restyled; **Loading drops the LC logo**.
+- **Connection-lines are pure CSS** — no `motion` dep added to the kiosk. New tokens
+  `--gradient-brand-panel`/`--gradient-call-stage` + `lc-cl-*`/`lc-beacon` keyframes (reduced-motion net extended).
+- Owner **CTA-style picker hidden** (`kiosk_cta_style` column/action/API left dormant as the re-enable seam) —
+  the per-CTA-style art direction is superseded by the single fixed Home.
+- **Zero migrations / RLS / new routes / new deps.** kiosk 24 + portal 465 tests + typecheck + lint + build +
+  check:routes green; opus whole-branch review = GO.
+- Spec/plan: `docs/specs/2026-06-18-kiosk-redesign-design.md` · `docs/plans/2026-06-18-kiosk-redesign.md`.
 
-- **Kiosk LAYOUT redesign** + **audio in-call overlay** polish — its own fresh `impeccable` effort.
-- **Must-fix: the no-logo-on-kiosk rule** — the kiosk still renders an "LC" `LogoMark` in
-  `apps/kiosk/src/components/brand.tsx` (Home + loading). Per brand §2, guest screens stay logo-free; the
-  hotel's own name leads.
-- Also: full kiosk repaint, per-CTA-style art direction (`kiosk_cta_style` warm/accent/classic), final
-  end/hang-up treatment, favicon from `mark.svg`.
-- Treat §1–4 + sign-in (§5.1) + shell (§5.2) + dashboards (§5.3) + the **owner portal** (now shipped) as
-  **locked inputs**.
+**The brand-revision LAYOUT phase is now COMPLETE** across every surface (sign-in, agent/admin shell +
+dashboards, owner portal, kiosk).
+
+### Remaining (not blocking the phase)
+- **Live video/voice smoke on prod** for the kiosk — Twilio/Agora only work on the Vercel prod deploy. Verify:
+  tap-anywhere starts a call (no recording interstitial), motion + reduced-motion, the connecting screen + PiP,
+  and a real video call end-to-end. (Pending a push of `main` to origin → Vercel prod.)
+- **Audio in-call overlay polish** (the agent/admin softphone in-call screen, in the portal) + **favicon from
+  `mark.svg`** — deferred brand-polish items, separate from the kiosk guest app.
 
 Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
