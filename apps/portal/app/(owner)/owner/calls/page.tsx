@@ -4,7 +4,7 @@ import type { Route } from "next";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-import { CallRow, type CallRowData } from "@/components/owner/call-row";
+import { CallRow, type CallRowData } from "@/components/call/call-row";
 import { dayGroupLabel } from "@/lib/owner/summary";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -129,8 +129,10 @@ export default async function OwnerCallsPage({
     ]
       .filter(Boolean)
       .join(" · ");
+    const incId = incidentByCall.get(c.id) ?? null;
     const item: CallRowData = {
       secondary,
+      incidentHref: incId ? `/owner/incidents/${incId}` : null,
       detail: {
         id: c.id,
         channel: c.channel,
@@ -146,7 +148,6 @@ export default async function OwnerCallsPage({
         handlerName: c.handled_by_user_id
           ? (handlerName.get(c.handled_by_user_id) ?? "—")
           : "Unanswered",
-        incidentId: incidentByCall.get(c.id) ?? null,
       },
     };
     const last = grouped[grouped.length - 1];

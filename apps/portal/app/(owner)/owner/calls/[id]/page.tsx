@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { StatusPill } from "@/components/owner/status-pill";
-import { CallDetailBody, type CallDetail } from "@/components/owner/call-detail-body";
+import { CallDetailBody, type CallDetail } from "@/components/call/call-detail-body";
 
 export default async function OwnerCallDetailPage({
   params,
@@ -60,7 +60,6 @@ export default async function OwnerCallDetailPage({
     propertyName: property?.name ?? "—",
     timeZone: property?.timezone ?? "UTC",
     handlerName,
-    incidentId: incident?.id ?? null,
   };
 
   return (
@@ -79,7 +78,7 @@ export default async function OwnerCallDetailPage({
         <StatusPill kind="call" status={call.state} />
       </div>
 
-      <CallDetailBody data={detail} />
+      <CallDetailBody data={detail} incidentHref={incident?.id ? `/owner/incidents/${incident.id}` : null} />
     </div>
   );
 }
