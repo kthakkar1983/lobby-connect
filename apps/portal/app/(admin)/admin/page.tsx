@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { Phone, Building2 } from "lucide-react";
 import type { ProfileStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
@@ -208,6 +210,7 @@ export default async function AdminOverviewPage() {
           label="Live calls"
           sub={`${live.audio} phone · ${live.video} video`}
           tone={live.total > 0 ? "live" : "default"}
+          href="/admin/calls"
         />
         <DashTile value={onlineAgents} label="Agents online" sub={`of ${(agents ?? []).length}`} />
         <DashTile
@@ -243,9 +246,9 @@ export default async function AdminOverviewPage() {
           />
         )}
         <div className="mt-1 flex gap-3">
-          <StatTile value={outcomes.answered} label="Answered" />
-          <StatTile value={outcomes.missed} label="Missed" alert={outcomes.missed > 0} />
-          <StatTile value={outcomes.failed} label="Failed" />
+          <StatTile value={outcomes.answered} label="Answered" href={"/admin/calls?outcome=answered" as Route} />
+          <StatTile value={outcomes.missed} label="Missed" alert={outcomes.missed > 0} href={"/admin/calls?outcome=missed" as Route} />
+          <StatTile value={outcomes.failed} label="Failed" href={"/admin/calls?outcome=failed" as Route} />
           <StatTile value={formatDuration(avgPickup)} label="Avg pickup" />
           <StatTile value={formatDuration(avgCallLen)} label="Avg call" />
         </div>
@@ -346,7 +349,10 @@ export default async function AdminOverviewPage() {
         </Card>
 
         <Card className="gap-2 p-5 shadow-md">
-          <h2 className={LABEL}>Recent calls</h2>
+          <div className="flex items-center justify-between">
+            <h2 className={LABEL}>Recent calls</h2>
+            <Link href="/admin/calls" className="text-sm text-accent-text hover:underline">View all</Link>
+          </div>
           {recentRows.length === 0 ? (
             <EmptyState
               icon={Phone}
