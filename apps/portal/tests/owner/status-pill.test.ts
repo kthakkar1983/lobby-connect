@@ -16,8 +16,8 @@ describe("callPill", () => {
 });
 
 describe("incidentPill", () => {
-  it("destructive red for open, neutral for resolved", () => {
-    expect(incidentPill("OPEN")).toEqual({ label: "Open", className: "bg-destructive/10 text-destructive" });
+  it("blaze (attention) for open, neutral for resolved", () => {
+    expect(incidentPill("OPEN")).toEqual({ label: "Open", className: "bg-attention/15 text-attention-text" });
     expect(incidentPill("RESOLVED")).toEqual({ label: "Resolved", className: "bg-muted text-muted-foreground" });
   });
 });

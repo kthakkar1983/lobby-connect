@@ -58,11 +58,12 @@ export default async function OwnerIncidentDetailPage({
       <div
         className={cn(
           "flex items-center gap-3 rounded-card border p-4",
-          open ? "border-destructive/40 bg-destructive/5" : "border-border bg-card",
+          open ? "border-attention/40 bg-attention/10" : "border-border bg-card",
         )}
       >
-        <Siren className={cn("size-5", open ? "text-destructive" : "text-text-muted")} aria-hidden="true" />
-        <h1 className="font-display text-2xl text-foreground">911 Emergency</h1>
+        <Siren className={cn("size-5", open ? "text-attention-text" : "text-text-muted")} aria-hidden="true" />
+        <h1 className="font-display text-2xl text-foreground">Emergency</h1>
+        <span className="rounded-[5px] bg-destructive/10 px-1.5 py-0.5 font-label text-[11px] font-bold tracking-[0.04em] text-destructive">911</span>
         <StatusPill kind="incident" status={incident.status} />
       </div>
 

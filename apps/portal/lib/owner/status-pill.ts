@@ -21,6 +21,6 @@ export function incidentPill(status: IncidentStatus): Pill {
     className:
       status === "RESOLVED"
         ? "bg-muted text-muted-foreground"
-        : "bg-destructive/10 text-destructive",
+        : "bg-attention/15 text-attention-text",
   };
 }
