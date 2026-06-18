@@ -29,6 +29,8 @@ export function App() {
   const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const callIdRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every teardown to abort an in-flight call setup (see onStartCall).
+  const callGenRef = useRef(0);
 
   // Live mirror of the current screen for timer callbacks (avoids stale closures).
   const screenRef = useRef(state.screen);
@@ -42,6 +44,11 @@ export function App() {
   }, []);
 
   const teardown = useCallback(async () => {
+    // Invalidate any in-flight call setup: if the guest cancels during the async
+    // startCall/join (many seconds on a cold first call), the setup must NOT go on
+    // to join Agora + arm the no-answer timer behind their back, which would leave
+    // an uncancellable call ringing for the full window.
+    callGenRef.current += 1;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     await sessionRef.current?.leave();
     sessionRef.current = null;
@@ -54,12 +61,18 @@ export function App() {
   }, []);
 
   const onStartCall = useCallback(async () => {
+    callIdRef.current = null; // clear any prior call's id while the new one sets up
+    const gen = ++callGenRef.current; // this attempt's token; teardown() bumps it to abort
+    const aborted = () => callGenRef.current !== gen;
     dispatch({ type: "TAP_CALL" }); // → ringing immediately (connecting); async setup follows
     try {
       const { callId, channelName } = await startCall();
+      // Cancelled during the (cold-slow) startCall? Close the row we just created.
+      if (aborted()) { void endCall(callId, "cancelled"); return; }
       callIdRef.current = callId;
       const uid = Math.floor(Math.random() * 1_000_000) + 1;
       const tok = await fetchAgoraToken(channelName, uid);
+      if (aborted()) { void endCall(callId, "cancelled"); return; }
       const session = await joinChannel({
         appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid,
         onRemoteVideo: (t) => setRemoteVideo(t ?? null),
@@ -94,6 +107,13 @@ export function App() {
           }
         },
       });
+      // Cancelled while joining? Leave the channel we just joined and close the
+      // call instead of committing to it behind the guest's back.
+      if (aborted()) {
+        await session.leave();
+        void endCall(callId, "cancelled");
+        return;
+      }
       sessionRef.current = session;
       localAudioRef.current = session.localAudio;
       setLocalVideo(session.localVideo);
@@ -108,6 +128,7 @@ export function App() {
         dispatch({ type: "RING_TIMEOUT" });
       }, RING_WINDOW_MS);
     } catch {
+      if (aborted()) return; // teardown already ran (cancel); don't override with apology
       await teardown();
       dispatch({ type: "ERROR" });
     }
