@@ -1367,12 +1367,27 @@ Merged `--no-ff` `bd15103` → `main`. The kiosk redesign (the brand layout phas
 **The brand-revision LAYOUT phase is now COMPLETE** across every surface (sign-in, agent/admin shell +
 dashboards, owner portal, kiosk).
 
-### Remaining (not blocking the phase)
-- **Live video/voice smoke on prod** for the kiosk — Twilio/Agora only work on the Vercel prod deploy. Verify:
-  tap-anywhere starts a call (no recording interstitial), motion + reduced-motion, the connecting screen + PiP,
-  and a real video call end-to-end. (Pending a push of `main` to origin → Vercel prod.)
+### Prod smoke — CONFIRMED 2026-06-18 (Kumar, on the kiosk prod deploy)
+Tap-anywhere → connect, the matched login-style FloatingPaths lines, Cancel, and a real video call all verified
+working. **Post-smoke fixes** (3 merges to `main`: `443bfc6` / `c62cd47` / `8cf85eb`):
+- **Lines now use the login's `motion` `FloatingPaths`** (the lean CSS stand-in didn't match) + slowed ~2x +
+  beacon-ripple / seam-drift slowed — `motion` added to the kiosk.
+- **End/Cancel tear down locally + go home first, then notify the server in the background** (a slow/cold
+  `call-ended` route was making End look unresponsive).
+- **Abortable in-flight call setup** — a generation token bumped by `teardown()`; a Cancel during a cold first
+  call now leaves the just-joined channel + closes the just-created call instead of orphaning a ringing call.
+- **THE Cancel bug** — the Ringing spinner/text overlay was `absolute inset-0 z-[1]` with **no
+  `pointer-events-none`**, sitting over `CallControls` (no z-index), so taps never reached the Cancel button and
+  `onCancel` never fired (guest stuck ringing to the 120s timeout). Fixed: `pointer-events-none` on the overlay +
+  `z-20` on `CallControls`. **Lesson: jsdom has no layout, so CSS-stacking / pointer-events bugs are invisible to
+  unit tests — full-screen decorative overlays MUST be `pointer-events-none`, and only real-browser smoke catches
+  this class of bug.** (See [[build-quirks]].)
+- **Issue 2 — first-call ring latency = serverless cold-start** (confirmed: 1st call slow, 2nd+ fast). Not a bug
+  (the incoming-video poll is already 3s); deferred to the Pro keep-warm upgrade ([[launch-pro-tier-deferrals]]).
+
+### Remaining (not blocking; optional brand-polish, separate from the kiosk app)
 - **Audio in-call overlay polish** (the agent/admin softphone in-call screen, in the portal) + **favicon from
-  `mark.svg`** — deferred brand-polish items, separate from the kiosk guest app.
+  `mark.svg`**.
 
 Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
