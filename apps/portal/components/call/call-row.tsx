@@ -4,12 +4,13 @@ import { useId, useState } from "react";
 import { Phone, Video, StickyNote, ChevronDown } from "lucide-react";
 import { StatusPill } from "@/components/owner/status-pill";
 import { formatTimeOnly, formatDuration } from "@/lib/owner/format";
-import { CallDetailBody, type CallDetail } from "@/components/owner/call-detail-body";
+import { CallDetailBody, type CallDetail } from "@/components/call/call-detail-body";
 import { cn } from "@/lib/utils";
 
 export type CallRowData = {
   readonly secondary: string; // pre-composed (handler · property · room …)
   readonly detail: CallDetail;
+  readonly incidentHref?: string | null; // owner: link; admin: omitted
 };
 
 export function CallRow({ call }: { readonly call: CallRowData }) {
@@ -54,7 +55,7 @@ export function CallRow({ call }: { readonly call: CallRowData }) {
 
       {expanded && (
         <div id={panelId} className="border-t border-border p-4">
-          <CallDetailBody data={detail} />
+          <CallDetailBody data={detail} incidentHref={call.incidentHref} />
         </div>
       )}
     </div>

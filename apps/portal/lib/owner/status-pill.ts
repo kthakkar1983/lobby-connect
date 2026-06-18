@@ -8,7 +8,7 @@ const CALL_PILL_CLASS: Record<CallState, string> = {
   IN_PROGRESS: "bg-live/15 text-live-foreground",
   RINGING: "bg-muted text-muted-foreground",
   NO_ANSWER: "bg-attention/15 text-attention-text",
-  FAILED: "bg-attention/15 text-attention-text",
+  FAILED: "bg-muted text-muted-foreground",
 };
 
 export function callPill(state: CallState): Pill {
@@ -21,6 +21,6 @@ export function incidentPill(status: IncidentStatus): Pill {
     className:
       status === "RESOLVED"
         ? "bg-muted text-muted-foreground"
-        : "bg-destructive/10 text-destructive",
+        : "bg-attention/15 text-attention-text",
   };
 }

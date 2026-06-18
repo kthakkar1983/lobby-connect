@@ -3,8 +3,7 @@ import { Phone } from "lucide-react";
 import type { Route } from "next";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
-import { CallRow, type CallRowData } from "@/components/owner/call-row";
+import { CallRow, type CallRowData } from "@/components/call/call-row";
 import { dayGroupLabel } from "@/lib/owner/summary";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,18 +12,21 @@ import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
 import type { CallChannel } from "@lc/shared";
 import { encodeCursor, decodeCursor, keysetOrFilter } from "@/lib/owner/calls-cursor";
+import { parseOutcome, statesForOutcome, buildCallsHref } from "@/lib/calls/filters";
+import { CallFilters } from "@/components/call/call-filters";
 
 const PAGE_SIZE = 50;
 
 export default async function OwnerCallsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string; before?: string; channel?: string }>;
+  searchParams: Promise<{ property?: string; before?: string; channel?: string; outcome?: string }>;
 }) {
-  const { property, before, channel: channelParam } = await searchParams;
+  const { property, before, channel: channelParam, outcome: outcomeParam } = await searchParams;
   const cursor = decodeCursor(before);
   const activeChannel: CallChannel | null =
     channelParam === "AUDIO" || channelParam === "VIDEO" ? channelParam : null;
+  const activeOutcome = parseOutcome(outcomeParam);
   const actor = await requireRole("OWNER");
   const supabase = await createServerClient();
 
@@ -69,6 +71,10 @@ export default async function OwnerCallsPage({
     callsQuery = callsQuery.eq("channel", activeChannel);
   }
 
+  if (activeOutcome) {
+    callsQuery = callsQuery.in("state", statesForOutcome(activeOutcome));
+  }
+
   const { data: calls } = await callsQuery;
   const rows = calls ?? [];
 
@@ -102,19 +108,16 @@ export default async function OwnerCallsPage({
     }
   }
 
-  const buildHref = (next: { property?: string | null; channel?: CallChannel | null; before?: string | null }) => {
-    const sp = new URLSearchParams();
-    const p = next.property === undefined ? activeProperty : next.property;
-    const ch = next.channel === undefined ? activeChannel : next.channel;
-    if (p) sp.set("property", p);
-    if (ch) sp.set("channel", ch);
-    if (next.before) sp.set("before", next.before);
-    const qs = sp.toString();
-    return `/owner/calls${qs ? `?${qs}` : ""}`;
-  };
   const lastRow = rows[rows.length - 1];
-  const olderHref = lastRow ? buildHref({ before: encodeCursor({ created_at: lastRow.created_at, id: lastRow.id }) }) : null;
-  const newestHref = buildHref({ before: null });
+  const olderHref = lastRow
+    ? buildCallsHref("/owner/calls", {
+        property: activeProperty, channel: activeChannel, outcome: activeOutcome,
+        before: encodeCursor({ created_at: lastRow.created_at, id: lastRow.id }),
+      })
+    : null;
+  const newestHref = buildCallsHref("/owner/calls", {
+    property: activeProperty, channel: activeChannel, outcome: activeOutcome,
+  });
 
   const now = new Date();
   // Build display rows + group them by day label (rows already sorted desc).
@@ -129,8 +132,10 @@ export default async function OwnerCallsPage({
     ]
       .filter(Boolean)
       .join(" · ");
+    const incId = incidentByCall.get(c.id) ?? null;
     const item: CallRowData = {
       secondary,
+      incidentHref: incId ? `/owner/incidents/${incId}` : null,
       detail: {
         id: c.id,
         channel: c.channel,
@@ -146,7 +151,6 @@ export default async function OwnerCallsPage({
         handlerName: c.handled_by_user_id
           ? (handlerName.get(c.handled_by_user_id) ?? "—")
           : "Unanswered",
-        incidentId: incidentByCall.get(c.id) ?? null,
       },
     };
     const last = grouped[grouped.length - 1];
@@ -159,56 +163,13 @@ export default async function OwnerCallsPage({
       <AutoRefresh />
       <h1 className="font-display text-3xl text-foreground">Calls</h1>
 
-      {multiProperty && (
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={buildHref({ property: null }) as Route}
-            className={cn(
-              "rounded-pill border px-3 py-1 text-sm",
-              !activeProperty ? "border-accent bg-accent/10 text-accent-text" : "border-border text-text-muted",
-            )}
-          >
-            All
-          </Link>
-          {props.map((p) => (
-            <Link
-              key={p.id}
-              href={buildHref({ property: p.id }) as Route}
-              className={cn(
-                "rounded-pill border px-3 py-1 text-sm",
-                activeProperty === p.id
-                  ? "border-accent bg-accent/10 text-accent-text"
-                  : "border-border text-text-muted",
-              )}
-            >
-              {p.name}
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            { label: "All", value: null },
-            { label: "Phone", value: "AUDIO" as const },
-            { label: "Video", value: "VIDEO" as const },
-          ] as const
-        ).map((opt) => (
-          <Link
-            key={opt.label}
-            href={buildHref({ channel: opt.value }) as Route}
-            className={cn(
-              "rounded-pill border px-3 py-1 text-sm",
-              activeChannel === opt.value
-                ? "border-accent bg-accent/10 text-accent-text"
-                : "border-border text-text-muted",
-            )}
-          >
-            {opt.label}
-          </Link>
-        ))}
-      </div>
+      <CallFilters
+        basePath="/owner/calls"
+        properties={props}
+        activeProperty={activeProperty}
+        activeChannel={activeChannel}
+        activeOutcome={activeOutcome}
+      />
 
       {rows.length === 0 ? (
         <Card className="p-0">

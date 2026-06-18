@@ -6,6 +6,7 @@ import {
   Activity,
   Building2,
   LayoutDashboard,
+  Phone,
   ScrollText,
   Users,
   type LucideIcon,
@@ -33,6 +34,7 @@ type NavEntry = {
 
 const ADMIN_NAV: readonly NavEntry[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/admin/calls", label: "Calls", icon: Phone },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/properties", label: "Properties", icon: Building2 },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText },

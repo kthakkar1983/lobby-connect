@@ -18,7 +18,6 @@ export type CallDetail = {
   readonly propertyName: string;
   readonly timeZone: string;
   readonly handlerName: string; // resolved name, or "Unanswered" / "—"
-  readonly incidentId: string | null;
 };
 
 function Field({ label, value }: { readonly label: string; readonly value: string }) {
@@ -30,13 +29,19 @@ function Field({ label, value }: { readonly label: string; readonly value: strin
   );
 }
 
-export function CallDetailBody({ data }: { readonly data: CallDetail }) {
+export function CallDetailBody({
+  data,
+  incidentHref,
+}: {
+  readonly data: CallDetail;
+  readonly incidentHref?: string | null;
+}) {
   return (
     <div className="flex flex-col gap-4">
-      {data.incidentId && (
+      {incidentHref && (
         <Link
-          href={`/owner/incidents/${data.incidentId}` as Route}
-          className="flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/5 p-4 text-sm font-medium text-destructive hover:bg-destructive/10"
+          href={incidentHref as Route}
+          className="flex items-center gap-2 rounded-card border border-attention/40 bg-attention/10 p-4 text-sm font-medium text-attention-text hover:bg-attention/15"
         >
           <Siren className="size-4" aria-hidden="true" /> Emergency — view incident
         </Link>
@@ -59,7 +64,7 @@ export function CallDetailBody({ data }: { readonly data: CallDetail }) {
         </SectionCard>
       )}
 
-      {/* Recording seam: dark until call recording ships. */}
+      {/* Recording seam: dark until call recording ships. Do not add an iframe sandbox. */}
       {data.recording_url && (
         <SectionCard title="Recording">
           <audio controls src={data.recording_url} className="w-full">

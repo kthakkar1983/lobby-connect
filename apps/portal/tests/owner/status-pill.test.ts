@@ -9,15 +9,17 @@ describe("callPill", () => {
   it("neutral for ringing", () => {
     expect(callPill("RINGING").className).toBe("bg-muted text-muted-foreground");
   });
-  it("blaze (attention) for missed/failed", () => {
+  it("blaze (attention) for missed", () => {
     expect(callPill("NO_ANSWER")).toEqual({ label: "Missed", className: "bg-attention/15 text-attention-text" });
-    expect(callPill("FAILED").className).toBe("bg-attention/15 text-attention-text");
+  });
+  it("muted neutral for failed", () => {
+    expect(callPill("FAILED")).toEqual({ label: "Failed", className: "bg-muted text-muted-foreground" });
   });
 });
 
 describe("incidentPill", () => {
-  it("destructive red for open, neutral for resolved", () => {
-    expect(incidentPill("OPEN")).toEqual({ label: "Open", className: "bg-destructive/10 text-destructive" });
+  it("blaze (attention) for open, neutral for resolved", () => {
+    expect(incidentPill("OPEN")).toEqual({ label: "Open", className: "bg-attention/15 text-attention-text" });
     expect(incidentPill("RESOLVED")).toEqual({ label: "Resolved", className: "bg-muted text-muted-foreground" });
   });
 });

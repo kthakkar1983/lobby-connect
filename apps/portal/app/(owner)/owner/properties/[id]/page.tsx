@@ -4,7 +4,7 @@ import { ChevronLeft, Phone } from "lucide-react";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { SectionCard } from "@/components/owner/section-card";
-import { CallRow, type CallRowData } from "@/components/owner/call-row";
+import { CallRow, type CallRowData } from "@/components/call/call-row";
 import { presenceLabel, presenceDotClass } from "@/lib/owner/format";
 import { cn } from "@/lib/utils";
 import { KioskContentCard } from "./kiosk-content-card";
@@ -162,8 +162,10 @@ export default async function OwnerPropertyDetailPage({
         ) : (
           <div className="flex flex-col gap-2">
             {recentRows.map((c) => {
+              const incId = recentIncidentByCall.get(c.id) ?? null;
               const item: CallRowData = {
                 secondary: c.channel === "VIDEO" ? "Video" : "Audio",
+                incidentHref: incId ? `/owner/incidents/${incId}` : null,
                 detail: {
                   id: c.id,
                   channel: c.channel,
@@ -179,7 +181,6 @@ export default async function OwnerPropertyDetailPage({
                   handlerName: c.handled_by_user_id
                     ? (recentHandlerName.get(c.handled_by_user_id) ?? "—")
                     : "Unanswered",
-                  incidentId: recentIncidentByCall.get(c.id) ?? null,
                 },
               };
               return <CallRow key={c.id} call={item} />;
