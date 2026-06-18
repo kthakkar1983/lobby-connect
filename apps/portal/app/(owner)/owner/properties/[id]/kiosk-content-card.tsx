@@ -24,7 +24,7 @@ const LABELS: Record<(typeof KIOSK_FIELDS)[number], string> = {
 
 const LONG_FIELDS = new Set(["kiosk_welcome_message", "kiosk_apology_message"]);
 
-type Props ={ propertyId: string; initial: KioskContentInput; initialStyle: KioskCtaStyle };
+type Props = { propertyId: string; initial: KioskContentInput; initialStyle: KioskCtaStyle };
 
 export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
   const router = useRouter();
