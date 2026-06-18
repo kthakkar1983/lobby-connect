@@ -11,17 +11,30 @@ describe("kiosk call machine", () => {
     expect(initialState().screen).toBe("home");
   });
 
-  it("home → disclosure on tap", () => {
+  it("home → ringing on tap (start connecting)", () => {
     const s = reduce(initialState(), { type: "TAP_CALL" });
-    expect(s.screen).toBe("disclosure");
+    expect(s.screen).toBe("ringing");
   });
 
-  it("disclosure → ringing on accept (records callId + channel)", () => {
+  it("TAP_CALL is a no-op when not on home", () => {
+    const s: KioskState = { screen: "connected", callId: "c1", channelName: "call_abc" };
+    expect(reduce(s, { type: "TAP_CALL" }).screen).toBe("connected");
+  });
+
+  it("CALL_STARTED records callId + channel and stays on ringing", () => {
     let s = reduce(initialState(), { type: "TAP_CALL" });
-    s = reduce(s, { type: "ACCEPT_DISCLOSURE", callId: "c1", channelName: "call_abc" });
+    s = reduce(s, { type: "CALL_STARTED", callId: "c1", channelName: "call_abc" });
     expect(s.screen).toBe("ringing");
     expect(s.callId).toBe("c1");
     expect(s.channelName).toBe("call_abc");
+  });
+
+  it("CALL_STARTED is ignored once the call is no longer ringing (cancelled mid-connect)", () => {
+    const s: KioskState = { screen: "home", callId: null, channelName: null };
+    const next = reduce(s, { type: "CALL_STARTED", callId: "c1", channelName: "call_abc" });
+    expect(next.screen).toBe("home");
+    expect(next.callId).toBeNull();
+    expect(next.channelName).toBeNull();
   });
 
   it("ringing → connected when the agent joins", () => {
@@ -59,18 +72,6 @@ describe("kiosk call machine", () => {
     s = reduce(s, { type: "ERROR" });
     expect(s.screen).toBe("apology");
   });
-
-  it("disclosure → home on close", () => {
-    let s = reduce(initialState(), { type: "TAP_CALL" });
-    expect(s.screen).toBe("disclosure");
-    s = reduce(s, { type: "CLOSE_DISCLOSURE" });
-    expect(s.screen).toBe("home");
-  });
-
-  it("CLOSE_DISCLOSURE is a no-op off the disclosure screen", () => {
-    const s: KioskState = { screen: "ringing", callId: "c1", channelName: "call_abc" };
-    expect(reduce(s, { type: "CLOSE_DISCLOSURE" }).screen).toBe("ringing");
-  });
 });
 
 describe("shouldFireRingTimeout (no-answer cutoff guard)", () => {
@@ -78,16 +79,12 @@ describe("shouldFireRingTimeout (no-answer cutoff guard)", () => {
     expect(shouldFireRingTimeout("ringing")).toBe(true);
   });
 
-  // Regression: the 120s ring timer is armed at ringing and was never cleared on
-  // connect, so it fired mid-call — tearing down Agora and stranding the kiosk on
-  // the live screen. The cutoff must be inert once the agent has joined.
   it("does NOT fire once the call has connected", () => {
     expect(shouldFireRingTimeout("connected")).toBe(false);
   });
 
-  it("does NOT fire on home, disclosure, or apology", () => {
+  it("does NOT fire on home or apology", () => {
     expect(shouldFireRingTimeout("home")).toBe(false);
-    expect(shouldFireRingTimeout("disclosure")).toBe(false);
     expect(shouldFireRingTimeout("apology")).toBe(false);
   });
 });

@@ -5,10 +5,10 @@
  */
 export const copy = {
   loading: "Getting things ready…",
-  recording: {
-    heading: "Before we connect you",
-    body: "Your call with the front desk may be recorded for training and quality. Tap continue when you're ready.",
-    action: "Continue",
+  ringing: {
+    title: "Ringing the front desk…",
+    subtitle: "Someone's almost there",
+    recordingNote: "Calls may be recorded for quality",
   },
   apology: {
     heading: "Sorry to keep you waiting.",

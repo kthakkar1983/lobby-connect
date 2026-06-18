@@ -45,10 +45,12 @@ export function Connected({
         </span>
       </div>
 
-      <div
-        ref={localRef}
-        className="absolute bottom-24 right-5 z-10 h-[104px] w-[152px] overflow-hidden rounded-card border-2 border-white/45"
-      />
+      <div className="absolute right-5 top-5 z-10 h-[104px] w-[152px] overflow-hidden rounded-card border-2 border-white/45">
+        <div ref={localRef} className="absolute inset-0" />
+        <span className="absolute bottom-1.5 left-2 font-label text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+          You
+        </span>
+      </div>
 
       <CallControls
         muted={muted}

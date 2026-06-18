@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { KIOSK_FIELDS, KIOSK_CTA_STYLES, type KioskContentInput, type KioskCtaStyle } from "@/lib/owner/kiosk";
+import { KIOSK_FIELDS, type KioskContentInput, type KioskCtaStyle } from "@/lib/owner/kiosk";
 import { updateKioskContentAction } from "./actions";
 
 const LABELS: Record<(typeof KIOSK_FIELDS)[number], string> = {
@@ -24,19 +24,12 @@ const LABELS: Record<(typeof KIOSK_FIELDS)[number], string> = {
 
 const LONG_FIELDS = new Set(["kiosk_welcome_message", "kiosk_apology_message"]);
 
-const STYLE_META: Record<KioskCtaStyle, { name: string; panel: string; greet: string }> = {
-  warm: { name: "Warm", panel: "bg-live", greet: "text-foreground" },
-  accent: { name: "Accent", panel: "bg-primary", greet: "text-foreground" },
-  classic: { name: "Classic", panel: "bg-primary", greet: "text-live-foreground" },
-};
-
 type Props = { propertyId: string; initial: KioskContentInput; initialStyle: KioskCtaStyle };
 
 export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState<KioskContentInput>(initial);
-  const [style, setStyle] = useState<KioskCtaStyle>(initialStyle);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -46,7 +39,6 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
 
   function cancel() {
     setValues(initial);
-    setStyle(initialStyle);
     setError(null);
     setEditing(false);
   }
@@ -54,7 +46,7 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
   function save() {
     setError(null);
     startTransition(async () => {
-      const result = await updateKioskContentAction(propertyId, values, style);
+      const result = await updateKioskContentAction(propertyId, values, initialStyle);
       if (result.ok) {
         toast.success("Kiosk content updated");
         setEditing(false);
@@ -79,39 +71,6 @@ export function KioskContentCard({ propertyId, initial, initialStyle }: Props) {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label>Appearance</Label>
-          <div className="flex gap-2">
-            {KIOSK_CTA_STYLES.map((s) => {
-              const meta = STYLE_META[s];
-              const selected = style === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  disabled={!editing}
-                  onClick={() => setStyle(s)}
-                  aria-pressed={selected}
-                  className={`flex-1 rounded-input border-2 p-1.5 text-left transition-colors disabled:cursor-default ${
-                    selected ? "border-accent" : "border-border"
-                  } ${editing ? "cursor-pointer" : ""}`}
-                >
-                  <span className="flex aspect-[16/10] overflow-hidden rounded-[6px] border border-border">
-                    <span className="flex-[0_0_55%] bg-card p-1">
-                      <span className={`block font-display text-[10px] leading-none ${meta.greet}`}>Hi.</span>
-                    </span>
-                    <span className={`flex-[0_0_45%] ${meta.panel}`} />
-                  </span>
-                  <span className="mt-1 block text-center text-xs font-medium text-foreground">
-                    {meta.name}
-                    {s === "warm" ? <span className="text-muted-foreground"> · default</span> : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {KIOSK_FIELDS.map((field) => (
           <div key={field} className="flex flex-col gap-1.5">
             <Label htmlFor={field}>{LABELS[field]}</Label>

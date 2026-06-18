@@ -9,23 +9,30 @@ export function SeamTop() {
   );
 }
 
-/** The "LC" seam mark (kiosk copy of the portal LogoMark). */
-export function LogoMark({ className = "" }: { readonly className?: string }) {
-  return (
-    <span
-      className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-input bg-primary text-sm font-semibold text-primary-foreground ${className}`}
-      aria-hidden
-    >
-      LC
-      <span
-        className="absolute inset-x-1.5 -bottom-px h-px rounded-full"
-        style={{ background: "var(--gradient-seam)" }}
-      />
-    </span>
-  );
-}
-
 /** Thin shimmering seam line for the loading state. */
 export function SeamShimmer() {
   return <div className="lc-anim-shimmer h-[3px] w-36 rounded-full" aria-hidden />;
+}
+
+/** Drifting connection-lines field (CSS-animated; the kiosk's dependency-free
+ *  echo of the portal floating-paths). Honors prefers-reduced-motion via index.css. */
+export function ConnectionLines({ className = "" }: { readonly className?: string }) {
+  return (
+    <svg
+      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+      viewBox="0 0 260 280"
+      preserveAspectRatio="none"
+      fill="none"
+      aria-hidden
+    >
+      <g className="lc-cl-layer" strokeWidth="1.1">
+        <path className="lc-cl-path stroke-accent" style={{ animationDelay: "0s" }}
+          d="M-10 70 C60 40 110 120 190 88 S300 84 340 108" />
+        <path className="lc-cl-path stroke-live" style={{ animationDelay: "-2s" }}
+          d="M-10 150 C70 120 120 200 210 160 S300 158 345 176" />
+        <path className="lc-cl-path stroke-accent" style={{ animationDelay: "-4s" }}
+          d="M-10 220 C80 192 130 250 220 214 S300 220 345 232" />
+      </g>
+    </svg>
+  );
 }

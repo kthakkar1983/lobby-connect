@@ -1,6 +1,5 @@
 export type KioskScreen =
   | "home"
-  | "disclosure"
   | "ringing"
   | "connected"
   | "apology";
@@ -13,8 +12,7 @@ export interface KioskState {
 
 export type KioskAction =
   | { type: "TAP_CALL" }
-  | { type: "CLOSE_DISCLOSURE" }
-  | { type: "ACCEPT_DISCLOSURE"; callId: string; channelName: string }
+  | { type: "CALL_STARTED"; callId: string; channelName: string }
   | { type: "AGENT_JOINED" }
   | { type: "RING_TIMEOUT" }
   | { type: "CANCEL" }
@@ -43,15 +41,15 @@ function home(): KioskState {
 export function reduce(state: KioskState, action: KioskAction): KioskState {
   switch (action.type) {
     case "TAP_CALL":
-      return state.screen === "home" ? { ...state, screen: "disclosure" } : state;
-    case "CLOSE_DISCLOSURE":
-      return state.screen === "disclosure" ? home() : state;
-    case "ACCEPT_DISCLOSURE":
-      return {
-        screen: "ringing",
-        callId: action.callId,
-        channelName: action.channelName,
-      };
+      // Tap starts connecting immediately; the async call setup follows and
+      // reports its ids via CALL_STARTED. No blocking consent screen.
+      return state.screen === "home" ? { ...state, screen: "ringing" } : state;
+    case "CALL_STARTED":
+      // Guarded like the other transitions: if the call was cancelled mid-connect
+      // (screen already back to home), a late CALL_STARTED must not write stale ids.
+      return state.screen === "ringing"
+        ? { ...state, callId: action.callId, channelName: action.channelName }
+        : state;
     case "AGENT_JOINED":
       return state.screen === "ringing" ? { ...state, screen: "connected" } : state;
     case "RING_TIMEOUT":

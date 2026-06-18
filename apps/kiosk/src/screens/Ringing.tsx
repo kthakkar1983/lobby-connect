@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ICameraVideoTrack } from "agora-rtc-sdk-ng";
-import { Phone } from "lucide-react";
+import { Phone, ShieldCheck } from "lucide-react";
+import { ConnectionLines } from "../components/brand";
 import { CallControls } from "./CallControls";
+import { copy } from "../lib/copy";
 
 export function Ringing({
   localVideo, muted, cameraOff, onMute, onCamera, onCancel,
@@ -19,23 +21,30 @@ export function Ringing({
   }, [localVideo]);
 
   return (
-    <div className="relative h-full overflow-hidden bg-call">
-      <div ref={ref} className="absolute inset-0" />
-      <div className="absolute inset-0 bg-call/45" />
+    <div className="relative h-full overflow-hidden" style={{ background: "var(--gradient-call-stage)" }}>
+      <ConnectionLines />
 
-      <div className="absolute left-4 top-4 rounded-pill bg-black/30 px-2.5 py-1 font-label text-[10px] font-semibold uppercase tracking-[0.13em] text-white/70">
-        You
+      {/* self-view PiP — top-right (consistent across every call stage) */}
+      <div className="absolute right-5 top-5 z-10 h-[104px] w-[152px] overflow-hidden rounded-card border-2 border-white/40">
+        <div ref={ref} className="absolute inset-0" />
+        <span className="absolute bottom-1.5 left-2 font-label text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+          You
+        </span>
       </div>
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white">
-        <div className="relative grid place-items-center">
+      <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 px-10 text-center text-white">
+        <div className="relative mb-2 grid size-32 place-items-center">
           <div className="seam-ring lc-anim-spin size-32 rounded-pill p-1" aria-hidden />
           <div className="absolute grid size-24 place-items-center rounded-pill bg-white/10">
             <Phone className="size-9" strokeWidth={1.6} />
           </div>
         </div>
-        <div className="font-display text-3xl">Ringing the front desk…</div>
-        <div className="font-mono text-sm text-white/70">Someone's almost there</div>
+        <div className="font-display text-3xl font-semibold">{copy.ringing.title}</div>
+        <div className="font-mono text-sm text-white/65">{copy.ringing.subtitle}</div>
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-white/45">
+          <ShieldCheck className="size-3.5" strokeWidth={1.8} />
+          {copy.ringing.recordingNote}
+        </div>
       </div>
 
       <CallControls
