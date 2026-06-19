@@ -1471,3 +1471,62 @@ Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
 auto-memories: `voice-vs-video-incoming`, `dev-server-sandbox-hazard`, `build-quirks` (the new `.next`
 " 2"-dupe quirk).
+
+---
+
+### Session 26 cont. (2026-06-19, evening handoff — pick up in a fresh chat)
+
+Two things shipped to `main` (Vercel auto-deploys both apps to prod). Kumar is re-testing **this evening**.
+
+**1) UI/UX punch-list §B — ALL 7 DONE, pushed (`be5dab4`).** Implementation against the locked brand system
+(`docs/brand/brand-guidelines.md`); TDD only where there was logic (B3 chart data).
+- **B1** Hang up → **blaze** (`bg-attention`+ink) in `components/softphone/audio-call-overlay.tsx`; 911 stays red.
+- **B2** Kiosk favicon — reused the portal navy-tile + reversed-mark SVG → `apps/kiosk/public/icon.svg` + `<link>`
+  +`theme-color` in `index.html` (ships to `dist/`).
+- **B3** Hourly chart → **thin grouped 3-series** bars + gridlines; new `HourlyLegend` (Phone=teal · Video=navy ·
+  Missed=blaze) wired into agent/admin/owner cards. **Data partition (a decision — flag if Kumar wants it different):
+  clean/non-overlapping** — `hourlyVolume` now buckets `audio`=answered AUDIO (COMPLETED), `video`=answered VIDEO,
+  `missed`=NO_ANSWER; FAILED + live excluded (no double-count). `HourlyCall` gained `state`, `HourBucket` gained
+  `missed`; `splitTodayByChannel` → narrower `DatedChannelCall`. TDD RED→GREEN.
+- **B4** "Total call duration" → body font (dropped `font-mono`), agent + admin.
+- **B5** Desktop type scale `+6.25%` — `globals.css` `@media (min-width:1024px){html{font-size:106.25%}}`
+  (percentage = respects browser default; rem text+spacing scale together). **One knob — raise toward 112.5% if it
+  still reads small.**
+- **B6** Logo+wordmark **lockup** on all auth pages — extracted `components/auth/auth-shell.tsx`
+  (Wordmark→`LogoLockup`); `(auth)/layout.tsx` delegates; new **`app/auth/layout.tsx`** brings `/auth/update-password`
+  (outside the `(auth)` group — URL must stay) into the same shell; `update-password/page.tsx` stripped to its form.
+- **B7** Incoming-call **property name** made prominent (`font-display text-2xl` bold) in `softphone.tsx`.
+- Gates: 475 portal tests + typecheck + lint + check:routes + portal/kiosk builds all green. A faithful static chart
+  preview was shown to Kumar in-chat. **PENDING: live visual pass** (sandbox can't run dev) — esp. B3 chart (needs a
+  dashboard with calls today), B5 scale, B6 auth lockups, B7 + B1 (best seen during a real call).
+
+**2) Item A voice smoke → found the presence-gate over-excluded ON_CALL; fixed + pushed (`d18d452`; doc `87e2562`).**
+Single-agent smoke (only Dilnoza meant to be online) STILL apologized. `systematic-debugging` + **Twilio per-leg logs
+were decisive:** the assigned primary agent (Dilnoza, correctly assigned) was **NEVER dialed** — she'd finished a
+**VIDEO call ~22s earlier** so her presence was **ON_CALL**, and `isReachableForDial` required `status==="AVAILABLE"`
+*exactly* → `resolvePrimaryAgent` skipped her. Both calls' legs went to the two ADMINS instead (Tejas
+registered-but-unmanned → 125s no-answer; Kumar Device dead → 0s fail) → apology. **Fix:** reachable =
+**`AVAILABLE || ON_CALL`** + fresh heartbeat (= the dashboard's `countOnlineAgents` "online" definition); still
+excludes AWAY (opted-out) + stale/OFFLINE. TDD (old test literally asserted `ON_CALL→false`); all gates green.
+- **CORRECTION (Kumar):** the `IN_PROGRESS` AUDIO row `83ef58de` seen mid-investigation was **his real live call with
+  Dilnoza** — NOT a leak and NOT an audio-finalization bug. **Do not chase it.**
+
+**EVENING RE-TEST PLAN (do this first next chat):** re-run the single-agent voice smoke, but with hygiene that matters
+**at Twilio concurrency = 1** (still 1 until ~2026-06-21):
+1. **Only ONE agent reachable.** At limit 1, multiple reachable targets RACE for the single slot. Set **Tejas's
+   "Covering"/`accepting_calls` OFF** (or have him truly offline ≥90s); Kumar's admin is already `accepting_calls=false`.
+   Otherwise the dial can land on an admin, not Dilnoza.
+2. **Dilnoza: exactly ONE portal tab, foregrounded, "Accepting calls" ON.** A backgrounded tab throttles the 20s
+   heartbeat → stale → OFFLINE → excluded. A *second* lingering "not accepting" tab fights the live one → flaps her to
+   AWAY (the likely source of the "dashboard says AWAY, screen says accepting" she saw).
+- Expected with the fix: every call rings + connects to Dilnoza, even right after a video call. Claude can verify live
+  via prod `calls` rows + Twilio per-leg logs (creds `apps/portal/.env.local`; Supabase prod ref `ztunzdpmazwwwkxcpyfp`;
+  child legs: `GET .../Calls.json?ParentCallSid=CA…`). Then also do the **UI/UX live visual pass** (B1–B7 above).
+
+**Residuals / follow-ups (non-blocking, logged in punch-list §A):** (a) presence freshness lags real Twilio **Device**
+registration by up to 90s (a just-closed browser is still dialed → 0s fail) — robust fix = gate on Device registration,
+not the heartbeat; (b) concurrency=1 races multiple reachable targets — the raise (~06-21) is the multi-agent unblock;
+(c) the "AWAY while accepting" flap — most likely multiple tabs; revisit only if it recurs with a single clean tab.
+
+**Commits this session:** `be5dab4` (UI/UX §B), `d18d452` (ON_CALL fix), `87e2562` (punch-list doc).
+Read order unchanged: `CLAUDE.md` → `MEMORY.md` → this file → `docs/v1-punchlist.md`.
