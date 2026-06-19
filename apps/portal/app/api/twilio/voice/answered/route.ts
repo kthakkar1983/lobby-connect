@@ -18,11 +18,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing callId" }, { status: 400 });
   }
 
-  const call = await fetchOperatorCall<{ id: string; state: CallState }>(
-    actor,
-    body.callId,
-    "id, state",
-  );
+  const call = await fetchOperatorCall<{
+    id: string;
+    state: CallState;
+    properties: { timezone: string } | null;
+  }>(actor, body.callId, "id, state, properties(timezone)");
   if (call instanceof NextResponse) return call;
 
   // Fast-path: if the state is already non-RINGING, no need to attempt the claim.
@@ -42,5 +42,5 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
 
-  return new NextResponse(null, { status: 204 });
+  return NextResponse.json({ timeZone: call.properties?.timezone ?? null });
 }
