@@ -1385,9 +1385,49 @@ working. **Post-smoke fixes** (3 merges to `main`: `443bfc6` / `c62cd47` / `8cf8
 - **Issue 2 — first-call ring latency = serverless cold-start** (confirmed: 1st call slow, 2nd+ fast). Not a bug
   (the incoming-video poll is already 3s); deferred to the Pro keep-warm upgrade ([[launch-pro-tier-deferrals]]).
 
-### Remaining (not blocking; optional brand-polish, separate from the kiosk app)
-- **Audio in-call overlay polish** (the agent/admin softphone in-call screen, in the portal) + **favicon from
-  `mark.svg`**.
+## Session 25 — Brand polish: favicon + audio in-call overlay — SHIPPED 2026-06-18
+
+The optional brand-polish items are done. **The brand revision is now fully complete across every surface.**
+Built brainstorm(visual-companion)→spec→plan→**subagent-driven** (3 build tasks + whole-branch verification;
+per-task spec+quality review + opus final = GO). Merged `--no-ff` `5c83840` → prod `dpl_FSoA9MZ…` **READY**
+(`lobby-connect-portal.vercel.app`). Spec/plan: `docs/specs/2026-06-18-brand-polish-favicon-audio-incall-design.md`
+· `docs/plans/2026-06-18-brand-polish-favicon-audio-incall.md`.
+
+- **(1) Logo/wordmark refresh** — Kumar re-exported the 6 brand SVGs (better spacing/minor adjustments) under the
+  same names; re-ran `pnpm -F @lc/portal optimize:svg` (~240KB raw Illustrator → <3KB each; `-on-dark` variants
+  correctly reverse navy→near-white `#f4f7f7`, mint connector survives only on the zero-area connector line) +
+  synced `components/brand/wordmark.tsx` intrinsic `width`/`height` to the new viewBoxes (LogoMark 771×970,
+  Wordmark 938×395, LogoLockup 965×350) so layout reservation stays shift-free. Verified all 6 light+dark.
+- **(2) Favicon** (first one — none existed): `app/icon.svg` = navy `#0F2D4B` rounded tile + the **reversed** mark
+  (chosen over transparent — the navy door fades on dark tabs); `app/apple-icon.tsx` = `next/og` `ImageResponse`
+  180×180 (full navy square, mark as a **base64** SVG data-URI — base64 not `;utf8,` so Satori reliably
+  rasterizes; defaults to the Node runtime so `Buffer` is safe) + navy `viewport.themeColor` in `layout.tsx`.
+  Visually verified legible at 16/32/64px and on a dark tab.
+- **(3) Audio in-call overlay redesign** (`components/softphone/audio-call-overlay.tsx`) — brought to the brand bar:
+  **911 → header top-right alone** (red `destructive`, max-separated from Hang up; keeps the AlertDialog confirm);
+  navy `--color-call` **call card** = small self-tracked duration · hotel name · mint **presence pulse**
+  (`lc-seam-drift`, reduced-motion-safe) · **bold HOTEL LOCAL TIME** (the new anchor); Room#/Notes + Mute/Hang up
+  **de-crammed control bar**; **press-Enter-to-save** notes — an in-field icon (`CornerDownLeft` idle →
+  `Loader2` saving → `Check` saved → `AlertTriangle` failed) + an `sr-only role=status aria-live` region for SR
+  parity; reuses the existing `saveNotes`/`pendingNotes` durability banner as the post-call backstop.
+- **Hotel local time wiring (the interesting bit — NO voice/TwiML/dial change):** the property `timezone` (NOT NULL)
+  now rides the existing `/api/twilio/voice/answered` response — that route returns `{ timeZone }` (was 204) via a
+  `properties(timezone)` embedded select; the softphone (`acceptCall`) reads it post-accept (the overlay only mounts
+  then), `saveNotes` now returns a bool, new `saveNotesNow` exposes the explicit save. The overlay ticks local time
+  via `Intl.DateTimeFormat` (invalid-tz guarded → hidden) + a self-tracked `mm:ss` duration.
+- **Safety + scope:** **all call/Twilio/emergency logic byte-identical** (opus line-verified — `endCall`/`toggleMute`
+  incl. the live-911 server-side mute / `triggerEmergency` / Device registration / `incoming` handlers untouched;
+  **`video-call.tsx` NOT in the diff**). **Audio-only scope** — the video overlay is left as a noted shared-`CallShell`
+  seam. **Zero migrations / RLS / new routes / service-role.**
+- **The whole-branch verification gate earned its keep:** the per-task overlay test (run filtered) was green, but the
+  full suite caught a real regression — `tests/components/softphone.test.tsx`'s catch-all fetch mocks returned
+  `{ ok: true }` **without `.json()`**, which the new `acceptCall` body read threw on. Fixed the 3 mocks to honor the
+  `Response` contract (production `reliableFetch` always returns a real `Response`). **Lesson: filtered per-task test
+  runs miss integration regressions in sibling tests — the full-suite gate is non-optional.**
+- **PENDING: prod audio voice smoke** (only exercisable on prod — Twilio points there). Confirm on a real audio call:
+  the navy call card shows, **hotel local time renders + ticks** (matches the property's configured tz), the call
+  **duration** ticks, typing a note + **Enter** shows `✓ Saved` and the row lands in the DB, **Mute/Unmute** works,
+  **Hang up** ends the call, and the **Call 911** confirm dialog opens (don't complete unless using the 933 test #).
 
 Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
