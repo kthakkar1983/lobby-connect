@@ -94,28 +94,35 @@ export function splitByChannel(items: ReadonlyArray<ChannelCall>): ChannelCounts
   return counts;
 }
 
-export type HourlyCall = DatedCall & { readonly channel: CallChannel };
-export type HourBucket = { hour: number; audio: number; video: number };
+export type DatedChannelCall = DatedCall & { readonly channel: CallChannel };
+export type HourlyCall = DatedChannelCall & { readonly state: CallState };
+export type HourBucket = { hour: number; audio: number; video: number; missed: number };
 
 /**
- * Today's calls bucketed by the local hour (0-23) of `ring_started_at`, split by channel.
- * Each call is bucketed in its own property timezone, so a multi-property feed reads as
- * "volume by hotel-local hour-of-day". Always returns 24 buckets.
+ * Today's calls bucketed by the local hour (0-23) of `ring_started_at`, partitioned into
+ * three disjoint outcome series for the grouped hourly chart:
+ *   - audio  = answered phone calls (COMPLETED + AUDIO)
+ *   - video  = answered video calls (COMPLETED + VIDEO)
+ *   - missed = unanswered calls (NO_ANSWER, either channel)
+ * FAILED (a system error, surfaced on phone-health) and still-live calls are excluded, so a
+ * missed call is counted once in `missed` — never double-counted in its channel. Each call is
+ * bucketed in its own property timezone ("volume by hotel-local hour"). Always 24 buckets.
  */
 export function hourlyVolume(items: ReadonlyArray<HourlyCall>, now: Date): HourBucket[] {
-  const buckets: HourBucket[] = Array.from({ length: 24 }, (_, hour) => ({ hour, audio: 0, video: 0 }));
+  const buckets: HourBucket[] = Array.from({ length: 24 }, (_, hour) => ({ hour, audio: 0, video: 0, missed: 0 }));
   for (const c of items) {
     if (!isToday(c.ring_started_at, c.timeZone, now)) continue;
     const bucket = buckets[localHour(c.ring_started_at, c.timeZone)];
     if (!bucket) continue; // unreachable: localHour is always 0-23
-    if (c.channel === "AUDIO") bucket.audio++;
-    else if (c.channel === "VIDEO") bucket.video++;
+    if (c.state === "NO_ANSWER") bucket.missed++;
+    else if (c.state === "COMPLETED" && c.channel === "AUDIO") bucket.audio++;
+    else if (c.state === "COMPLETED" && c.channel === "VIDEO") bucket.video++;
   }
   return buckets;
 }
 
-/** Today's calls split by channel — drives the per-property pod / board bars. */
-export function splitTodayByChannel(items: ReadonlyArray<HourlyCall>, now: Date): ChannelCounts {
+/** Today's calls split by channel (all states) — drives the per-property pod / board bars. */
+export function splitTodayByChannel(items: ReadonlyArray<DatedChannelCall>, now: Date): ChannelCounts {
   return splitByChannel(items.filter((c) => isToday(c.ring_started_at, c.timeZone, now)));
 }
 

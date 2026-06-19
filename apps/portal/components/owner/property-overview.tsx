@@ -4,7 +4,7 @@ import type { Route } from "next";
 import type { ProfileStatus, CallState, CallChannel } from "@lc/shared";
 import { Card } from "@/components/ui/card";
 import { DashTile } from "@/components/dashboard/dash-tile";
-import { HourlyVolumeChart, ChannelLegend } from "@/components/dashboard/channel-viz";
+import { HourlyVolumeChart, HourlyLegend } from "@/components/dashboard/channel-viz";
 import { CallRow, type CallRowData } from "@/components/call/call-row";
 import { hourlyVolume, countByOutcome, avgPickupSeconds, type DatedCall } from "@/lib/dashboard/calls";
 import { presenceDotClass, presenceLabel, isLivePresence, formatTimeOnly, formatDuration } from "@/lib/owner/format";
@@ -69,7 +69,7 @@ export function PropertyOverview({
       <Card className="gap-3 p-5">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className={LABEL}>Tonight · call volume</h2>
-          {todayCalls.length > 0 && <ChannelLegend />}
+          {todayCalls.length > 0 && <HourlyLegend />}
         </div>
         {todayCalls.length > 0 ? (
           <HourlyVolumeChart data={hourly} className="mt-1" />

@@ -13,6 +13,7 @@ import {
   type OutcomeCall,
   type ChannelCall,
   type HourlyCall,
+  type DatedChannelCall,
   type LiveCall,
 } from "@/lib/dashboard/calls";
 
@@ -116,29 +117,38 @@ describe("splitByChannel", () => {
 });
 
 describe("hourlyVolume", () => {
-  it("buckets today's calls by local hour of ring_started_at, split by channel", () => {
+  it("buckets today's answered audio/video and missed (NO_ANSWER) calls by local hour", () => {
     const items: HourlyCall[] = [
-      { ring_started_at: "2026-06-08T01:00:00Z", channel: "AUDIO", timeZone: "America/Chicago" }, // 20:00 CT
-      { ring_started_at: "2026-06-08T01:30:00Z", channel: "VIDEO", timeZone: "America/Chicago" }, // 20:30 CT
-      { ring_started_at: "2026-06-08T00:30:00Z", channel: "AUDIO", timeZone: "America/Chicago" }, // 19:30 CT
-      { ring_started_at: "2026-06-06T01:00:00Z", channel: "AUDIO", timeZone: "America/Chicago" }, // not today
+      { ring_started_at: "2026-06-08T01:00:00Z", channel: "AUDIO", state: "COMPLETED", timeZone: "America/Chicago" }, // 20:00 CT -> audio
+      { ring_started_at: "2026-06-08T01:30:00Z", channel: "VIDEO", state: "COMPLETED", timeZone: "America/Chicago" }, // 20:30 CT -> video
+      { ring_started_at: "2026-06-08T01:45:00Z", channel: "AUDIO", state: "NO_ANSWER", timeZone: "America/Chicago" }, // 20:45 CT -> missed (not audio)
+      { ring_started_at: "2026-06-08T00:30:00Z", channel: "AUDIO", state: "COMPLETED", timeZone: "America/Chicago" }, // 19:30 CT -> audio
+      { ring_started_at: "2026-06-06T01:00:00Z", channel: "AUDIO", state: "COMPLETED", timeZone: "America/Chicago" }, // not today
     ];
     const buckets = hourlyVolume(items, NOW);
     expect(buckets).toHaveLength(24);
-    expect(buckets[20]).toEqual({ hour: 20, audio: 1, video: 1 });
-    expect(buckets[19]).toEqual({ hour: 19, audio: 1, video: 0 });
-    expect(buckets[0]).toEqual({ hour: 0, audio: 0, video: 0 });
+    expect(buckets[20]).toEqual({ hour: 20, audio: 1, video: 1, missed: 1 });
+    expect(buckets[19]).toEqual({ hour: 19, audio: 1, video: 0, missed: 0 });
+    expect(buckets[0]).toEqual({ hour: 0, audio: 0, video: 0, missed: 0 });
+  });
+  it("excludes FAILED and still-live calls from all three series", () => {
+    const items: HourlyCall[] = [
+      { ring_started_at: "2026-06-08T01:00:00Z", channel: "AUDIO", state: "FAILED", timeZone: "America/Chicago" },
+      { ring_started_at: "2026-06-08T01:00:00Z", channel: "VIDEO", state: "RINGING", timeZone: "America/Chicago" },
+      { ring_started_at: "2026-06-08T01:00:00Z", channel: "AUDIO", state: "IN_PROGRESS", timeZone: "America/Chicago" },
+    ];
+    expect(hourlyVolume(items, NOW)[20]).toEqual({ hour: 20, audio: 0, video: 0, missed: 0 });
   });
   it("returns 24 zeroed buckets for empty", () => {
     const buckets = hourlyVolume([], NOW);
     expect(buckets).toHaveLength(24);
-    expect(buckets.every((b, i) => b.hour === i && b.audio === 0 && b.video === 0)).toBe(true);
+    expect(buckets.every((b, i) => b.hour === i && b.audio === 0 && b.video === 0 && b.missed === 0)).toBe(true);
   });
 });
 
 describe("splitTodayByChannel", () => {
   it("splits today's calls by channel, ignoring non-today", () => {
-    const items: HourlyCall[] = [
+    const items: DatedChannelCall[] = [
       { ring_started_at: "2026-06-08T01:00:00Z", channel: "AUDIO", timeZone: "America/Chicago" }, // today
       { ring_started_at: "2026-06-08T01:30:00Z", channel: "VIDEO", timeZone: "America/Chicago" }, // today
       { ring_started_at: "2026-06-08T00:30:00Z", channel: "AUDIO", timeZone: "America/Chicago" }, // today

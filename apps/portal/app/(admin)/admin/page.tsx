@@ -17,7 +17,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatTile } from "@/components/owner/stat-tile";
 import { DashTile } from "@/components/dashboard/dash-tile";
-import { ChannelLegend, HourlyVolumeChart } from "@/components/dashboard/channel-viz";
+import { HourlyLegend, HourlyVolumeChart } from "@/components/dashboard/channel-viz";
 import { AvailabilityToggle } from "./availability-cards";
 import {
   countByOutcome,
@@ -230,9 +230,9 @@ export default async function AdminOverviewPage() {
       <Card className="gap-3 p-5 shadow-md">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className={LABEL}>Tonight · all agents</h2>
-          <ChannelLegend />
+          <HourlyLegend />
         </div>
-        <p className="font-mono text-xs text-text-muted">
+        <p className="text-xs text-text-muted">
           Total call duration: {formatDuration(talkTime)}
         </p>
         {todayTotal > 0 ? (

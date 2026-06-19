@@ -230,10 +230,13 @@ export function AudioCallOverlay({
             {muted ? <MicOff size={16} /> : <Mic size={16} />}
             {muted ? "Unmute" : "Mute"}
           </button>
+          {/* Hang up is blaze (not navy): red=911 was reading as the "end call" cue.
+              Intentional override of "blaze = needs-attention, never a CTA" for this
+              one control (punch-list B1, Kumar 2026-06-18). 911 stays red, top-right. */}
           <button
             type="button"
             onClick={onHangUp}
-            className="flex items-center gap-1.5 rounded-button bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            className="flex items-center gap-1.5 rounded-button bg-attention px-4 py-2 text-sm font-semibold text-attention-foreground"
           >
             <PhoneOff size={16} /> Hang up
           </button>

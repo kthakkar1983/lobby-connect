@@ -24,19 +24,21 @@ Read order context: `CLAUDE.md` → `MEMORY.md` → `memory/project-status.md`. 
 
 ## B. UI / UX fixes
 
-1. [ ] **Audio overlay: Hang up → blaze.** Change the Hang up button from navy (`bg-primary`) to **blaze** (`--color-attention`). **DECISION LOCKED** (Kumar, 2026-06-18) — red (911) was drawing the "end call" association; blaze on Hang up fixes that. This intentionally overrides the brand rule "blaze = needs-attention, never a CTA" for this one control; no brainstorming needed. (911 stays red/destructive, top-right.)
+> **All 7 implemented 2026-06-19 (session 26)** on `main` working tree — typecheck (4 workspaces) · lint · check:routes · 475 portal tests · portal+kiosk builds all green. **NOT yet committed; NOT yet visually confirmed in a live browser.** The visual-judgment items (B3 chart, B5 type scale, B7 prominence) want Kumar's eyes before final sign-off — folds into §C. TDD only applied where there was logic (B3's `hourlyVolume` 3-series partition).
 
-2. [ ] **Kiosk favicon.** Add the same navy-tile + reversed-mark icon to the kiosk (`apps/kiosk`, via its `index.html`). Explicit exception to the no-logo-on-kiosk rule — a browser-tab favicon is not an on-screen logo, so it's fine.
+1. [x] **Audio overlay: Hang up → blaze.** — DONE. `bg-primary`→`bg-attention` + `text-attention-foreground` (brand-correct ink-on-blaze pairing) in `components/softphone/audio-call-overlay.tsx`, with a comment recording the intentional brand override. 911 unchanged (red, top-right).
 
-3. [ ] **Hourly chart redesign — match the reference, 3 series.** Restyle the agent-dashboard `HourlyVolumeChart` (`components/dashboard/channel-viz` / the chart card) to the clean reference Kumar shared ("Calls Per Hour": **thin, rounded-top bars grouped side-by-side per hour**, legend with colored dots top-right, light y-axis gridlines, airy spacing). Three series per hour: **Audio · Video · Missed** (brand mapping: audio = teal, video = navy, missed = blaze). Thinner bars than today.
+2. [x] **Kiosk favicon.** — DONE. Reused the portal's navy-tile + reversed-mark SVG at `apps/kiosk/public/icon.svg` + `<link rel="icon">` and `theme-color` in `apps/kiosk/index.html`; build copies it to `dist/icon.svg` (verified).
 
-4. [ ] **"total call duration:" → body font.** In the chart card, the "total call duration:" label currently uses a label/mono treatment; switch it to the **body font** (Outfit).
+3. [x] **Hourly chart redesign — 3 series.** — DONE (wants live visual confirm). `HourlyVolumeChart` rebuilt as thin (`max-w-[5px]`, `flex-1` responsive) rounded-top bars grouped side-by-side per hour over light gridlines; new 3-series `HourlyLegend` (Phone=teal · Video=navy · Missed=blaze) swapped into all three chart cards (agent/admin/owner). **Data partition is the clean one:** `audio`=answered AUDIO, `video`=answered VIDEO, `missed`=NO_ANSWER (FAILED + live excluded → no double-count). `hourlyVolume`/`HourBucket` extended TDD (RED→GREEN), 20/20. Pod/board `ChannelBar` keeps the 2-series `ChannelLegend`.
 
-5. [ ] **Bump the desktop type scale.** General text reads small on desktop. Raise the base/desktop scale carefully so dense surfaces (tables, dashboards, the audit/calls lists) don't break or overflow.
+4. [x] **"total call duration:" → body font.** — DONE. Dropped `font-mono` from the duration line on the agent + admin dashboards (now Outfit).
 
-6. [ ] **Logo + wordmark on every auth page.** Verify the lockup shows on **sign-in, forgot-password, update-password, and onboarding** — some may only render the wordmark (or nothing) today. Make them consistent.
+5. [x] **Bump the desktop type scale.** — DONE (wants live visual confirm). `globals.css`: `@media (min-width:1024px) { html { font-size: 106.25% } }` — a *percentage* (respects the user's browser default) so Tailwind's rem-based text **and** spacing scale together (+6.25%) → dense tables/dashboards reflow proportionally, not overflow. Single knob; raise toward 112.5% if it still reads small on a real monitor.
 
-7. [ ] **Make the incoming-call property name unmistakable.** On an incoming call the agent must instantly see *which property* it's for. Today the softphone shows a quiet "Incoming call · {property}" line — give the property name far more prominence (size/weight/placement) so it's absolutely clear at a glance.
+6. [x] **Logo + wordmark on every auth page.** — DONE. Extracted `components/auth/auth-shell.tsx` (swaps `Wordmark`→`LogoLockup` = mark + wordmark); `(auth)/layout.tsx` delegates to it (covers sign-in/forgot/onboarding); new `app/auth/layout.tsx` brings `update-password` (outside the `(auth)` group, URL must stay `/auth/update-password`) into the same shell; `update-password/page.tsx` stripped to just its form.
+
+7. [x] **Make the incoming-call property name unmistakable.** — DONE (wants live visual confirm). `softphone.tsx` incoming phase: quiet "Incoming call" eyebrow + the property name in a large bold `font-display text-2xl` line (fallback "Unknown property").
 
 ---
 

@@ -28,9 +28,33 @@ export function ChannelLegend({ className }: { readonly className?: string }) {
   );
 }
 
+/** The three grouped series for the hourly chart (brand mapping, spec §5 / punch-list B3). */
+const HOURLY_SERIES = [
+  { key: "audio", label: "Phone", color: "bg-accent" },
+  { key: "video", label: "Video", color: "bg-primary" },
+  { key: "missed", label: "Missed", color: "bg-attention" },
+] as const;
+
+/** Legend for the 3-series hourly chart: Phone (teal) · Video (navy) · Missed (blaze). */
+export function HourlyLegend({ className }: { readonly className?: string }) {
+  return (
+    <div className={cn("flex items-center gap-3 text-[11px] text-text-muted", className)}>
+      {HOURLY_SERIES.map((s) => (
+        <span key={s.key} className="flex items-center gap-1.5">
+          <span className={cn("h-2 w-2 rounded-[2px]", s.color)} aria-hidden="true" />
+          {s.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Stacked phone/video volume by hour of day (24 buckets from `hourlyVolume`).
- * Heights scale to the busiest hour; empty hours render as baseline whitespace.
+ * Hourly call volume by hour of day (24 buckets from `hourlyVolume`), drawn as thin
+ * rounded-top bars grouped side-by-side per hour — one per series (answered phone,
+ * answered video, missed) — over light y-axis gridlines. Bars are `flex-1` so the row
+ * stays inside its container (the chart also lives on the mobile owner portal); heights
+ * scale to the busiest single bar of the night.
  */
 export function HourlyVolumeChart({
   data,
@@ -39,36 +63,45 @@ export function HourlyVolumeChart({
   readonly data: ReadonlyArray<HourBucket>;
   readonly className?: string;
 }) {
-  const max = Math.max(1, ...data.map((b) => b.audio + b.video));
+  const max = Math.max(1, ...data.flatMap((b) => [b.audio, b.video, b.missed]));
 
   return (
     <div className={className}>
-      <div className="flex h-28 items-stretch gap-[3px]" role="img" aria-label="Calls by hour, phone and video">
-        {data.map((b) => {
-          const total = b.audio + b.video;
-          return (
-            // `h-full` gives each column a definite height so the bar's percentage
-            // height resolves (with `items-end`/auto-height columns the bars
-            // collapse to 0 and nothing renders); `justify-end` bottom-aligns them.
+      <div className="relative h-32">
+        {/* Light horizontal gridlines (0 / ⅓ / ⅔ / baseline). Decorative. */}
+        <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="border-t border-border/60" />
+          ))}
+        </div>
+        <div
+          className="relative flex h-full items-end gap-[3px]"
+          role="img"
+          aria-label="Calls by hour: answered phone, answered video, and missed"
+        >
+          {data.map((b) => (
             <div
               key={b.hour}
-              className="flex h-full flex-1 flex-col justify-end"
-              title={`${hourLabel(b.hour)}: ${b.audio} phone, ${b.video} video`}
+              className="flex h-full flex-1 items-end justify-center gap-[2px]"
+              title={`${hourLabel(b.hour)}: ${b.audio} phone, ${b.video} video, ${b.missed} missed`}
             >
-              {total > 0 && (
-                <div
-                  className="flex flex-col overflow-hidden rounded-[2px]"
-                  style={{ height: `${(total / max) * 100}%` }}
-                >
-                  <div className="bg-primary" style={{ flexGrow: b.video }} />
-                  <div className="bg-accent" style={{ flexGrow: b.audio }} />
-                </div>
-              )}
+              {HOURLY_SERIES.map((s) => {
+                const v = b[s.key];
+                return (
+                  <div
+                    key={s.key}
+                    className={cn("max-w-[5px] flex-1 self-end rounded-t-[2px]", s.color)}
+                    // `max(2px, …)` keeps a non-zero count visible even when tiny vs the
+                    // night's peak; a zero count collapses to 0 (an empty, aligned slot).
+                    style={{ height: v > 0 ? `max(2px, ${(v / max) * 100}%)` : "0px" }}
+                  />
+                );
+              })}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
-      <div className="mt-1.5 flex justify-between font-mono text-[10px] text-text-muted">
+      <div className="mt-1.5 flex justify-between text-[10px] text-text-muted">
         <span>12a</span>
         <span>6a</span>
         <span>12p</span>

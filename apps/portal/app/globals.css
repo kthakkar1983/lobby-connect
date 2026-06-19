@@ -110,6 +110,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Desktop type scale (punch-list B5). Body copy read small on large monitors, so
+   nudge the root size up at lg+. A *percentage* (not px) keeps the user's browser
+   font-size preference intact, and Tailwind's rem-based text+spacing scale together
+   so dense tables/dashboards reflow proportionally rather than overflowing. Kept
+   modest (+6.25%); single knob — raise toward 112.5% after a live desktop pass. */
+@media (min-width: 1024px) {
+  html {
+    font-size: 106.25%;
+  }
+}
+
 /* ============================================================
    Stage 3 — motion. The seam "drift": animate the gradient ANGLE
    (not the element) so an active-call edge/ring feels alive.

@@ -402,10 +402,24 @@ export function Softphone({ role }: SoftphoneProps) {
       )}
 
       {phase === "incoming" && (
-        <div className="mt-3 space-y-2">
-          <p className="text-text-muted">
-            {incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call…"}
-          </p>
+        <div className="mt-3 space-y-3">
+          {/* Property name is the agent's first must-know on an incoming call (esp.
+              admins covering several hotels) — make it unmistakable: big display
+              line under a quiet eyebrow, not a muted inline aside (punch-list B7). */}
+          <div className="text-center">
+            <p className="font-label text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Incoming call
+            </p>
+            {incomingProperty ? (
+              <p className="mt-1 font-display text-2xl font-bold leading-tight text-foreground">
+                {incomingProperty}
+              </p>
+            ) : (
+              <p className="mt-1 font-display text-xl font-semibold text-text-muted">
+                Unknown property
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
