@@ -12,7 +12,9 @@ vi.mock("@/lib/supabase/server", () => ({
 //         .select("id")                                   — claimCall (returns callUpdateResult)
 //   profiles.select().eq().maybeSingle()                  — requireApiActor profile read
 //   profiles.update().eq()                                — ON_CALL stamp
-let callRow: { id: string; state: string; operator_id: string } | null = null;
+let callRow:
+  | { id: string; state: string; operator_id: string; properties: { timezone: string } | null }
+  | null = null;
 // Controls what claimCall's .select("id") returns — default winner (one row).
 let callUpdateResult: Array<{ id: string }> = [{ id: "c1" }];
 const callUpdateSpy = vi.fn();
@@ -76,15 +78,18 @@ describe("POST /api/twilio/voice/answered", () => {
     expect((await POST(req({ callId: "c1" }))).status).toBe(401);
   });
 
-  it("marks the call IN_PROGRESS + handled_by + answered_at, and self ON_CALL (winner)", async () => {
-    callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
+  it("marks the call IN_PROGRESS + handled_by, self ON_CALL, and returns the property timeZone (winner)", async () => {
+    callRow = {
+      id: "c1",
+      state: "RINGING",
+      operator_id: "op1",
+      properties: { timezone: "America/New_York" },
+    };
     const res = await POST(req({ callId: "c1" }));
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ timeZone: "America/New_York" });
     expect(callUpdateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        state: "IN_PROGRESS",
-        handled_by_user_id: "u1",
-      }),
+      expect.objectContaining({ state: "IN_PROGRESS", handled_by_user_id: "u1" }),
     );
     expect(callUpdateSpy.mock.calls[0]?.[0]).toHaveProperty("answered_at");
     expect(profileUpdateSpy).toHaveBeenCalledWith(
@@ -93,21 +98,21 @@ describe("POST /api/twilio/voice/answered", () => {
   });
 
   it("409 + no write when the call is not RINGING (already answered)", async () => {
-    callRow = { id: "c1", state: "IN_PROGRESS", operator_id: "op1" };
+    callRow = { id: "c1", state: "IN_PROGRESS", operator_id: "op1", properties: null };
     const res = await POST(req({ callId: "c1" }));
     expect(res.status).toBe(409);
     expect(callUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("404 when the call belongs to another operator", async () => {
-    callRow = { id: "c1", state: "RINGING", operator_id: "OTHER" };
+    callRow = { id: "c1", state: "RINGING", operator_id: "OTHER", properties: null };
     const res = await POST(req({ callId: "c1" }));
     expect(res.status).toBe(404);
     expect(callUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
-    callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
+    callRow = { id: "c1", state: "RINGING", operator_id: "op1", properties: null };
     profileFetch.mockResolvedValueOnce({
       data: { id: "u1", operator_id: "op1", role: "OWNER", active: true },
     });
@@ -120,7 +125,7 @@ describe("POST /api/twilio/voice/answered", () => {
   it("409 when concurrent accept beats us (claimCall returns 0 rows)", async () => {
     // callRow still shows RINGING — canAnswer fast-path passes — but a concurrent
     // accept claimed the row before our UPDATE lands. DB returns no rows.
-    callRow = { id: "c1", state: "RINGING", operator_id: "op1" };
+    callRow = { id: "c1", state: "RINGING", operator_id: "op1", properties: null };
     callUpdateResult = [];
     const res = await POST(req({ callId: "c1" }));
     expect(res.status).toBe(409);

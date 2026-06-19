@@ -1,0 +1,29 @@
+import { ImageResponse } from "next/og";
+
+export const size = { width: 180, height: 180 };
+export const contentType = "image/png";
+
+// Reversed mark (near-white door + teal + mint) — same artwork as /brand/mark-on-dark.svg.
+const MARK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 770.5 969.7"><path fill="#f4f7f7" d="M186 909.1c0 32.8-32.2 48.9-55.7 51.2l-93.7 9.3C23.4 970.9.7 951.2.7 933.9L0 47.1C0 19.7 23.2-2.8 51.5.3l522.7 56.8-362.1 119.8c-16.6 8.4-26.1 23.4-25.8 43.5l-.3 688.8Z"/><path fill="#2ea6aa" d="M610.9 919.5c-17.1 1.5-35.3-11.5-35.3-29.4l-.6-652c0-22.5-16.3-40.4-36.2-45.3L393.1 180l331-108.4c11.1-3.6 19.8-9.2 28.1-5.1 7.4 3.6 18.3 13.1 18.3 26.1l-1.1 789.3c0 17.6-26.4 26.1-37 27.1l-121.5 10.6Z"/><path fill="#06d6a0" d="M338.5 940.9c-14 1.6-28.2-15.8-28.1-29.2l1.3-254c.2-43.7 47-64 81.3-58.7 44.5 6.9 59.2 44 58.9 88.2l-1.5 228.6c0 7.2-5.5 13.2-12.6 14L338.4 941Z"/><circle cx="380.8" cy="497" r="66.8" fill="#06d6a0"/></svg>`;
+
+export default function AppleIcon() {
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#0F2D4B",
+        }}
+      >
+        {/* mark at ~62% height; aspect 770.5/969.7 → 89×112. Base64 data URI
+            (not ;utf8,) — the registered encoding Satori reliably rasterizes. */}
+        <img width={89} height={112} src={`data:image/svg+xml;base64,${Buffer.from(MARK).toString("base64")}`} />
+      </div>
+    ),
+    size,
+  );
+}

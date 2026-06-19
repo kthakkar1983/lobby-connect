@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { fontVars } from "./fonts";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  themeColor: "#0F2D4B",
+};
 
 export const metadata: Metadata = {
   title: "Lobby Connect",

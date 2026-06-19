@@ -97,8 +97,8 @@ describe("Softphone — stale-closure regression (H1)", () => {
           json: () => Promise.resolve({ hasPlaybook: false }),
         });
       }
-      // presence, answered, notes, emergency
-      return Promise.resolve({ ok: true });
+      // presence, answered, notes, emergency (answered now reads .json() for timeZone)
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -161,7 +161,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
       }
       if (url === "/api/calls/notes") return Promise.resolve({ ok: false, status: 500 });
-      return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
     });
 
     render(<Softphone role="AGENT" />);
@@ -183,7 +183,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
 
     // Let the notes endpoint succeed, click Retry, banner clears.
     fetchMock.mockImplementation((url: string) =>
-      Promise.resolve({ ok: true, status: url === "/api/calls/notes" ? 204 : 200 }),
+      Promise.resolve({ ok: true, status: url === "/api/calls/notes" ? 204 : 200, json: () => Promise.resolve({}) }),
     );
     await user.click(screen.getByText("Retry"));
     await waitFor(() => expect(screen.queryByText(/Couldn.t save notes/i)).toBeNull());
