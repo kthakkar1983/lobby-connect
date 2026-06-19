@@ -34,8 +34,8 @@ export function LogoMark({
   return (
     <img
       src={onDark ? "/brand/mark-on-dark.svg" : "/brand/mark.svg"}
-      width={351}
-      height={439}
+      width={771}
+      height={970}
       alt={title ?? ""}
       aria-hidden={title ? undefined : true}
       draggable={false}
@@ -45,7 +45,7 @@ export function LogoMark({
 }
 
 /**
- * The full "LOBBY connect" lockup with the mint dot–line–dot connector. Wide (~2.5 aspect).
+ * The full "LOBBY connect" lockup with the mint dot–line–dot connector. Wide (~2.4 aspect).
  * Roomy spots: expanded sidebar header, sign-in, owner/agent headers.
  * `title` becomes the alt text; pass "" to make it decorative inside an already-labelled link.
  */
@@ -61,8 +61,8 @@ export function Wordmark({
   return (
     <img
       src={onDark ? "/brand/wordmark-on-dark.svg" : "/brand/wordmark.svg"}
-      width={460}
-      height={184}
+      width={938}
+      height={395}
       alt={title}
       draggable={false}
       className={cn("h-7 w-auto select-none", className)}
@@ -71,7 +71,7 @@ export function Wordmark({
 }
 
 /**
- * The full lockup — the mark beside the "LOBBY connect" wordmark. Wide (~2.6
+ * The full lockup — the mark beside the "LOBBY connect" wordmark. Wide (~2.8
  * aspect; viewBox cropped to the artwork). Roomy spots: the expanded sidebar
  * header. `onDark` reverses it for the navy rail.
  */
@@ -87,8 +87,8 @@ export function LogoLockup({
   return (
     <img
       src={onDark ? "/brand/mark+wordmark-on-dark.svg" : "/brand/mark+wordmark.svg"}
-      width={990}
-      height={376}
+      width={965}
+      height={350}
       alt={title}
       draggable={false}
       className={cn("h-8 w-auto select-none", className)}
