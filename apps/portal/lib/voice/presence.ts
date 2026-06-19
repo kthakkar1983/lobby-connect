@@ -30,6 +30,22 @@ export function effectivePresence(
   return isStale(lastSeenAt, nowMs) ? "OFFLINE" : (status as PresenceStatus);
 }
 
+/**
+ * Reachable for an outbound `<Dial>` leg = heartbeat fresh AND status AVAILABLE.
+ * Built on effectivePresence, so a stale heartbeat (the daily OFFLINE sweep may
+ * not have run yet) is correctly unreachable. The voice router uses this so an
+ * offline/away/on-call agent is NOT dialed: at the pilot's Twilio concurrency
+ * limit a dead leg would soak the single available call slot and the guest hears
+ * the apology even though a reachable agent existed. See docs/v1-punchlist.md §A.
+ */
+export function isReachableForDial(
+  status: string,
+  lastSeenAt: string | null,
+  nowMs: number,
+): boolean {
+  return effectivePresence(status, lastSeenAt, nowMs) === "AVAILABLE";
+}
+
 /** True when last_seen is missing or older than the stale window. */
 export function isStale(lastSeenAtIso: string | null, now: number): boolean {
   if (!lastSeenAtIso) return true;

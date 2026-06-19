@@ -9,6 +9,7 @@ import {
   publicUrlFromRequest,
 } from "@/lib/twilio/client";
 import { planDial, type DialCandidate } from "@/lib/voice/plan-dial";
+import { isReachableForDial } from "@/lib/voice/presence";
 import {
   APOLOGY_MESSAGE,
   twimlResponse,
@@ -51,7 +52,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Best-effort heartbeat — detached so it never sits on the guest's critical path.
     void recordHeartbeat(property.operator_id, "twilio_webhook").catch(() => {});
 
-    // 2–4. Independent reads in parallel.
+    // 2–4. Independent reads in parallel. `nowMs` gates dial targets on a fresh
+    // heartbeat (resolve*), so an offline/away agent isn't dialed.
+    const nowMs = Date.now();
     const [existing, primaryAgent, availableAdmins] = await Promise.all([
       admin
         .from("calls")
@@ -59,14 +62,23 @@ export async function POST(request: Request): Promise<NextResponse> {
         .eq("twilio_call_sid", callSid)
         .maybeSingle()
         .then((r) => r.data as { id: string } | null),
-      resolvePrimaryAgent(admin, property.id),
-      resolveAvailableAdmins(admin, property.id, property.operator_id),
+      resolvePrimaryAgent(admin, property.id, nowMs),
+      resolveAvailableAdmins(admin, property.id, property.operator_id, nowMs),
     ]);
 
     const { targets, droppedCount } = planDial({ primaryAgent, availableAdmins });
     if (droppedCount > 0) {
       Sentry.captureMessage(
         `Dial fan-out capped at ${targets.length}; ${droppedCount} candidate(s) dropped (property ${property.id})`,
+        "warning",
+      );
+    }
+    if (targets.length === 0) {
+      // No reachable softphone at call time — none assigned/accepting, or all
+      // offline/away. The guest gets the apology either way; surface it so this
+      // dead-end stops being silent (it's the symptom Kumar hit on the pilot).
+      Sentry.captureMessage(
+        `Incoming call with no reachable agents (property ${property.id}, callSid ${callSid})`,
         "warning",
       );
     }
@@ -111,7 +123,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 // Today's exact query logic, lifted into named readers so the two 2-deep chains
 // run in parallel. Behavior-identical to the prior inline blocks.
-async function resolvePrimaryAgent(admin: Admin, propertyId: string): Promise<DialCandidate | null> {
+async function resolvePrimaryAgent(admin: Admin, propertyId: string, nowMs: number): Promise<DialCandidate | null> {
   const { data: assignment } = await admin
     .from("property_assignments")
     .select("primary_agent_id")
@@ -121,16 +133,23 @@ async function resolvePrimaryAgent(admin: Admin, propertyId: string): Promise<Di
   if (!assignment?.primary_agent_id) return null;
   const { data: agent } = await admin
     .from("profiles")
-    .select("id, twilio_identity, active")
+    .select("id, twilio_identity, active, status, last_seen_at")
     .eq("id", assignment.primary_agent_id)
     .maybeSingle();
-  if (agent?.active && agent.twilio_identity) {
+  // Presence-gate: only dial an agent whose softphone is actually reachable
+  // (AVAILABLE + fresh heartbeat). Dialing an offline agent wastes the call's
+  // dial slot — at the pilot's Twilio concurrency limit it black-holes the call.
+  if (
+    agent?.active &&
+    agent.twilio_identity &&
+    isReachableForDial(agent.status ?? "OFFLINE", agent.last_seen_at, nowMs)
+  ) {
     return { id: agent.id, twilioIdentity: agent.twilio_identity };
   }
   return null;
 }
 
-async function resolveAvailableAdmins(admin: Admin, propertyId: string, operatorId: string): Promise<DialCandidate[]> {
+async function resolveAvailableAdmins(admin: Admin, propertyId: string, operatorId: string, nowMs: number): Promise<DialCandidate[]> {
   const { data: availRows } = await admin
     .from("admin_call_availability")
     .select("profile_id")
@@ -140,14 +159,22 @@ async function resolveAvailableAdmins(admin: Admin, propertyId: string, operator
   if (ids.length === 0) return [];
   const { data: admins } = await admin
     .from("profiles")
-    .select("id, twilio_identity, active, role, operator_id")
+    .select("id, twilio_identity, active, role, operator_id, status, last_seen_at")
     .in("id", ids)
     .eq("active", true)
     .eq("role", "ADMIN")
     .eq("operator_id", operatorId);
   const out: DialCandidate[] = [];
-  for (const a of (admins ?? []) as Array<{ id: string; twilio_identity: string | null }>) {
-    if (a.twilio_identity) out.push({ id: a.id, twilioIdentity: a.twilio_identity });
+  // Presence-gate (see resolvePrimaryAgent): skip admins whose softphone isn't reachable.
+  for (const a of (admins ?? []) as Array<{
+    id: string;
+    twilio_identity: string | null;
+    status: string | null;
+    last_seen_at: string | null;
+  }>) {
+    if (a.twilio_identity && isReachableForDial(a.status ?? "OFFLINE", a.last_seen_at, nowMs)) {
+      out.push({ id: a.id, twilioIdentity: a.twilio_identity });
+    }
   }
   return out;
 }
