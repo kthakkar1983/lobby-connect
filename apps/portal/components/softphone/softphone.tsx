@@ -44,6 +44,7 @@ export function Softphone({ role }: SoftphoneProps) {
   const [roomNumber, setRoomNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [incomingProperty, setIncomingProperty] = useState("");
+  const [callTimeZone, setCallTimeZone] = useState<string | null>(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
   // True once a 911 trigger came back as failed/degraded — the agent must fall
   // back to verbal relay / instruct the guest to dial 911 directly.
@@ -86,16 +87,26 @@ export function Softphone({ role }: SoftphoneProps) {
         },
         { label: "calls.notes" },
       );
-      if (res && res.ok) {
+      const ok = !!res && res.ok;
+      if (ok) {
         setNotesSave("idle");
         setPendingNotes(null);
       } else {
         setNotesSave("failed");
         setPendingNotes(payload);
       }
+      return ok;
     },
     [],
   );
+
+  const saveNotesNow = useCallback(async (): Promise<boolean> => {
+    const id = callIdRef.current;
+    const room = roomNumberRef.current;
+    const note = notesRef.current;
+    if (!id || (!room && !note)) return true;
+    return saveNotes({ callId: id, roomNumber: room, notes: note });
+  }, [saveNotes]);
 
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
@@ -195,7 +206,7 @@ export function Softphone({ role }: SoftphoneProps) {
     call.accept();
     setMuted(false);
     setPhase("in-call");
-    await reliableFetch(
+    const ans = await reliableFetch(
       "/api/twilio/voice/answered",
       {
         method: "POST",
@@ -204,6 +215,10 @@ export function Softphone({ role }: SoftphoneProps) {
       },
       { label: "calls.answered" },
     );
+    if (ans && ans.ok) {
+      const data = (await ans.json().catch(() => null)) as { timeZone?: string | null } | null;
+      if (data && typeof data.timeZone === "string") setCallTimeZone(data.timeZone);
+    }
   }, []);
 
   const declineCall = useCallback(() => {
@@ -243,6 +258,7 @@ export function Softphone({ role }: SoftphoneProps) {
     setMuted(false);
     setEmergencyActive(false);
     setEmergencyFailed(false);
+    setCallTimeZone(null);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
     if (id && (room || note)) {
@@ -416,6 +432,7 @@ export function Softphone({ role }: SoftphoneProps) {
           muted={muted}
           roomNumber={roomNumber}
           notes={notes}
+          timeZone={callTimeZone}
           emergencyActive={emergencyActive}
           emergencyFailed={emergencyFailed}
           onToggleMute={toggleMute}
@@ -423,6 +440,7 @@ export function Softphone({ role }: SoftphoneProps) {
           onTriggerEmergency={() => void triggerEmergency()}
           onRoomNumberChange={setRoomNumber}
           onNotesChange={setNotes}
+          onSaveNotes={saveNotesNow}
         />
       )}
 

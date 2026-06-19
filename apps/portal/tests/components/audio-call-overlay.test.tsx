@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/components/call/playbook-panel", () => ({
@@ -16,6 +16,7 @@ const baseProps = {
   muted: false,
   roomNumber: "",
   notes: "",
+  timeZone: null as string | null,
   emergencyActive: false,
   emergencyFailed: false,
   onToggleMute: vi.fn(),
@@ -23,6 +24,7 @@ const baseProps = {
   onTriggerEmergency: vi.fn(),
   onRoomNumberChange: vi.fn(),
   onNotesChange: vi.fn(),
+  onSaveNotes: vi.fn().mockResolvedValue(true),
 };
 
 afterEach(() => cleanup());
@@ -57,5 +59,26 @@ describe("AudioCallOverlay", () => {
     render(<AudioCallOverlay {...baseProps} emergencyActive />);
     expect(screen.getByText(/Emergency active/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /911 active/i })).toHaveProperty("disabled", true);
+  });
+
+  it("shows hotel local time only when a timezone is provided", () => {
+    const { rerender } = render(<AudioCallOverlay {...baseProps} timeZone={null} />);
+    expect(screen.queryByText(/hotel local time/i)).toBeNull();
+    rerender(<AudioCallOverlay {...baseProps} timeZone="America/New_York" />);
+    expect(screen.getByText(/hotel local time/i)).toBeTruthy();
+  });
+
+  it("hides local time for an invalid timezone (no crash)", () => {
+    render(<AudioCallOverlay {...baseProps} timeZone="Not/AZone" />);
+    expect(screen.queryByText(/hotel local time/i)).toBeNull();
+  });
+
+  it("saves notes on Enter and shows a saved indicator", async () => {
+    const user = userEvent.setup();
+    const onSaveNotes = vi.fn().mockResolvedValue(true);
+    render(<AudioCallOverlay {...baseProps} notes="towels" onSaveNotes={onSaveNotes} />);
+    await user.type(screen.getByPlaceholderText("Call notes"), "{Enter}");
+    expect(onSaveNotes).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.getByText(/notes saved/i)).toBeTruthy());
   });
 });
