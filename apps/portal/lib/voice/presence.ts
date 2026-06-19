@@ -31,19 +31,28 @@ export function effectivePresence(
 }
 
 /**
- * Reachable for an outbound `<Dial>` leg = heartbeat fresh AND status AVAILABLE.
- * Built on effectivePresence, so a stale heartbeat (the daily OFFLINE sweep may
- * not have run yet) is correctly unreachable. The voice router uses this so an
- * offline/away/on-call agent is NOT dialed: at the pilot's Twilio concurrency
- * limit a dead leg would soak the single available call slot and the guest hears
- * the apology even though a reachable agent existed. See docs/v1-punchlist.md §A.
+ * Reachable for an outbound `<Dial>` leg = heartbeat fresh AND status is "online"
+ * (AVAILABLE or ON_CALL) — i.e. the same definition the dashboard uses for an online
+ * agent (see countOnlineAgents). Built on effectivePresence, so a stale heartbeat
+ * (the daily OFFLINE sweep may not have run yet) is correctly unreachable.
+ *
+ * ON_CALL is reachable: an agent who just finished — or is wrapping up — a call is
+ * briefly ON_CALL (e.g. right after a video call, or pinned by a leaked IN_PROGRESS
+ * row), and must still receive the next call. Requiring status === "AVAILABLE"
+ * exactly black-holed a real pilot call: the assigned agent was ON_CALL ~20s after a
+ * video call, so the gate skipped her and the guest heard the apology while she sat
+ * idle. Only an explicit AWAY (opted out) or a stale/OFFLINE heartbeat is unreachable.
+ *
+ * The router uses this so an offline/away agent isn't dialed: at the pilot's Twilio
+ * concurrency limit a dead leg would soak the single call slot. See docs/v1-punchlist.md §A.
  */
 export function isReachableForDial(
   status: string,
   lastSeenAt: string | null,
   nowMs: number,
 ): boolean {
-  return effectivePresence(status, lastSeenAt, nowMs) === "AVAILABLE";
+  const effective = effectivePresence(status, lastSeenAt, nowMs);
+  return effective === "AVAILABLE" || effective === "ON_CALL";
 }
 
 /** True when last_seen is missing or older than the stale window. */

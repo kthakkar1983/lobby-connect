@@ -54,18 +54,24 @@ describe("isReachableForDial", () => {
   const fresh = new Date(now - (PRESENCE_STALE_AFTER_MS - 1000)).toISOString();
   const stale = new Date(now - (PRESENCE_STALE_AFTER_MS + 1000)).toISOString();
 
-  it("is reachable when AVAILABLE and the heartbeat is fresh", () => {
+  it("is reachable when AVAILABLE or ON_CALL and the heartbeat is fresh", () => {
     expect(isReachableForDial("AVAILABLE", fresh, now)).toBe(true);
+    // ON_CALL must be reachable too: an agent who just finished (or is wrapping up)
+    // a call is briefly ON_CALL — common right after a video call, or pinned by a
+    // leaked IN_PROGRESS row. Excluding them black-holed a real call in the pilot
+    // smoke (the assigned agent was ON_CALL post-video → never dialed). Matches the
+    // dashboard's "online" = AVAILABLE | ON_CALL definition.
+    expect(isReachableForDial("ON_CALL", fresh, now)).toBe(true);
   });
 
-  it("is not reachable when AWAY / ON_CALL / OFFLINE, even with a fresh heartbeat", () => {
+  it("is not reachable when AWAY (opted out) or OFFLINE, even with a fresh heartbeat", () => {
     expect(isReachableForDial("AWAY", fresh, now)).toBe(false);
-    expect(isReachableForDial("ON_CALL", fresh, now)).toBe(false);
     expect(isReachableForDial("OFFLINE", fresh, now)).toBe(false);
   });
 
-  it("is not reachable when AVAILABLE but the heartbeat is stale or missing", () => {
+  it("is not reachable when the heartbeat is stale or missing, regardless of status", () => {
     expect(isReachableForDial("AVAILABLE", stale, now)).toBe(false);
+    expect(isReachableForDial("ON_CALL", stale, now)).toBe(false);
     expect(isReachableForDial("AVAILABLE", null, now)).toBe(false);
   });
 });
