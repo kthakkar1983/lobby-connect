@@ -4,6 +4,7 @@ import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 import {
   isStale,
   effectivePresence,
+  isReachableForDial,
   DEFAULT_LOGIN_STATUS,
   isLiveStatus,
   type PresenceStatus,
@@ -45,6 +46,27 @@ describe("effectivePresence", () => {
 
   it("returns OFFLINE when last_seen_at is null", () => {
     expect(effectivePresence("AVAILABLE", null, now)).toBe("OFFLINE");
+  });
+});
+
+describe("isReachableForDial", () => {
+  const now = Date.parse("2026-05-31T12:00:00.000Z");
+  const fresh = new Date(now - (PRESENCE_STALE_AFTER_MS - 1000)).toISOString();
+  const stale = new Date(now - (PRESENCE_STALE_AFTER_MS + 1000)).toISOString();
+
+  it("is reachable when AVAILABLE and the heartbeat is fresh", () => {
+    expect(isReachableForDial("AVAILABLE", fresh, now)).toBe(true);
+  });
+
+  it("is not reachable when AWAY / ON_CALL / OFFLINE, even with a fresh heartbeat", () => {
+    expect(isReachableForDial("AWAY", fresh, now)).toBe(false);
+    expect(isReachableForDial("ON_CALL", fresh, now)).toBe(false);
+    expect(isReachableForDial("OFFLINE", fresh, now)).toBe(false);
+  });
+
+  it("is not reachable when AVAILABLE but the heartbeat is stale or missing", () => {
+    expect(isReachableForDial("AVAILABLE", stale, now)).toBe(false);
+    expect(isReachableForDial("AVAILABLE", null, now)).toBe(false);
   });
 });
 

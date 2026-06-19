@@ -98,6 +98,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { POST } from "@/app/api/twilio/voice/incoming/route";
 
+// Presence is gated on a fresh heartbeat; build timestamps relative to the
+// route's real Date.now() so reachable rows stay inside the 90s window.
+const freshSeen = () => new Date().toISOString();
+const staleSeen = () => new Date(Date.now() - 5 * 60_000).toISOString();
+
 function makeRequest(params: Record<string, string>) {
   const body = new URLSearchParams(params);
   return new Request("http://localhost:3000/api/twilio/voice/incoming", {
@@ -137,7 +142,7 @@ describe("POST /api/twilio/voice/incoming", () => {
   it("dials the assigned agent and inserts a RINGING call", async () => {
     canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
-    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: freshSeen() };
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
     expect(xml).toContain(
@@ -173,7 +178,7 @@ describe("POST /api/twilio/voice/incoming", () => {
   it("is idempotent — an existing call for the CallSid is not re-inserted", async () => {
     canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
-    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: freshSeen() };
     canned.existingCall = { id: "call1" };
     await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     expect(insertSpy).not.toHaveBeenCalled();
@@ -182,13 +187,48 @@ describe("POST /api/twilio/voice/incoming", () => {
   it("dials both the assigned agent and an accepting admin", async () => {
     canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
-    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: freshSeen() };
     canned.availRows = [{ profile_id: "x1" }];
-    canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1" }];
+    canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1", status: "AVAILABLE", last_seen_at: freshSeen() }];
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
     expect(xml).toContain("<Identity>lc_a1</Identity>");
     expect(xml).toContain("<Identity>lc_x1</Identity>");
+  });
+
+  it("does NOT dial the assigned agent when their heartbeat is stale (offline)", async () => {
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
+    canned.assignment = { primary_agent_id: "a1" };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: staleSeen() };
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    const xml = await res.text();
+    expect(xml).not.toContain("<Dial");
+    expect(xml).toContain("<Hangup/>");
+    const [, row] = insertSpy.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(row).toMatchObject({ state: "NO_ANSWER" });
+  });
+
+  it("does NOT dial an admin who is AWAY (opted out), even with a fresh heartbeat", async () => {
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
+    canned.assignment = null;
+    canned.availRows = [{ profile_id: "x1" }];
+    canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1", status: "AWAY", last_seen_at: freshSeen() }];
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    const xml = await res.text();
+    expect(xml).not.toContain("<Dial");
+    expect(xml).toContain("<Hangup/>");
+  });
+
+  it("dials the reachable agent but skips an offline admin", async () => {
+    canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
+    canned.assignment = { primary_agent_id: "a1" };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: freshSeen() };
+    canned.availRows = [{ profile_id: "x1" }];
+    canned.admins = [{ id: "x1", twilio_identity: "lc_x1", active: true, role: "ADMIN", operator_id: "op1", status: "OFFLINE", last_seen_at: freshSeen() }];
+    const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Identity>lc_a1</Identity>");
+    expect(xml).not.toContain("lc_x1");
   });
 
   it("returns apology TwiML (200) when a Supabase query throws (e.g. timeout)", async () => {
@@ -205,7 +245,7 @@ describe("POST /api/twilio/voice/incoming", () => {
     recordHeartbeat.mockImplementationOnce(() => Promise.reject(new Error("boom")));
     canned.property = { id: "p1", operator_id: "op1", active: true, name: "Hotel One" };
     canned.assignment = { primary_agent_id: "a1" };
-    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true };
+    canned.agent = { id: "a1", twilio_identity: "lc_a1", active: true, status: "AVAILABLE", last_seen_at: freshSeen() };
     const res = await POST(makeRequest({ To: "+1", From: "+2", CallSid: "CA1" }));
     const xml = await res.text();
     expect(xml).toContain("<Identity>lc_a1</Identity>"); // dialed, not apology
