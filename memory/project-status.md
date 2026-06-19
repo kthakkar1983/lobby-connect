@@ -1428,7 +1428,46 @@ per-task spec+quality review + opus final = GO). Merged `--no-ff` `5c83840` → 
   **duration** ticks, typing a note + **Enter** shows `✓ Saved` and the row lands in the DB, **Mute/Unmute** works,
   **Hang up** ends the call, and the **Call 911** confirm dialog opens (don't complete unless using the 933 test #).
 
-Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file. Brand design source =
+## Session 26 (2026-06-19) — v1 punch-list + call-reliability fix (presence-gate)
+
+**The brand revision is done; we're now closing v1.** Created **`docs/v1-punchlist.md`** as the canonical
+remaining-work tracker (read it first when picking up v1 work). Sections: **A** call reliability (below — fixed),
+**B** UI fixes, **C** verification, **D** a plain-English security-posture doc. Owner-portal browser pass marked
+**verified** (Kumar).
+
+**Item A — intermittent "no one is available" — DIAGNOSED + FIXED + DEPLOYED (pending smoke).** Worked it with
+`systematic-debugging`. **Root cause:** the Twilio account's **concurrent-call limit = 1** (console-confirmed;
+Kumar submitted business verification to raise it — expect ~**2026-06-21**) colliding with routing's **parallel
+`<Dial>` to all assigned + `accepting_calls` agents**. At limit 1 only one outbound leg is placed; with **2 of 3
+agents (Dilnoza, Tejas) offline but still dialed**, the single slot usually landed on a dead identity → greeting,
+no ring, apology. Evidence: prod `calls` rows (NO_ANSWERs dying in 7–15s, not the 120s ring) → Twilio per-leg
+logs (all legs 0s/no-ring) → Twilio Monitor **10004 "concurrency exceeded" on every call** → console limit=1.
+**NOT a code regression** (10004 + fast-misses go back ~2 weeks; rate rose as test agents drifted offline; an
+earlier "tab-backgrounding" guess was refuted by Kumar's A/B test).
+**Fix (TDD, merged `--no-ff` `2072105` → prod `dpl_HhkT1Go…`):** routing dials only **reachable** agents — new
+pure `isReachableForDial(status,lastSeenAt,nowMs)` in `lib/voice/presence.ts` (= `effectivePresence(...)===
+"AVAILABLE"`, so a stale heartbeat is unreachable even though the OFFLINE sweep is daily); `resolvePrimaryAgent`/
+`resolveAvailableAdmins` (in `app/api/twilio/voice/incoming/route.ts`) select `status,last_seen_at` and gate;
+empty-targets now emits a Sentry warning. With one online agent the fan-out collapses to a single leg → fits limit
+1 → connects. `planDial`/TwiML byte-identical; zero migrations/RLS. All gates green.
+
+**FIRST ACTION next chat (before anything else):** confirm Kumar's **single-agent prod voice smoke** — with only
+his softphone online, call in 3–4× → every call should ring + connect (no random apology); and a fully-offline
+call should apology + log a Sentry "no reachable agents" event. **If it passes:** check off A in the punch-list,
+add a `docs(status)` note, move to the B items. **If it still misses:** the fix is presence-gating only — the
+deeper lever is the Twilio concurrency increase (pending) and/or the lower-priority "harden + surface real Twilio
+**Device** registration" follow-up (presence is a proxy for reachability, not a guarantee the Device is
+registered) — re-open with the Twilio per-leg logs (creds in `apps/portal/.env.local`; Supabase prod ref
+`ztunzdpmazwwwkxcpyfp`; both query approaches are in this session's history).
+
+**Remaining v1 (see `docs/v1-punchlist.md`):** B1 Hang-up→**blaze** (LOCKED, no brainstorm), B2 kiosk favicon,
+B3 hourly chart → thin 3-series (audio/video/missed, teal/navy/blaze, match Kumar's reference image), B4
+"total call duration" → body font, B5 desktop type-scale bump, B6 logo+wordmark on all auth pages, B7 make the
+**incoming-call property name** unmistakable; C finish the brand-polish audio smoke (local-time ticks +
+Enter-saves-note); D the security-posture doc.
+
+Read order for the next session: `CLAUDE.md` → `MEMORY.md` → this file → **`docs/v1-punchlist.md`** (the v1 tracker).
+Brand design source =
 `docs/brand/brand-guidelines.md`; impeccable context = `docs/PRODUCT.md` + `docs/DESIGN.md`. Relevant
 auto-memories: `voice-vs-video-incoming`, `dev-server-sandbox-hazard`, `build-quirks` (the new `.next`
 " 2"-dupe quirk).
