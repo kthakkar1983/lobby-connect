@@ -1335,10 +1335,9 @@ property-detail's last-5-ever) — intentional "tonight" framing. The `/admin/ca
 (agent/admin have no incident route — a v2 seam). `incidentByCall` is last-write-wins if a call ever had >1
 incident (the 6c flow makes exactly one — informational).
 
-**ONE GATE PENDING — live browser pass on prod** (the harness sandbox can't run the Next dev server; verify on
-the prod deploy): single-hotel overview (quiet vs busy night), tile drill-throughs → correct pre-filtered Calls,
-blaze incidents + red 911 tag on mobile, gradient-on-Home-only chrome, `/admin/calls` filters + pagination + the
-dashboard deep-links.
+**Gate CLEARED — live browser pass VERIFIED on prod (Kumar, 2026-06-18, session 25).** Owner portal redesign is
+done + verified: single-hotel overview, tile drill-throughs → pre-filtered Calls, blaze incidents + red 911 tag,
+gradient-on-Home-only chrome, and `/admin/calls` all confirmed working.
 
 Spec: `docs/specs/2026-06-17-owner-portal-redesign-design.md` · Plan: `docs/plans/2026-06-17-owner-portal-redesign.md`.
 
