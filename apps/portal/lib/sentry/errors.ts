@@ -6,12 +6,12 @@ import { unstable_cache } from "next/cache";
 // /status card degrades to a link instead of breaking the page. `fetchImpl` is
 // injectable for tests. The count is one page of issues (Sentry caps at 100),
 // which is plenty of resolution for an at-a-glance health dot.
-export async function getRecentErrorCount(
-  fetchImpl: typeof fetch = fetch,
-): Promise<number | null> {
+export async function getRecentErrorCount(fetchImpl: typeof fetch = fetch): Promise<number | null> {
   const org = process.env.SENTRY_ORG;
   const project = process.env.SENTRY_PROJECT;
-  const token = process.env.SENTRY_AUTH_TOKEN;
+  // Prefer the read-scoped token; the build's SENTRY_AUTH_TOKEN is upload-only
+  // and 403s on the issues API, which silently degraded this card to a link.
+  const token = process.env.SENTRY_READ_TOKEN ?? process.env.SENTRY_AUTH_TOKEN;
   if (!org || !project || !token) return null;
 
   try {
@@ -35,5 +35,5 @@ export async function getRecentErrorCount(
 export const getCachedErrorCount = unstable_cache(
   async () => getRecentErrorCount(),
   ["status:sentry-error-count"],
-  { revalidate: 60 },
+  { revalidate: 60 }
 );

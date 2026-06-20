@@ -36,4 +36,32 @@ describe("getRecentErrorCount", () => {
     }) as unknown as typeof fetch;
     expect(await getRecentErrorCount(throwing)).toBeNull();
   });
+
+  it("prefers SENTRY_READ_TOKEN (the upload-only SENTRY_AUTH_TOKEN 403s on the issues API)", async () => {
+    vi.stubEnv("SENTRY_READ_TOKEN", "read-tok");
+    vi.stubEnv("SENTRY_AUTH_TOKEN", "upload-tok");
+    let auth: string | null = null;
+    const capturing = (async (_url: string, init: RequestInit) => {
+      auth = new Headers(init?.headers).get("authorization");
+      return new Response(JSON.stringify([{ id: "1" }]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    expect(await getRecentErrorCount(capturing)).toBe(1);
+    expect(auth).toBe("Bearer read-tok");
+  });
+
+  it("falls back to SENTRY_AUTH_TOKEN when no read token is set", async () => {
+    let auth: string | null = null;
+    const capturing = (async (_url: string, init: RequestInit) => {
+      auth = new Headers(init?.headers).get("authorization");
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    await getRecentErrorCount(capturing);
+    expect(auth).toBe("Bearer tok");
+  });
 });
