@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { UsersTable } from "./users-table";
+import { effectivePresence } from "@/lib/voice/presence";
 
 export default async function UsersPage() {
   const actor = await requireRole("ADMIN");
@@ -9,7 +10,7 @@ export default async function UsersPage() {
   const { data: users, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, role, status, active, last_seen_at, created_at, must_change_password",
+      "id, full_name, email, role, status, active, last_seen_at, created_at, must_change_password"
     )
     .eq("operator_id", actor.operator_id)
     .order("created_at", { ascending: false });
@@ -17,6 +18,16 @@ export default async function UsersPage() {
   if (error) {
     throw new Error(`Failed to load users: ${error.message}`);
   }
+
+  // Show effective (staleness-aware) presence: a stale heartbeat reads OFFLINE even
+  // if the status column still says AVAILABLE (the OFFLINE sweep is only daily). This
+  // matches the admin dashboard + call routing; without it the users list showed a
+  // stale "AVAILABLE" that disagreed with the properties board.
+  const now = Date.now();
+  const usersWithPresence = (users ?? []).map((u) => ({
+    ...u,
+    status: effectivePresence(u.status, u.last_seen_at, now),
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,7 +40,7 @@ export default async function UsersPage() {
         </div>
       </header>
 
-      <UsersTable users={users ?? []} actorId={actor.id} />
+      <UsersTable users={usersWithPresence} actorId={actor.id} />
     </div>
   );
 }
