@@ -5,7 +5,8 @@ export { scrubPii };
 
 export function initSentry(): void {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
-  if (!dsn) return; // no-op when unconfigured
+  // no-op when unconfigured, or when running the local Vite dev server
+  if (!dsn || import.meta.env.DEV) return;
   Sentry.init({
     dsn,
     tracesSampleRate: 0.1,
