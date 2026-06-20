@@ -1530,3 +1530,31 @@ not the heartbeat; (b) concurrency=1 races multiple reachable targets — the ra
 
 **Commits this session:** `be5dab4` (UI/UX §B), `d18d452` (ON_CALL fix), `87e2562` (punch-list doc).
 Read order unchanged: `CLAUDE.md` → `MEMORY.md` → this file → `docs/v1-punchlist.md`.
+
+---
+
+## Session 27 (2026-06-20) — §A confirmed working in prod logs; Sentry hygiene + status-card fixes; presence-display mismatch fixed
+
+Kumar kept testing §A and asked Claude to read the logs. Three threads, all shipped to `main` → prod.
+
+**1) Item A (call reliability) — CONFIRMED WORKING from prod logs (no code change this thread).** Evidence via Supabase prod (`calls`) + Twilio REST (per-leg logs + Monitor alerts):
+- **Today (06-20) audio: 4/4 COMPLETED, 0 NO_ANSWER, 0 sub-30s fast-fails** (vs 06-19: 7/16, 8 fast-fails; 06-18: 0/2). **Twilio 10004 "concurrency exceeded" alerts: 06-17=3, 06-18=1, 06-19=13, 06-20=0.**
+- Per-leg: today every call dialed **Dilnoza (agent) + Tejas (admin)**; Dilnoza answered 3/4, Tejas 1/4 → the **`d18d452` ON_CALL fix is working** (she's dialed now; on 06-19's misses she was never dialed). **No black-holed calls** — the "no reachable agents" Sentry warning never fired (DB invariant: empty-targets are born NO_ANSWER; today had zero; Kumar confirmed nothing under "reachable" in Sentry).
+- **STILL OPEN (the real §A close):** (a) the **isolated single-agent smoke has NOT truly been run** — right now Dilnoza **and** Tejas **and** Kumar all read AVAILABLE/online, so today's connects always had ≥2 manned identities (at limit-1 the race resolved to a live human either way). Definitive close = only Dilnoza reachable (Tejas accepting-off/offline; Kumar admin already accepting-off), her tab foregrounded → call 3–4×. (b) **Whether the Twilio concurrency cap actually lifted is UNCONFIRMED** — leg timing is ambiguous and the REST API can't read the cap; check the **Twilio console** (was 1; raise expected ~06-21). 0×10004 today is suggestive but volume was low.
+
+**2) Sentry hygiene + read access — PRs #20 (`ca0369f`) + #21 (`6281d60`).** Surfaced while reading §A logs.
+- **Read access set up:** `pnpm sentry:issues` (+ `-- --issue <id>`) CLI (`scripts/sentry-issues.mjs`) reads a new **`SENTRY_READ_TOKEN`** (Sentry **Internal Integration**, Issue&Event:Read) in `apps/portal/.env.local`. **The build `SENTRY_AUTH_TOKEN` is upload-only → 403 on the issues API** — don't use it for reads. New memory `sentry-observability-access`.
+- **#20:** gate Sentry to **deployed builds only** (local `next dev`/`vite dev` stop creating prod issues — the recurring `ReferenceError: X is not defined` cluster was **local-dev HMR**, env=development); **`isTwilioTransportNoise`** beforeSend filter drops the benign Twilio Voice transport-churn `UnhandledRejection` (WS close 1005 → `TransportError 31009`). That **31009** = live evidence for the §A "presence ≠ real Twilio **Device** registration" follow-up.
+- **#21:** the `/admin/status` "Recent errors" card — (1) read `SENTRY_READ_TOKEN` (the upload token 403'd → card was silently null; **Kumar added the read token to Vercel _production_ env** via dashboard — the REST/CLI write is blocked by the auto-mode classifier); (2) the query counted **all-time** unresolved (Sentry's `statsPeriod` does NOT filter the issue list by age) → showed "2" (two **June-4** stragglers outside the 14d UI view) while the dashboard showed 0 → fixed with **`lastSeen:-24h`**; (3) cache **60s→120s** to ease the issues-endpoint rate limit (**5/short-window, shared token** → transient grey "Sentry unavailable" flaps that self-heal).
+
+**3) Presence-display mismatch — PR #22 (`c76d156`).** Admin dashboard Properties board showed an agent **OFFLINE** while `/admin/users` showed the same agent **AVAILABLE**. Cause: the users table rendered the **raw `profiles.status` column**; everywhere else (dashboard, owner portal, routing) computes **`effectivePresence`** (heartbeat stale >90s → OFFLINE regardless of the column — the OFFLINE sweep is only daily). Confirmed live: **Dilnoza** status=AVAILABLE, heartbeat ~2.5h stale → OFFLINE. Fix: `/admin/users/page.tsx` maps rows through `effectivePresence`; also refactored the dashboard's 2 inline `isStale ? OFFLINE : status` onto `effectivePresence` (one source, can't drift again). **Note:** non-softphone **OWNERs** now read OFFLINE in the users list (accurate) — blanking presence for owners is an easy open follow-up.
+
+**Post-deploy checks for `c76d156` (verify next chat):** `/admin/status` Sentry tile reads **0 / green** (Kumar also resolved the 2 June-4 issues); `/admin/users` shows Dilnoza **OFFLINE** matching the dashboard; the Twilio `UnhandledRejection` drops off Sentry over ~a day.
+
+**PICK UP HERE (fresh chat):**
+1. **Close §A properly:** the **isolated single-agent smoke** (only Dilnoza reachable + foregrounded; Tejas accepting-off) → all calls ring+connect; **and confirm the Twilio concurrency cap in the console** (was 1; raise expected ~06-21). If both good → check off §A in `docs/v1-punchlist.md`.
+2. **§C:** finish the audio in-call smoke (hotel-local-time ticks + Enter-saves-note) + the live a11y/visual pass for §B.
+3. **§D:** write `docs/security-posture.md` (plain-English auth/tokens/caching/PII/service-role; consider the `security-review` skill).
+4. Optional: blank presence for OWNERs in `/admin/users`; the deeper Twilio **Device**-registration hardening (§A follow-up); downsize `ring.mp3`.
+
+**Commits this session:** `ca0369f` + `6281d60` (Sentry, PRs #20/#21), `c76d156` (presence, PR #22). New memory: `sentry-observability-access`. Read order unchanged: `CLAUDE.md` → `MEMORY.md` → this file → `docs/v1-punchlist.md`.

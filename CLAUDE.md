@@ -53,6 +53,15 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - **No emojis in code or commits** unless explicitly requested
 - **Spec changes**: edit `docs/specs/*.md` files; old versions are in git history, not "v2 file"
 
+## Sourcing discipline (ALWAYS — applies to all research, claims, numbers, and reports)
+
+- **Mark every factual claim as one of two things: source-backed or gap-filled.** Never blur the line.
+- **Source-backed** = directly confirmed by a search result, fetched page, file, or tool output. Cite it (link or filename). Prices, specs, dates, names, availability, and "who/what/when" facts MUST be source-backed.
+- **Gap-filled** = inference, estimate, recollection, or reasoning not tied to a source. Label it explicitly in-line: "estimate", "unverified", "from prior knowledge — not re-checked", "inferred", etc.
+- **Never present an unverified number (price, spec, date) as if it were confirmed.** If a search returns no figure, say "could not verify" — do NOT substitute a plausible guess. (Lesson: M280/M500/QS2000 price estimates given without verification were wrong by ~3–5x.)
+- **When a prior gap-filled claim is later contradicted by a source, correct it openly** and note what changed.
+- Applies to chat answers AND any saved deliverable (reports, docs). In documents, keep a visible confidence/sourcing note on uncertain items.
+
 ## Deployed URLs (v1, Vercel-provided, custom domain deferred)
 
 - Portal: `lobby-connect-portal.vercel.app`
