@@ -15,7 +15,11 @@ export async function getRecentErrorCount(fetchImpl: typeof fetch = fetch): Prom
   if (!org || !project || !token) return null;
 
   try {
-    const query = encodeURIComponent("is:unresolved");
+    // `statsPeriod` only sets the stats bucket — it does NOT filter the issue
+    // list by age — so `is:unresolved` alone counts ALL-TIME unresolved issues
+    // (including ones older than the 14d UI window). `lastSeen:-24h` scopes the
+    // count to issues actually seen in the last 24h, matching what this card claims.
+    const query = encodeURIComponent("is:unresolved lastSeen:-24h");
     const url = `https://sentry.io/api/0/projects/${org}/${project}/issues/?statsPeriod=24h&query=${query}`;
     const res = await fetchImpl(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -30,10 +34,11 @@ export async function getRecentErrorCount(fetchImpl: typeof fetch = fetch): Prom
 }
 
 // /admin/status refreshes every 20s; without this each tick (per tab) hit the
-// Sentry API. Cache the count for 60s so it's ~1 call/min regardless of viewers.
-// The card is ≤60s stale — fine for an at-a-glance health dot.
+// Sentry API. Cache the count for 120s so it's ~1 call/2min regardless of viewers
+// (also eases Sentry's tight rate limit on the issues-search endpoint). The card
+// is ≤120s stale — fine for an at-a-glance health dot.
 export const getCachedErrorCount = unstable_cache(
   async () => getRecentErrorCount(),
   ["status:sentry-error-count"],
-  { revalidate: 60 }
+  { revalidate: 120 }
 );
