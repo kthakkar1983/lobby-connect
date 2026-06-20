@@ -64,4 +64,19 @@ describe("getRecentErrorCount", () => {
     await getRecentErrorCount(capturing);
     expect(auth).toBe("Bearer tok");
   });
+
+  it("scopes the count to recently-active issues (last 24h), not all-time unresolved", async () => {
+    let url = "";
+    const capturing = (async (u: string) => {
+      url = u;
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    await getRecentErrorCount(capturing);
+    const q = decodeURIComponent(url);
+    expect(q).toContain("is:unresolved");
+    expect(q).toContain("lastSeen:-24h");
+  });
 });

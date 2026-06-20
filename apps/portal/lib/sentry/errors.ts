@@ -15,7 +15,11 @@ export async function getRecentErrorCount(fetchImpl: typeof fetch = fetch): Prom
   if (!org || !project || !token) return null;
 
   try {
-    const query = encodeURIComponent("is:unresolved");
+    // `statsPeriod` only sets the stats bucket — it does NOT filter the issue
+    // list by age — so `is:unresolved` alone counts ALL-TIME unresolved issues
+    // (including ones older than the 14d UI window). `lastSeen:-24h` scopes the
+    // count to issues actually seen in the last 24h, matching what this card claims.
+    const query = encodeURIComponent("is:unresolved lastSeen:-24h");
     const url = `https://sentry.io/api/0/projects/${org}/${project}/issues/?statsPeriod=24h&query=${query}`;
     const res = await fetchImpl(url, {
       headers: { Authorization: `Bearer ${token}` },
