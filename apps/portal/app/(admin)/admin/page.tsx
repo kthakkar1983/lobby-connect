@@ -31,7 +31,7 @@ import {
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
 import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/format";
-import { isStale } from "@/lib/voice/presence";
+import { effectivePresence } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
 import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
 
@@ -82,7 +82,7 @@ export default async function AdminOverviewPage() {
     supabase
       .from("calls")
       .select(
-        "id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id",
+        "id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id"
       )
       .eq("operator_id", actor.operator_id)
       .gte("ring_started_at", since)
@@ -115,7 +115,7 @@ export default async function AdminOverviewPage() {
   }
   const profileById = new Map(agentProfiles.map((p) => [p.id, p]));
   const agentByProperty = new Map(
-    (assigns ?? []).map((a) => [a.property_id, profileById.get(a.primary_agent_id) ?? null]),
+    (assigns ?? []).map((a) => [a.property_id, profileById.get(a.primary_agent_id) ?? null])
   );
   const acceptingMap = new Map((avail ?? []).map((a) => [a.property_id, a.accepting_calls]));
 
@@ -123,7 +123,7 @@ export default async function AdminOverviewPage() {
   const live = countLiveCalls(calls);
   const onlineAgents = countOnlineAgents(
     (agents ?? []) as { status: ProfileStatus; last_seen_at: string | null }[],
-    now.getTime(),
+    now.getTime()
   );
   const outcomes = countByOutcome(calls, now);
   const avgPickup = avgPickupSeconds(calls, now);
@@ -166,7 +166,7 @@ export default async function AdminOverviewPage() {
   const health = phoneHealthRollup(
     props.map((p) => ({ id: p.id, name: p.name, timeZone: tzById.get(p.id) ?? "UTC" })),
     calls,
-    now,
+    now
   );
   const attentionIds = new Set(health.needAttention.map((p) => p.id));
 
@@ -182,7 +182,10 @@ export default async function AdminOverviewPage() {
         : { value: `${health.ok}/${health.total}`, sub: "lines OK", tone: "live" };
 
   const countByProp = (id: string) =>
-    countToday(calls.filter((c) => c.property_id === id), now);
+    countToday(
+      calls.filter((c) => c.property_id === id),
+      now
+    );
 
   // Problem properties float to the top of the board.
   const boardRows = props
@@ -232,9 +235,7 @@ export default async function AdminOverviewPage() {
           <h2 className={LABEL}>Tonight · all agents</h2>
           <HourlyLegend />
         </div>
-        <p className="text-xs text-text-muted">
-          Total call duration: {formatDuration(talkTime)}
-        </p>
+        <p className="text-xs text-text-muted">Total call duration: {formatDuration(talkTime)}</p>
         {todayTotal > 0 ? (
           <HourlyVolumeChart data={hourly} className="mt-1" />
         ) : (
@@ -246,9 +247,22 @@ export default async function AdminOverviewPage() {
           />
         )}
         <div className="mt-1 flex gap-3">
-          <StatTile value={outcomes.answered} label="Answered" href={"/admin/calls?outcome=answered" as Route} />
-          <StatTile value={outcomes.missed} label="Missed" alert={outcomes.missed > 0} href={"/admin/calls?outcome=missed" as Route} />
-          <StatTile value={outcomes.failed} label="Failed" href={"/admin/calls?outcome=failed" as Route} />
+          <StatTile
+            value={outcomes.answered}
+            label="Answered"
+            href={"/admin/calls?outcome=answered" as Route}
+          />
+          <StatTile
+            value={outcomes.missed}
+            label="Missed"
+            alert={outcomes.missed > 0}
+            href={"/admin/calls?outcome=missed" as Route}
+          />
+          <StatTile
+            value={outcomes.failed}
+            label="Failed"
+            href={"/admin/calls?outcome=failed" as Route}
+          />
           <StatTile value={formatDuration(avgPickup)} label="Avg pickup" />
           <StatTile value={formatDuration(avgCallLen)} label="Avg call" />
         </div>
@@ -269,9 +283,7 @@ export default async function AdminOverviewPage() {
             {boardRows.map((p) => {
               const agent = agentByProperty.get(p.id);
               const effective: ProfileStatus | null = agent
-                ? isStale(agent.last_seen_at, now.getTime())
-                  ? "OFFLINE"
-                  : agent.status
+                ? effectivePresence(agent.status, agent.last_seen_at, now.getTime())
                 : null;
               return (
                 <TableRow key={p.id}>
@@ -285,7 +297,10 @@ export default async function AdminOverviewPage() {
                     {agent && effective ? (
                       <span className="inline-flex items-center gap-2">
                         <span
-                          className={cn("inline-block h-2 w-2 rounded-full", presenceDotClass(effective))}
+                          className={cn(
+                            "inline-block h-2 w-2 rounded-full",
+                            presenceDotClass(effective)
+                          )}
                           aria-hidden="true"
                         />
                         {agent.full_name}
@@ -323,9 +338,11 @@ export default async function AdminOverviewPage() {
           ) : (
             <ul className="flex flex-col">
               {team.map(({ agent, propCount }) => {
-                const effective: ProfileStatus = isStale(agent.last_seen_at, now.getTime())
-                  ? "OFFLINE"
-                  : agent.status;
+                const effective: ProfileStatus = effectivePresence(
+                  agent.status,
+                  agent.last_seen_at,
+                  now.getTime()
+                );
                 return (
                   <li
                     key={agent.id}
@@ -333,7 +350,10 @@ export default async function AdminOverviewPage() {
                   >
                     <span className="inline-flex items-center gap-2 text-foreground">
                       <span
-                        className={cn("inline-block h-2 w-2 rounded-full", presenceDotClass(effective))}
+                        className={cn(
+                          "inline-block h-2 w-2 rounded-full",
+                          presenceDotClass(effective)
+                        )}
                         aria-hidden="true"
                       />
                       {agent.full_name}
@@ -351,7 +371,9 @@ export default async function AdminOverviewPage() {
         <Card className="gap-2 p-5 shadow-md">
           <div className="flex items-center justify-between">
             <h2 className={LABEL}>Recent calls</h2>
-            <Link href="/admin/calls" className="text-sm text-accent-text hover:underline">View all</Link>
+            <Link href="/admin/calls" className="text-sm text-accent-text hover:underline">
+              View all
+            </Link>
           </div>
           {recentRows.length === 0 ? (
             <EmptyState
