@@ -20,6 +20,7 @@
     "gen:types": "supabase gen types typescript --local > packages/shared/src/database.generated.ts && prettier --write packages/shared/src/database.generated.ts",
     "check:routes": "node scripts/check-routes.mjs",
     "gen:types:check": "node scripts/check-types-drift.mjs",
+    "sentry:issues": "node scripts/sentry-issues.mjs",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop"
   },
