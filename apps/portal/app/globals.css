@@ -113,11 +113,14 @@ body {
 /* Desktop type scale (punch-list B5). Body copy read small on large monitors, so
    nudge the root size up at lg+. A *percentage* (not px) keeps the user's browser
    font-size preference intact, and Tailwind's rem-based text+spacing scale together
-   so dense tables/dashboards reflow proportionally rather than overflowing. Kept
-   modest (+6.25%); single knob — raise toward 112.5% after a live desktop pass. */
+   so dense tables/dashboards reflow proportionally rather than overflowing. The
+   106.25% pass still read a touch small on a live desktop review (2026-06-20), so
+   raised to 112.5% (= 18px root). Single knob — next rungs 118.75% / 125% if still
+   small. NOTE: fixed-px text (e.g. text-[11px] micro-labels) is absolute by design
+   and does NOT scale with this. */
 @media (min-width: 1024px) {
   html {
-    font-size: 106.25%;
+    font-size: 112.5%;
   }
 }
 
