@@ -1,7 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 import { UsersTable } from "./users-table";
-import { effectivePresence } from "@/lib/voice/presence";
+import { effectivePresence, roleHasPresence } from "@/lib/voice/presence";
 
 export default async function UsersPage() {
   const actor = await requireRole("ADMIN");
@@ -22,11 +22,15 @@ export default async function UsersPage() {
   // Show effective (staleness-aware) presence: a stale heartbeat reads OFFLINE even
   // if the status column still says AVAILABLE (the OFFLINE sweep is only daily). This
   // matches the admin dashboard + call routing; without it the users list showed a
-  // stale "AVAILABLE" that disagreed with the properties board.
+  // stale "AVAILABLE" that disagreed with the properties board. OWNERs have no
+  // softphone and never heartbeat, so leave their stored status untouched — the table
+  // renders "—" for them (see roleHasPresence) instead of a misleading OFFLINE.
   const now = Date.now();
   const usersWithPresence = (users ?? []).map((u) => ({
     ...u,
-    status: effectivePresence(u.status, u.last_seen_at, now),
+    status: roleHasPresence(u.role)
+      ? effectivePresence(u.status, u.last_seen_at, now)
+      : u.status,
   }));
 
   return (

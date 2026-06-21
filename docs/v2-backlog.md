@@ -67,6 +67,38 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 
 ---
 
+### Kiosk config token has no expiry or per-property revocation
+
+**Status:** open · **Raised:** 2026-06-20 (v1 security-posture review, §D) · **Pilot workaround:** treat the pairing link as a secret; the only revocation today is rotating the global `KIOSK_CONFIG_SECRET` (re-pairs every property at once).
+
+**Problem.** The kiosk pairing token is a per-property HMAC (`signKioskToken`, `apps/portal/lib/kiosk/config-token.ts:18`) that stamps an issued-at `t` but **never checks it** — `verifyKioskToken` (`:26`) validates only the signature, so the token has no expiry, no nonce, and no per-property revocation. It is delivered in a URL (`/?t=…`) and persisted to `localStorage` (`lc_kiosk_token`, `apps/kiosk/src/lib/config.ts`). Anyone who obtains it (browser history, a screenshot of the pairing link, a shared/synced tablet profile) can replay it indefinitely to read that property's kiosk config — including the guest WiFi password (`app/api/kiosk/config/route.ts:20,37`) — and to start/cancel video calls that ring the agent.
+
+**Why it matters.** A single leaked link is effectively a permanent, unrevocable credential for that property. MEDIUM. For a single-hotel pilot the operational exposure is small (one trusted tablet), but it does not scale.
+
+**Where it lives.** `apps/portal/lib/kiosk/config-token.ts` (sign/verify); consumed by `app/api/kiosk/{config,call-started,call-ended}/route.ts`, kiosk `heartbeat` (via `recordHeartbeat`), and the kiosk branch of `app/api/agora/token/route.ts`.
+
+**Fix sketch.** Add a per-property `kiosk_token_version` column mixed into the signed payload; `verifyKioskToken` checks it against the property's current version, so bumping the column revokes one property's token without touching the global secret. Optionally enforce a max-age via the already-present `t` field. This is the natural pairing for the post-pilot **device-registry / per-device pairing** item already noted in `memory/project-status.md`.
+
+**Acceptance.** An admin can revoke/re-pair a single property's kiosk; an old token then 401s; other properties are unaffected.
+
+---
+
+### Agora token route does not constrain `uid` to a role namespace
+
+**Status:** open · **Raised:** 2026-06-20 (v1 security-posture review, §D) · **Pilot workaround:** none needed — confined to a single, already-active call within the requester's own property.
+
+**Problem.** `GET /api/agora/token` (`apps/portal/app/api/agora/token/route.ts:19`) reads `uid` verbatim from the query string and never validates it against a range or the caller's role. The channel IS correctly scoped (kiosk branch requires `verified.propertyId === call.property_id`, `:42`; session branch requires `actor.operatorId === call.operator_id`, `:52`), but a holder of a valid kiosk token for a property in a live call can mint a PUBLISHER token for *any* uid on that channel — including the agent's uid — enabling an RTC-level uid collision / stream-hijack within that one call. The clients pick disjoint ranges by convention only (kiosk `[1, 1_000_000]`, `apps/kiosk/src/App.tsx:73`; agent `[1_000_001, 2_000_000]`, `apps/portal/components/video-call/video-call.tsx:54`); nothing enforces them server-side.
+
+**Why it matters.** LOW: blast radius is a single already-active call for the requester's own property; it cannot reach another property's or operator's call. Worth closing as defense-in-depth, but the fix touches the live video token path (video is only smoke-testable on prod), so it is deferred out of the pilot rather than rushed in.
+
+**Where it lives.** `apps/portal/app/api/agora/token/route.ts` (uid read + both auth branches).
+
+**Fix sketch.** Promote the uid ranges to shared constants and enforce them per branch — kiosk uid ∈ guest range, session uid ∈ agent range; reject out-of-range with 400/403. TDD against the existing route tests. (Alternative: assign the uid server-side instead of trusting the client.)
+
+**Acceptance.** A kiosk token cannot obtain a token for an agent-range uid (and vice-versa); a regression test covers both branches; live video still connects.
+
+---
+
 ## UI / UX
 
 ### Admin off-tab incoming-video nudge

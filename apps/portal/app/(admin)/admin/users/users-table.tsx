@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
+import { roleHasPresence } from "@/lib/voice/presence";
 import {
   Dialog,
   DialogContent,
@@ -556,7 +557,9 @@ export function UsersTable({ users, actorId }: Props) {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-text-muted text-xs">{u.status}</TableCell>
+                  <TableCell className="text-text-muted text-xs">
+                    {roleHasPresence(u.role) ? u.status : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />
                   </TableCell>

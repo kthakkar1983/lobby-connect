@@ -1,4 +1,4 @@
-import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
+import { PRESENCE_STALE_AFTER_MS, type Role } from "@lc/shared";
 
 export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
 
@@ -53,6 +53,15 @@ export function isReachableForDial(
 ): boolean {
   const effective = effectivePresence(status, lastSeenAt, nowMs);
   return effective === "AVAILABLE" || effective === "ON_CALL";
+}
+
+/**
+ * Roles that run a softphone and therefore report presence. OWNERs have no
+ * softphone and never heartbeat, so surfaces that list users show "—" for an
+ * owner rather than a misleading OFFLINE. AGENT + ADMIN are the call-takers.
+ */
+export function roleHasPresence(role: Role): boolean {
+  return role === "AGENT" || role === "ADMIN";
 }
 
 /** True when last_seen is missing or older than the stale window. */
