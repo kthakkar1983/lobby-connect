@@ -116,3 +116,19 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 - OR lift the incoming-video state out of `VideoCallHost` so the banner can render in the aside on home **and** as a fixed fallback off-home (the active `VideoCall` is already fixed full-screen and escapes any container).
 
 **Acceptance.** An admin on a non-home tab sees a visible incoming-video nudge (not just the ring) and can reach the call in one click; the agent/home experience is unchanged.
+
+---
+
+## Infrastructure / environments
+
+### Broaden the staging DB to all preview branches
+
+**Status:** open · **Raised:** 2026-06-21 (staging env build) · **Pilot workaround:** n/a — staging works for its purpose; this is an enhancement.
+
+**Problem.** The staging environment scopes its Supabase + secret env vars to the **`staging` git branch only** (`vercel env … preview staging`). So a per-PR feature-branch preview does NOT automatically point at the staging DB — only the `staging` branch does. The design originally floated scoping the DB vars to *all* Preview branches so every PR preview is DB-backed for free, but that breaks the cross-app URL vars (`NEXT_PUBLIC_APP_URL` / `KIOSK_ORIGIN` / `VITE_PORTAL_API_URL`), which are URL-specific per preview.
+
+**Why it matters.** Per-PR previews currently have no working backend unless merged into `staging`. Fine for a solo dev; limits parallel preview testing later.
+
+**Fix sketch.** Scope the staging DB + secret vars to all Preview branches, and derive the cross-app URLs at runtime from Vercel's `VERCEL_BRANCH_URL` system var instead of a fixed `NEXT_PUBLIC_APP_URL` (each preview self-references). Or adopt Supabase branching (Pro) for per-branch isolated DBs. Runbook: `docs/setup/2026-06-21-staging-runbook.md`.
+
+**Acceptance.** Any PR preview boots against a non-prod DB with no manual env work; cross-app calls resolve to that preview's own URLs.
