@@ -19,3 +19,22 @@ describe("scrubPii", () => {
     expect(scrubPii("from +1 415 555 2671 to +1 800 555 0199")).toBe("from [redacted] to [redacted]");
   });
 });
+
+describe("scrubPii — recording PII", () => {
+  it("drops recording key-name variants (Twilio param casing + sid)", () => {
+    expect(
+      scrubPii({ RecordingUrl: "https://api.twilio.com/x", recording_sid: "RE1", room: "204" }),
+    ).toEqual({ room: "204" });
+  });
+  it("redacts a Twilio recording URL embedded in free text", () => {
+    expect(
+      scrubPii(
+        "playback failed: https://api.twilio.com/2010-04-01/Accounts/ACxxx/Recordings/RExxx.mp3 done",
+      ),
+    ).toBe("playback failed: [redacted] done");
+  });
+  it("keeps ordinary (non-recording) URLs — no over-redaction", () => {
+    const url = "https://abc.supabase.co/storage/v1/object/public/logos/hotel.png";
+    expect(scrubPii({ note: `logo at ${url}` })).toEqual({ note: `logo at ${url}` });
+  });
+});
