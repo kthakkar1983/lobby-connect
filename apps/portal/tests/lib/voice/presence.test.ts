@@ -5,6 +5,7 @@ import {
   isStale,
   effectivePresence,
   isReachableForDial,
+  roleHasPresence,
   DEFAULT_LOGIN_STATUS,
   isLiveStatus,
   type PresenceStatus,
@@ -87,5 +88,16 @@ describe("constants + guards", () => {
     expect(isLiveStatus("ON_CALL")).toBe(true);
     expect(isLiveStatus("OFFLINE")).toBe(false);
     expect(isLiveStatus("bogus")).toBe(false);
+  });
+});
+
+describe("roleHasPresence", () => {
+  it("is true for call-takers (AGENT, ADMIN) who run a softphone", () => {
+    expect(roleHasPresence("AGENT")).toBe(true);
+    expect(roleHasPresence("ADMIN")).toBe(true);
+  });
+
+  it("is false for OWNER — no softphone, never heartbeats", () => {
+    expect(roleHasPresence("OWNER")).toBe(false);
   });
 });
