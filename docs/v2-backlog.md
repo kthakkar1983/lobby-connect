@@ -132,3 +132,21 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Fix sketch.** Scope the staging DB + secret vars to all Preview branches, and derive the cross-app URLs at runtime from Vercel's `VERCEL_BRANCH_URL` system var instead of a fixed `NEXT_PUBLIC_APP_URL` (each preview self-references). Or adopt Supabase branching (Pro) for per-branch isolated DBs. Runbook: `docs/setup/2026-06-21-staging-runbook.md`.
 
 **Acceptance.** Any PR preview boots against a non-prod DB with no manual env work; cross-app calls resolve to that preview's own URLs.
+
+---
+
+## Agents / routing
+
+### Multi-agent property roster + daily on-shift selection
+
+**Status:** open · **Raised:** 2026-06-21 · **Pilot workaround:** v1 assigns exactly **one** primary agent per property (plus admins who opt into the parallel dial).
+
+**Desired (owner's framing, 2026-06-21).** Assign a **roster of 2–3 agents** to a property, then **pick which one is "on shift" that day** — only the on-shift agent is dialed. This is explicitly **NOT** concurrent multi-agent coverage of one pod, and **NOT** the reserved `backup_agent_id` "ring a backup too" idea (that framing was rejected). At most one on-shift agent at a time; an **admin can always chip in**; if a pod's volume outgrows one agent, the plan is to **remove properties from that pod**, not add concurrent agents.
+
+**Why it matters.** Lets the operator staff a property from a small bench (cover days off / shift swaps) by flipping who's on-shift, instead of closing/reopening an assignment every time.
+
+**Where it lives.** `property_assignments` (one active row per property; partial unique index `property_assignments_one_active`, migration 0005); assignment UI `app/(admin)/admin/properties/[id]/assignment-card.tsx` + `lib/assignments/plan.ts`; routing dials the single active `primary_agent_id` in `lib/voice/*`. The `backup_agent_id` column is **not** this feature.
+
+**Fix sketch.** Add a property→agents **roster** (many-to-many) + a per-property **on-shift pointer** (or a dated shift schedule) that selects which roster agent is the active `primary_agent_id`. Routing is unchanged (still dials one agent + accepting admins) — this is a *selection layer* over the existing single-active-assignment invariant, not concurrent multi-dial. Admin UI flips the on-shift agent without manual close/reopen.
+
+**Acceptance.** An admin can attach 2–3 agents to a property and flip which one is on-shift for the day; routing dials that agent; no concurrent same-pod dialing; the single-active-assignment invariant still holds.
