@@ -60,7 +60,7 @@ Read order context: `CLAUDE.md` → `MEMORY.md` → `memory/project-status.md`. 
 
 ## D. Docs / security
 
-- [ ] **Plain-English security & data-posture writeup** (`docs/security-posture.md`) — a readable, audit-style explanation (not code) of how the system handles, at minimum:
+- [x] **Plain-English security & data-posture writeup** (`docs/security-posture.md`) — a readable, audit-style explanation (not code) of how the system handles, at minimum:
   - **Auth:** Supabase Auth (password-only, invite/admin-provisioned), `must_change_password` first-login gate, the Next.js middleware gate, RLS-on-every-table model + the column-guard triggers.
   - **Token retention / lifetimes:** Supabase session/JWT, the **Twilio voice access token** (~1h, in-place auto-refresh), **Agora** RTC tokens, and where each lives (cookie / memory) and for how long.
   - **Caching:** the Next.js caching layers in use (`cache()` request-dedupe, `unstable_cache` for the Sentry probe, the polling/refetch model — no realtime subscriptions), and what is/isn't cached.
@@ -68,6 +68,10 @@ Read order context: `CLAUDE.md` → `MEMORY.md` → `memory/project-status.md`. 
   - **Secrets / service-role:** where the service-role key is used (Twilio webhooks, cron, admin provisioning) and the boundary that keeps it out of app code.
 
   When we tackle this, gather the facts from the code first; consider running the `security-review` skill for a rigor pass alongside the writeup.
+
+  **DONE (2026-06-20, session 28).** `docs/security-posture.md` written — source-backed, audit-style, covering auth/access-control, token lifetimes (Supabase session; Twilio Voice 1h; Agora 1h; kiosk HMAC no-expiry), caching (`cache()` request-dedupe / `unstable_cache` 120s Sentry probe / 20s poll, no realtime), PII (Sentry scrub + audit log + recording-off), and the service-role boundary. Ran the `security-review` skill over the auth/RLS/service-role/Twilio-HMAC/token surfaces **plus a live Supabase security-advisor check** → **no high/medium exploitable vuln.** Triage: **fixed** the Sentry recording-URL scrubbing gap (TDD, `packages/shared/src/sentry-scrub.ts`); **filed two** defense-in-depth items to `docs/v2-backlog.md` (kiosk-token expiry/revocation — MEDIUM; Agora-token uid namespace — LOW); **documented as accepted** the two advisor WARNs (SECURITY DEFINER executable-by-`authenticated` = by-design per `0014`; leaked-password protection = known Pro-tier deferral).
+
+  **Optional cleanups (session-27 PICK-UP item 4):** OWNER presence in `/admin/users` now shows "—" (new TDD'd `roleHasPresence` in `lib/voice/presence.ts`; wired in `page.tsx` + `users-table.tsx`) — agent/admin presence unchanged. **ring.mp3 downsize NOT done** — no mp3 encoder in the dev sandbox (no `ffmpeg`/`lame`/`sox`; `afconvert` can't emit mp3); the 681KB/320kbps file is unchanged. Do it later with: `ffmpeg -i ring.mp3 -ac 1 -b:a 80k ring.new.mp3` → replace → confirm it still rings on an incoming **video** call (prod-only test).
 
 ---
 
