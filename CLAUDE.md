@@ -52,6 +52,7 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - **Audit log** every meaningful change (create/update/delete on top-level entities, role changes, sign-in/out)
 - **No emojis in code or commits** unless explicitly requested
 - **Spec changes**: edit `docs/specs/*.md` files; old versions are in git history, not "v2 file"
+- **Versioning**: semver (`vMAJOR.MINOR.PATCH`) via git tags + GitHub Releases; bump the four `package.json`s at release. Policy: `docs/VERSIONING.md`. (`plan-*` tags are a separate milestone axis.)
 
 ## Sourcing discipline (ALWAYS — applies to all research, claims, numbers, and reports)
 
