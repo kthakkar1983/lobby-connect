@@ -150,3 +150,21 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Fix sketch.** Add a property→agents **roster** (many-to-many) + a per-property **on-shift pointer** (or a dated shift schedule) that selects which roster agent is the active `primary_agent_id`. Routing is unchanged (still dials one agent + accepting admins) — this is a *selection layer* over the existing single-active-assignment invariant, not concurrent multi-dial. Admin UI flips the on-shift agent without manual close/reopen.
 
 **Acceptance.** An admin can attach 2–3 agents to a property and flip which one is on-shift for the day; routing dials that agent; no concurrent same-pod dialing; the single-active-assignment invariant still holds.
+
+---
+
+### Twilio concurrent-call cap = 1 → re-enable parallel multi-target dial
+
+**Status:** open (deferred to v2 by Kumar, 2026-06-22) · **Raised:** 2026-06-19 (§A root-cause) · **Pilot workaround:** routing presence-gates the dial, so with one reachable agent the fan-out collapses to a single leg that fits the cap — the v1 single-agent voice smoke passes this way.
+
+**Problem.** The Twilio account's concurrent-call limit is **1** (console-confirmed; an account setting, not derivable from code). Routing fires a parallel `<Dial>` to the property's assigned primary agent + admins with `accepting_calls=true`; at cap 1 only one outbound leg is placed and the rest are rejected (Twilio error **10004**). The presence gate (shipped `2072105` / `d18d452`) makes this safe for the pilot by only dialing *reachable* agents, so a single online agent → one leg → connects every time; but **multi-agent fan-out cannot work until the cap is raised**.
+
+**Why it matters.** Multi-agent coverage (primary agent + admin backup ringing simultaneously, first-answer wins) is the intended routing behavior; it's blocked purely by the account cap. The pilot accepts single-agent routing.
+
+**Where it lives.** `app/api/twilio/voice/incoming/route.ts` (`planDial` + `resolvePrimaryAgent` / `resolveAvailableAdmins`); `lib/voice/presence.ts` (`isReachableForDial`). The fan-out code is already written and capped at `MAX_DIAL_TARGETS` (10) — raising the Twilio cap re-enables it with **no code change**.
+
+**Fix sketch.** Confirm/raise the Twilio concurrent-call limit (business verification submitted ~2026-06-19). Once raised, re-run a multi-agent voice smoke (2+ reachable targets ring in parallel, first-answer wins).
+
+**Companion (also deferred).** Harden routing to gate on **real Twilio Device registration** state, not just the 20s presence heartbeat — the heartbeat lags Device-down by up to 90s, so a just-closed browser is dialed into a 0s-fail leg (observed 2026-06-19). Was the lower-priority §A follow-up in `docs/v1-punchlist.md`.
+
+**Acceptance.** With the cap raised, a call rings 2+ reachable targets simultaneously and the first to answer wins; the others stop ringing; no 10004 alerts.

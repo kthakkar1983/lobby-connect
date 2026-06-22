@@ -1617,3 +1617,5 @@ Kumar's s1 smoke surfaced 3 issues; investigation found a 4th (a data-correctnes
 **Release:** `v1.0.1` — four `package.json`s `1.0.0 → 1.0.1`, annotated tag, GitHub Release. CI green before the tag (per `docs/VERSIONING.md`).
 
 **Gates:** full suite (+ new specs) · typecheck · lint · check:routes · portal build · CI — all green. Zero migrations / RLS / new routes / service-role. Cross-session memory [[voice-vs-video-incoming]] updated.
+
+**v1 status (Kumar, 2026-06-22): COMPLETE.** §A (call reliability) smoke passed — audio connects reliably with the presence-gated single-agent routing. The **Twilio concurrent-call cap (=1) + multi-agent fan-out are deferred to v2** (`docs/v2-backlog.md` → Agents/routing). v1 (pilot, one hotel end-to-end) is done; remaining `docs/v1-punchlist.md` items are non-blocking niceties or v2 pointers.
