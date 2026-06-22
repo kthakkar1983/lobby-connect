@@ -57,3 +57,10 @@ Push any commit to `staging`, or `vercel redeploy <staging-deployment-url> --cwd
 - **Vercel crons run on production deployments only** — staging does **not** auto-run the presence-sweep / reaper crons. Trigger manually with the staging `CRON_SECRET` if ever needed.
 - **Never real 911 on staging:** `EMERGENCY_DIAL_NUMBER=933` always (and Twilio is shadowed off anyway).
 - **Builds are serialized on Hobby** — a staging preview may queue behind a production build.
+- **Env vars are snapshotted at deploy creation.** A var added *after* a deploy was triggered is NOT in that deploy — push a new commit (re-sync) to pick it up. (This bit us once: the cross-app URL vars were set just after the seed push, so the first staging deploy fell back to localhost until a re-sync.)
+
+## Kiosk on staging — DEFERRED
+
+The kiosk fetches the portal API **cross-origin**, and the staging portal preview sits behind Vercel's Deployment Protection (auth wall) — `/api/kiosk/config` returns **401** to the kiosk (it has no Vercel SSO cookie for the portal's domain), so the kiosk can't finish loading on staging. The *generated* kiosk link is correct (uses `KIOSK_ORIGIN`); the kiosk just can't reach the API.
+
+**Deferred on purpose** — staging exists for portal-side work (v1.1: caching / session / DB), and the kiosk changes rarely. To enable the kiosk on staging later, either **(A)** turn off Vercel Deployment Protection for Preview on both projects (makes *all* previews public; app auth + kiosk token still protect data), or **(B)** have the kiosk send a Vercel protection-bypass token on its API calls (keeps the wall on; small code change).
