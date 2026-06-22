@@ -131,7 +131,7 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
 
       {ringing ? (
         <div className="mt-3" role="alert" aria-live="assertive">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center text-center">
             <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-live/15 text-primary">
               <span
                 aria-hidden="true"
@@ -139,10 +139,14 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
               />
               <Video size={18} className="relative" />
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground">Incoming video call</p>
-              <p className="truncate text-text-muted">{call!.propertyName}</p>
-            </div>
+            {/* Hotel name is the agent's first must-know — mirror the audio
+                softphone incoming UI: quiet eyebrow + large bold hotel name. */}
+            <p className="mt-2 font-label text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Incoming video call
+            </p>
+            <p className="mt-1 font-display text-2xl font-bold leading-tight text-foreground">
+              {call!.propertyName}
+            </p>
           </div>
           <button
             type="button"
