@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { HourBucket } from "@/lib/dashboard/calls";
+import { CHANNEL_COLOR } from "@/lib/dashboard/channel-colors";
 
 /**
  * Shared channel visualisations for the dashboards (spec §5): phone/video split
@@ -16,22 +17,22 @@ function hourLabel(hour: number): string {
 export function ChannelLegend({ className }: { readonly className?: string }) {
   return (
     <div className={cn("flex items-center gap-3 text-[11px] text-text-muted", className)}>
-      <span className="flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-[2px] bg-accent" aria-hidden="true" />
-        Phone
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-[2px] bg-primary" aria-hidden="true" />
-        Video
-      </span>
+      {(["AUDIO", "VIDEO"] as const).map((ch) => (
+        <span key={ch} className="flex items-center gap-1.5">
+          <span className={cn("h-2 w-2 rounded-[2px]", CHANNEL_COLOR[ch].fill)} aria-hidden="true" />
+          {CHANNEL_COLOR[ch].label}
+        </span>
+      ))}
     </div>
   );
 }
 
-/** The three grouped series for the hourly chart (brand mapping, spec §5 / punch-list B3). */
+/** The three grouped series for the hourly chart (brand mapping, spec §5 / punch-list B3).
+ *  Channel colours come from the shared CHANNEL_COLOR source so the chart and the
+ *  recent-calls channel icon always agree; "missed" is an outcome, not a channel. */
 const HOURLY_SERIES = [
-  { key: "audio", label: "Phone", color: "bg-accent" },
-  { key: "video", label: "Video", color: "bg-primary" },
+  { key: "audio", label: CHANNEL_COLOR.AUDIO.label, color: CHANNEL_COLOR.AUDIO.fill },
+  { key: "video", label: CHANNEL_COLOR.VIDEO.label, color: CHANNEL_COLOR.VIDEO.fill },
   { key: "missed", label: "Missed", color: "bg-attention" },
 ] as const;
 
@@ -130,8 +131,8 @@ export function ChannelBar({
     <div className={cn("flex h-2 overflow-hidden rounded-full bg-muted", className)}>
       {total > 0 && (
         <>
-          <div className="bg-accent" style={{ flexGrow: audio }} aria-hidden="true" />
-          <div className="bg-primary" style={{ flexGrow: video }} aria-hidden="true" />
+          <div className={CHANNEL_COLOR.AUDIO.fill} style={{ flexGrow: audio }} aria-hidden="true" />
+          <div className={CHANNEL_COLOR.VIDEO.fill} style={{ flexGrow: video }} aria-hidden="true" />
         </>
       )}
     </div>

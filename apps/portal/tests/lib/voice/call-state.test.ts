@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { canAnswer, ACTIVE_CALL_STATES, finalizeCallPayload, claimCall } from "@/lib/voice/call-state";
+import {
+  canAnswer,
+  ACTIVE_CALL_STATES,
+  finalizeCallPayload,
+  claimCall,
+  resolveFinalState,
+} from "@/lib/voice/call-state";
 
 describe("canAnswer", () => {
   it("allows answering only a RINGING call", () => {
@@ -45,6 +51,36 @@ describe("finalizeCallPayload", () => {
   it("returns the requested terminal state (FAILED)", () => {
     const payload = finalizeCallPayload("FAILED", null, endedAt);
     expect(payload.state).toBe("FAILED");
+  });
+});
+
+describe("resolveFinalState", () => {
+  // Unanswered call: the kiosk reason maps straight through.
+  it("maps an unanswered call's reason directly", () => {
+    expect(resolveFinalState("no-answer", false)).toBe("NO_ANSWER");
+    expect(resolveFinalState("cancelled", false)).toBe("NO_ANSWER");
+    expect(resolveFinalState("completed", false)).toBe("COMPLETED");
+    expect(resolveFinalState("failed", false)).toBe("FAILED");
+  });
+
+  it("defaults an unknown/missing reason to COMPLETED", () => {
+    expect(resolveFinalState(undefined, false)).toBe("COMPLETED");
+    expect(resolveFinalState("weird", false)).toBe("COMPLETED");
+  });
+
+  // The invariant: a call that was ANSWERED can never be NO_ANSWER. A concurrent
+  // accept (both rung browsers accepted) or a guest tapping End on a connected
+  // call makes the kiosk report cancelled/no-answer for an already-claimed call;
+  // that connected-then-ended call is COMPLETED, not a missed call.
+  it("never downgrades an answered call to NO_ANSWER", () => {
+    expect(resolveFinalState("cancelled", true)).toBe("COMPLETED");
+    expect(resolveFinalState("no-answer", true)).toBe("COMPLETED");
+  });
+
+  it("keeps a genuine terminal outcome on an answered call", () => {
+    expect(resolveFinalState("completed", true)).toBe("COMPLETED");
+    // A real mid-call failure stays FAILED — the guard is specifically about NO_ANSWER.
+    expect(resolveFinalState("failed", true)).toBe("FAILED");
   });
 });
 

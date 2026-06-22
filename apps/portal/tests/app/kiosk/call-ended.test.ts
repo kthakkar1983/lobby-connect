@@ -72,6 +72,22 @@ describe("POST /api/kiosk/call-ended", () => {
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ state: "NO_ANSWER" }));
   });
 
+  it("never downgrades an ANSWERED call to NO_ANSWER (concurrent-accept race)", async () => {
+    // The bug: both rung browsers accepted, one claimed (answered_at set →
+    // IN_PROGRESS), then the kiosk teardown reported "cancelled" and stamped the
+    // answered call NO_ANSWER. An answered call that ended is COMPLETED.
+    callRow = {
+      id: "call-1",
+      property_id: "prop-1",
+      state: "IN_PROGRESS",
+      answered_at: "2026-06-22T05:38:53.944Z",
+    };
+    const token = signKioskToken("prop-1", SECRET);
+    await POST(req({ callId: "call-1", reason: "cancelled" }, token));
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ state: "COMPLETED" }));
+    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ state: "NO_ANSWER" }));
+  });
+
   it("404 when the call belongs to another property", async () => {
     callRow = { id: "call-1", property_id: "OTHER", state: "RINGING", answered_at: null };
     const token = signKioskToken("prop-1", SECRET);

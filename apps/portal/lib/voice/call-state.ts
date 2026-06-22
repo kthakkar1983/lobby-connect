@@ -37,6 +37,34 @@ export async function claimCall(
   return !!data && data.length > 0;
 }
 
+type FinalState = "COMPLETED" | "NO_ANSWER" | "FAILED";
+
+/** The kiosk's end `reason` → finalize state. "cancelled" is a guest who hung up. */
+const STATE_BY_REASON: Record<string, FinalState> = {
+  completed: "COMPLETED",
+  "no-answer": "NO_ANSWER",
+  cancelled: "NO_ANSWER",
+  failed: "FAILED",
+};
+
+/**
+ * Resolve the finalize state from the kiosk's end `reason`, enforcing the
+ * invariant that an ANSWERED call can never be NO_ANSWER.
+ *
+ * A concurrent accept (both rung browsers accepted — possible while video was
+ * broadcast to every agent) or a guest tapping End on a connected call makes the
+ * kiosk's teardown report "cancelled"/"no-answer" for a call an agent already
+ * claimed. Without this guard that answered call was stamped NO_ANSWER (a real
+ * pilot row: `answered_at` + `handled_by` set, yet state NO_ANSWER) — a connected
+ * call mislabeled as missed. If it was answered, a cancel/no-answer reason means
+ * it connected then ended → COMPLETED. (A genuine `failed` stays FAILED.)
+ */
+export function resolveFinalState(reason: string | undefined, answered: boolean): FinalState {
+  const base = STATE_BY_REASON[reason ?? "completed"] ?? "COMPLETED";
+  if (answered && base === "NO_ANSWER") return "COMPLETED";
+  return base;
+}
+
 /** State-guarded finalize payload (COMPLETED/NO_ANSWER/FAILED). Caller keeps its own `.eq/.in(state)` write guard. */
 export function finalizeCallPayload(
   state: "COMPLETED" | "NO_ANSWER" | "FAILED",

@@ -2,16 +2,9 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
-import { finalizeCallPayload, ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
+import { finalizeCallPayload, ACTIVE_CALL_STATES, resolveFinalState } from "@/lib/voice/call-state";
 
 export const runtime = "nodejs";
-
-const STATE_BY_REASON: Record<string, "COMPLETED" | "NO_ANSWER" | "FAILED"> = {
-  completed: "COMPLETED",
-  "no-answer": "NO_ANSWER",
-  cancelled: "NO_ANSWER",
-  failed: "FAILED",
-};
 
 export async function POST(request: Request): Promise<NextResponse> {
   const token = request.headers.get("x-kiosk-token") ?? "";
@@ -40,7 +33,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const endedAt = new Date();
-  const nextState = STATE_BY_REASON[body.reason ?? "completed"] ?? "COMPLETED";
+  // An answered call (answered_at set) can never be NO_ANSWER — a "cancelled"/
+  // "no-answer" reason on an already-claimed call means it connected then ended.
+  const nextState = resolveFinalState(body.reason, call.answered_at != null);
 
   // Conditional on a still-active state so the kiosk-vs-agent finalize race is
   // safe: whichever side closes the call first wins, and a late writer (e.g. the

@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { Phone, Video, StickyNote, ChevronDown } from "lucide-react";
 import type { CallState } from "@lc/shared";
 import { formatDuration, formatTimeOnly, formatCallTime } from "@/lib/owner/format";
+import { CHANNEL_COLOR, asChannel } from "@/lib/dashboard/channel-colors";
 import { cn } from "@/lib/utils";
 
 export type RecentCall = {
@@ -49,7 +50,8 @@ function DetailField({ label, value }: { readonly label: string; readonly value:
 export function RecentCallRow({ call }: { readonly call: RecentCall }) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
-  const Icon = call.channel === "VIDEO" ? Video : Phone;
+  const channel = asChannel(call.channel);
+  const Icon = channel === "VIDEO" ? Video : Phone;
   const hasNotes = Boolean(call.notes?.trim());
 
   return (
@@ -63,8 +65,8 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
       >
         <Icon
           size={14}
-          className="shrink-0 text-text-muted"
-          aria-label={call.channel === "VIDEO" ? "Video" : "Phone"}
+          className={cn("shrink-0", CHANNEL_COLOR[channel].icon)}
+          aria-label={CHANNEL_COLOR[channel].label}
         />
         <span
           className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(call.state))}

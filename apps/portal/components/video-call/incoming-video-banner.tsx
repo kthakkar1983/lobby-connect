@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
+import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { cn } from "@/lib/utils";
 
 export interface IncomingVideoCall {
@@ -84,6 +85,14 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
     if (isRinging) ringtoneRef.current?.start();
     else ringtoneRef.current?.stop();
   }, [isRinging]);
+
+  // Flash the tab title while ringing so a backgrounded tab is identifiable
+  // (the s1-test "whose browser is ringing?" gap).
+  const ringingProperty = calls[0]?.propertyName ?? "";
+  useRingingTabTitle(
+    isRinging,
+    ringingProperty ? `Incoming video call · ${ringingProperty}` : "Incoming video call",
+  );
 
   // A persistent card in the right column, directly under the softphone (its
   // sibling) — so video has its own home in that dead space instead of floating
