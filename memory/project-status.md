@@ -1599,3 +1599,21 @@ Three deliverables (brainstorm → spec → plan → execute). Did **not** touch
 - v2 follow-up (broaden staging DB to all preview branches) filed in `docs/v2-backlog.md`.
 
 **Learnings:** Vercel **de-dupes** a branch push at an already-deployed SHA → needed a unique commit to trigger the first staging build; pre-existing **all-branches Preview env vars LEAK** into a new branch unless shadowed per-branch; the kiosk swallows config-fetch errors (`App.tsx:41` `catch(() => {})`) so every failure looks identical to "stuck on Loading"; `vercel env add <N> preview <branch> --value <V> --yes` is the non-interactive CLI form; `supabase db push` to staging is blocked here (no Postgres egress / CLI linked to prod) so migrations go via the MCP; Vercel **snapshots env vars at deploy creation** (vars added after a deploy is triggered need a fresh deploy/re-sync — the cross-app URL vars fell back to localhost until a re-sync); the **preview auth wall blocks cross-origin API calls** (kiosk→portal 401), so a protected staging preview can't run the kiosk.
+
+---
+
+## Session 30 (2026-06-22) — s1-test fixes (video routing + finalization + call UI) → v1.0.1
+
+Kumar's s1 smoke surfaced 3 issues; investigation found a 4th (a data-correctness bug). All fixed via `systematic-debugging` (root-cause-first, TDD), merged `--no-ff` `2aeba0d` (fix `0249159`) → prod, **smoke CONFIRMED**, then released **`v1.0.1`** (first PATCH on the v1.0.0 baseline). Did **not** touch v1 §A (voice smoke / Twilio concurrency — still Kumar's; these fixes are orthogonal).
+
+**1) Video rang every agent/admin (not just the assigned/covering set).** `GET /api/calls/incoming-video` filtered only by operator + channel + RINGING + time-window — no assignment/`accepting_calls` scope, while the audio path (`resolvePrimaryAgent`/`resolveAvailableAdmins`) already scoped. Prod proof: a video call was `handled_by` Tejas, an ADMIN with `accepting_calls=false`. **Fix:** new `resolveTargetPropertyIds` (in the route) scopes the poll to the same set as the audio dial — the property's assigned primary agent + admins accepting calls for it; empty scope short-circuits (no query, no ring). **Presence deliberately NOT gated on the polling user** (polling proves liveness; a stale heartbeat must not silence a present client — unlike audio, which gates dead Twilio identities). 7 tests.
+
+**2) Answered video calls mislabeled NO_ANSWER (the data anomaly).** The kiosk finalizer (`/api/kiosk/call-ended`) mapped `cancelled`/`no-answer` → NO_ANSWER with only an `.in(state, ACTIVE_CALL_STATES)` guard, so it overwrote an already-answered IN_PROGRESS call. Triggered by a concurrent accept (both rung browsers accepted — #1's broadcast) or a guest ending a connected call (kiosk `onCancel`/abort paths send `cancelled`, racing the agent's `completed`). **Fix:** new pure `resolveFinalState(reason, answered)` in `lib/voice/call-state.ts` — an answered call (`answered_at` set) can only be COMPLETED/FAILED, never NO_ANSWER. **15 corrupted prod rows (back to 2026-06-06) backfilled to COMPLETED** via MCP. Tests in call-state + call-ended.
+
+**3) Phantom ringtone, unidentifiable tab.** A tab rang during a meeting and no one could tell which — incoming calls left no tab-level signal. Mostly explained by #1 (video broadcast rang everyone; prod had zero stuck RINGING rows). **Fix:** new `lib/hooks/use-ringing-tab-title.ts` flashes the browser tab title ("Incoming call · {hotel}") while ringing, wired into the audio softphone (`phase==="incoming"`) and the video banner. Hook unit-tested.
+
+**4) Chart colours ≠ recent-calls indicator.** Channel colour was defined in ~4 places independently and the recent-call channel icon was muted grey. Kumar chose: keep the chart's channel colours, bring the icon up to match. **Fix:** shared `lib/dashboard/channel-colors.ts` (teal=phone, navy=video) used by the chart/legend/bar + the recent-call icon; outcome dots (mint/blaze/grey) unchanged.
+
+**Release:** `v1.0.1` — four `package.json`s `1.0.0 → 1.0.1`, annotated tag, GitHub Release. CI green before the tag (per `docs/VERSIONING.md`).
+
+**Gates:** full suite (+ new specs) · typecheck · lint · check:routes · portal build · CI — all green. Zero migrations / RLS / new routes / service-role. Cross-session memory [[voice-vs-video-incoming]] updated.
