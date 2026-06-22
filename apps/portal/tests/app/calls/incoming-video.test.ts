@@ -8,7 +8,11 @@ vi.mock("@/lib/supabase/server", () => ({
 let profileRow: Record<string, unknown> | null = null;
 let callRows: Array<Record<string, unknown>> = [];
 let propertyRows: Array<{ id: string; name: string }> = [];
+let assignmentRows: Array<{ property_id: string }> = [];
+let availabilityRows: Array<{ property_id: string }> = [];
 const gteSpy = vi.fn();
+const inSpy = vi.fn();
+const callsQuerySpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -16,12 +20,25 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (table === "profiles") {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: profileRow }) }) }) };
       }
+      // property_assignments: select().eq().is()  -> assigned-primary properties
+      if (table === "property_assignments") {
+        return { select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: assignmentRows }) }) }) };
+      }
+      // admin_call_availability: select().eq().eq()  -> accepting-calls properties
+      if (table === "admin_call_availability") {
+        return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: availabilityRows }) }) }) };
+      }
       if (table === "properties") {
         return { select: () => ({ in: () => Promise.resolve({ data: propertyRows }) }) };
       }
-      // calls: select().eq().eq().eq().gte().order()
+      // calls: select().eq().eq().eq().in().gte().order()
+      callsQuerySpy();
       const chain = {
         eq: () => chain,
+        in: (col: string, vals: string[]) => {
+          inSpy(col, vals);
+          return chain;
+        },
         gte: (col: string, val: string) => {
           gteSpy(col, val);
           return chain;
@@ -40,8 +57,14 @@ const request = new Request("http://localhost:3000/api/calls/incoming-video");
 beforeEach(() => {
   getUser.mockReset();
   gteSpy.mockClear();
+  inSpy.mockClear();
+  callsQuerySpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
+  // u1 is the assigned primary agent for prop-1, so the default happy-path tests
+  // have a property in scope and the calls query runs.
+  assignmentRows = [{ property_id: "prop-1" }];
+  availabilityRows = [];
   callRows = [
     { id: "call-1", property_id: "prop-1", agora_channel_name: "call_abc", ring_started_at: "2026-06-01T00:00:00Z" },
   ];
@@ -84,5 +107,56 @@ describe("GET /api/calls/incoming-video", () => {
     // ~10 min cutoff: well past the 120s ring window, well within the last hour.
     expect(cutoffAgeMs).toBeGreaterThan(5 * 60_000);
     expect(cutoffAgeMs).toBeLessThan(60 * 60_000);
+  });
+
+  // --- Scoping: the poll must surface a call only to the agents the audio path
+  // would dial (assigned primary agent + admins accepting calls). Before this,
+  // every logged-in agent/admin polled back EVERY ringing video call. ---
+
+  it("scopes the query to the agent's assigned properties", async () => {
+    await GET(request);
+    expect(inSpy).toHaveBeenCalledWith("property_id", ["prop-1"]);
+  });
+
+  it("an agent assigned to no property never rings (and skips the calls query)", async () => {
+    assignmentRows = [];
+    const body = await (await GET(request)).json();
+    expect(body.calls).toEqual([]);
+    expect(callsQuerySpy).not.toHaveBeenCalled();
+    expect(inSpy).not.toHaveBeenCalled();
+  });
+
+  it("an admin sees video calls only for properties it is accepting calls for", async () => {
+    profileRow = { id: "u1", operator_id: "op-1", role: "ADMIN" };
+    assignmentRows = [];
+    availabilityRows = [{ property_id: "prop-2" }];
+    await GET(request);
+    expect(inSpy).toHaveBeenCalledWith("property_id", ["prop-2"]);
+  });
+
+  it("an admin not accepting calls (covering off) and unassigned never rings", async () => {
+    profileRow = { id: "u1", operator_id: "op-1", role: "ADMIN" };
+    assignmentRows = [];
+    availabilityRows = [];
+    const body = await (await GET(request)).json();
+    expect(body.calls).toEqual([]);
+    expect(callsQuerySpy).not.toHaveBeenCalled();
+  });
+
+  it("unions an admin's assigned and accepting-calls properties (deduped)", async () => {
+    profileRow = { id: "u1", operator_id: "op-1", role: "ADMIN" };
+    assignmentRows = [{ property_id: "prop-1" }];
+    availabilityRows = [{ property_id: "prop-2" }, { property_id: "prop-1" }];
+    await GET(request);
+    const ids = inSpy.mock.calls[0]?.[1] as string[];
+    expect(ids).toHaveLength(2);
+    expect(ids).toEqual(expect.arrayContaining(["prop-1", "prop-2"]));
+  });
+
+  it("an agent does not consult admin_call_availability (assignment only)", async () => {
+    // availabilityRows would add prop-9, but an AGENT must ignore it.
+    availabilityRows = [{ property_id: "prop-9" }];
+    await GET(request);
+    expect(inSpy).toHaveBeenCalledWith("property_id", ["prop-1"]);
   });
 });

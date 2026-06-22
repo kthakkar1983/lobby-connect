@@ -8,6 +8,7 @@ import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
 import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
+import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 
@@ -119,6 +120,13 @@ export function Softphone({ role }: SoftphoneProps) {
   // in layouts that don't mount a provider (admin layout).
   const { report } = useLineStatus();
   useEffect(() => { report(phase); }, [phase, report]);
+
+  // Flash the tab title while a call is ringing so a backgrounded tab is
+  // identifiable (the s1-test "whose browser is ringing?" gap).
+  useRingingTabTitle(
+    phase === "incoming",
+    incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call",
+  );
 
   // Register the Twilio Device once.
   useEffect(() => {
