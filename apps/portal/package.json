@@ -16,6 +16,8 @@
     "@lc/shared": "workspace:*",
     "@lc/ui": "workspace:*",
     "@sentry/nextjs": "^10.56.0",
+    "@speechmatics/auth": "^0.1.0",
+    "@speechmatics/real-time-client": "^8.5.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.45.0",
     "@twilio/voice-sdk": "^2.18.3",
