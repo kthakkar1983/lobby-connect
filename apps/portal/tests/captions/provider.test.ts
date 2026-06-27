@@ -20,13 +20,14 @@ const sm = vi.hoisted(() => {
 vi.mock("@speechmatics/real-time-client", () => ({ RealtimeClient: sm.RealtimeClient }));
 
 // Web Audio + MediaStream do not exist in the node test env — stub the minimum.
+const audioCtxClose = vi.fn().mockResolvedValue(undefined);
 class FakeAudioContext {
   sampleRate = 16000;
   destination = {};
   createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
   createScriptProcessor = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null }));
   createGain = vi.fn(() => ({ gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() }));
-  close = vi.fn().mockResolvedValue(undefined);
+  close = audioCtxClose;
 }
 
 beforeEach(() => {
@@ -69,6 +70,17 @@ describe("createCaptionStream", () => {
     await stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
     stream.stop();
     expect(sm.client.stopRecognition).toHaveBeenCalled();
+    expect(audioCtxClose).toHaveBeenCalled();
+  });
+
+  it("stop() during a pending start() resolves cleanly and never wires audio", async () => {
+    // stop() lands synchronously, before the dynamic import of the SDK resolves;
+    // start() must short-circuit, resolve cleanly, and never wire audio.
+    const stream = createCaptionStream("jwt");
+    const p = stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
+    stream.stop();           // stop arrives while start() is still pending
+    await expect(p).resolves.toBeUndefined();
+    expect(sm.client.sendAudio).not.toHaveBeenCalled();
   });
 
   it("propagates a connection failure (the hook treats it as captions-off)", async () => {

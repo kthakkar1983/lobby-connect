@@ -11,6 +11,7 @@ import { parseTranscriptMessage } from "@/lib/captions/messages";
  * SDK details verified against @speechmatics/real-time-client@8.5.0 types:
  *   - US endpoint via the `url` constructor option (default is EU).
  *   - sendAudio accepts the Int16Array directly (it is an ArrayBufferView).
+ *   - Echo fallback: if the live smoke shows the guest audio double-playing, route the sink to audioCtx.createMediaStreamDestination() instead of audioCtx.destination (a throwaway MediaStream sink that still pulls the ScriptProcessor but never reaches the speakers).
  *   - start(jwt, { audio_format, transcription_config }); receiveMessage gives { data }.
  *
  * NOTE: ScriptProcessorNode is deprecated but universally supported and dead
@@ -61,6 +62,7 @@ export function createCaptionStream(token: string): CaptionStream {
 
       client.addEventListener("receiveMessage", ({ data }: { data: unknown }) => {
         const update = parseTranscriptMessage(data);
+        // drop ignore + empty-text (silence boundaries) regardless of kind
         if (update.kind === "ignore" || !update.text) return;
         (update.kind === "partial" ? onPartial : onFinal)(update.text);
       });
