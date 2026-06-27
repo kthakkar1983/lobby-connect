@@ -11,6 +11,7 @@ import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
+import { useCaptions } from "@/lib/captions/use-captions";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -46,6 +47,8 @@ export function Softphone({ role }: SoftphoneProps) {
   const [notes, setNotes] = useState("");
   const [incomingProperty, setIncomingProperty] = useState("");
   const [callTimeZone, setCallTimeZone] = useState<string | null>(null);
+  const [guestAudioTrack, setGuestAudioTrack] = useState<MediaStreamTrack | null>(null);
+  const captionGrabRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
   // True once a 911 trigger came back as failed/degraded — the agent must fall
   // back to verbal relay / instruct the guest to dial 911 directly.
@@ -108,6 +111,8 @@ export function Softphone({ role }: SoftphoneProps) {
     if (!id || (!room && !note)) return true;
     return saveNotes({ callId: id, roomNumber: room, notes: note });
   }, [saveNotes]);
+
+  const captions = useCaptions(guestAudioTrack);
 
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
@@ -208,12 +213,30 @@ export function Softphone({ role }: SoftphoneProps) {
     };
   }, [intendedStatus]);
 
+  // Clean up the caption-grab poll if the component unmounts mid-call.
+  useEffect(() => () => {
+    if (captionGrabRef.current) clearInterval(captionGrabRef.current);
+  }, []);
+
   const acceptCall = useCallback(async () => {
     const call = callRef.current;
     if (!call) return;
     call.accept();
     setMuted(false);
     setPhase("in-call");
+    // The remote MediaStream isn't ready synchronously after accept(); poll
+    // briefly until Twilio exposes it, then caption it. Bounded so a call that
+    // never connects media doesn't poll forever.
+    if (captionGrabRef.current) clearInterval(captionGrabRef.current);
+    let tries = 0;
+    captionGrabRef.current = setInterval(() => {
+      const t = call.getRemoteStream?.()?.getAudioTracks?.()[0] ?? null;
+      if (t || ++tries > 25) {
+        if (captionGrabRef.current) clearInterval(captionGrabRef.current);
+        captionGrabRef.current = null;
+        if (t) setGuestAudioTrack(t);
+      }
+    }, 200);
     const ans = await reliableFetch(
       "/api/twilio/voice/answered",
       {
@@ -267,6 +290,11 @@ export function Softphone({ role }: SoftphoneProps) {
     setEmergencyActive(false);
     setEmergencyFailed(false);
     setCallTimeZone(null);
+    if (captionGrabRef.current) {
+      clearInterval(captionGrabRef.current);
+      captionGrabRef.current = null;
+    }
+    setGuestAudioTrack(null);
     setPhase("ready");
     await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
     if (id && (room || note)) {
@@ -463,6 +491,8 @@ export function Softphone({ role }: SoftphoneProps) {
           onRoomNumberChange={setRoomNumber}
           onNotesChange={setNotes}
           onSaveNotes={saveNotesNow}
+          captionFinals={captions.finals}
+          captionPartial={captions.partial}
         />
       )}
 

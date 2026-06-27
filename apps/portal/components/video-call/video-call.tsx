@@ -10,6 +10,8 @@ import type {
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
+import { CaptionBand } from "@/components/call/caption-band";
+import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
@@ -20,6 +22,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [guestAudioTrack, setGuestAudioTrack] = useState<MediaStreamTrack | null>(null);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -32,6 +35,8 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
   notesRef.current = notes;
+
+  const captions = useCaptions(guestAudioTrack);
 
   // Accept the call, then join Agora.
   // NOTE: the cleanup must tear down the client/tracks, and we must bail on
@@ -73,7 +78,10 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           await c.subscribe(user, mediaType);
           if (mediaType === "video" && remoteRef.current)
             (user.videoTrack as IRemoteVideoTrack)?.play(remoteRef.current);
-          if (mediaType === "audio") user.audioTrack?.play();
+          if (mediaType === "audio") {
+            user.audioTrack?.play();
+            setGuestAudioTrack(user.audioTrack?.getMediaStreamTrack() ?? null);
+          }
         });
         c.on("user-left", () => void handleEnd());
 
@@ -160,6 +168,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
       audioRef.current?.close();
       videoRef.current?.close();
       await clientRef.current?.leave().catch(() => {});
+      setGuestAudioTrack(null);
     }
     const ok = await saveNotes();
     if (ok) onClose();
@@ -207,6 +216,11 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           <div
             ref={localRef}
             className="absolute bottom-4 right-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
+          />
+          <CaptionBand
+            finals={captions.finals}
+            partial={captions.partial}
+            className="absolute inset-x-3 bottom-3"
           />
         </div>
         <PlaybookPanel callId={callId} />
