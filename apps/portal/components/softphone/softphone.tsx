@@ -12,6 +12,7 @@ import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
+import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -112,7 +113,10 @@ export function Softphone({ role }: SoftphoneProps) {
     return saveNotes({ callId: id, roomNumber: room, notes: note });
   }, [saveNotes]);
 
-  const captions = useCaptions(guestAudioTrack);
+  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
+  // Gating the track (not just hiding the band) tears down the STT stream when
+  // captions are off — stops the upstream audio + the per-minute billing.
+  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
 
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
@@ -493,6 +497,8 @@ export function Softphone({ role }: SoftphoneProps) {
           onSaveNotes={saveNotesNow}
           captionFinals={captions.finals}
           captionPartial={captions.partial}
+          captionsEnabled={captionsEnabled}
+          onToggleCaptions={toggleCaptions}
         />
       )}
 

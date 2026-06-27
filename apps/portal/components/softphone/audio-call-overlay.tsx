@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
+import { CaptionToggle } from "@/components/call/caption-toggle";
 
 function formatElapsed(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -39,6 +40,8 @@ export function AudioCallOverlay({
   onSaveNotes,
   captionFinals,
   captionPartial,
+  captionsEnabled,
+  onToggleCaptions,
 }: {
   readonly propertyName: string;
   readonly callId: string;
@@ -56,6 +59,8 @@ export function AudioCallOverlay({
   readonly onSaveNotes: () => Promise<boolean>;
   readonly captionFinals: string[];
   readonly captionPartial: string;
+  readonly captionsEnabled: boolean;
+  readonly onToggleCaptions: () => void;
 }) {
   // Call duration — self-tracked from mount (≈ answer time; not server-authoritative).
   const startRef = useRef(Date.now());
@@ -232,6 +237,7 @@ export function AudioCallOverlay({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <CaptionToggle enabled={captionsEnabled} onToggle={onToggleCaptions} />
           <button
             type="button"
             onClick={onToggleMute}
