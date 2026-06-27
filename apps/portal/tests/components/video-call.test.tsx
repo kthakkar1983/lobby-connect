@@ -19,15 +19,19 @@ import userEvent from "@testing-library/user-event";
 // which are hoisted before top-level module code.
 const agora = vi.hoisted(() => {
   const userLeftListeners: Array<() => void> = [];
+  const userPublishedListeners: Array<(user: unknown, mediaType: string) => void> = [];
   const client = {
     on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
       if (event === "user-left") userLeftListeners.push(cb as () => void);
+      if (event === "user-published") userPublishedListeners.push(cb as (u: unknown, m: string) => void);
     }),
     join: vi.fn().mockResolvedValue(undefined),
     publish: vi.fn().mockResolvedValue(undefined),
     subscribe: vi.fn().mockResolvedValue(undefined),
     leave: vi.fn().mockResolvedValue(undefined),
     triggerUserLeft: () => userLeftListeners.forEach((cb) => cb()),
+    triggerUserPublished: (user: unknown, mediaType: string) =>
+      userPublishedListeners.forEach((cb) => cb(user, mediaType)),
   };
   const audioTrack = { setMuted: vi.fn(), close: vi.fn() };
   const videoTrack = {
@@ -58,6 +62,14 @@ vi.mock("agora-rtc-sdk-ng", () => ({
 // Stub PlaybookPanel to prevent its own fetch calls from polluting assertions.
 vi.mock("@/components/call/playbook-panel", () => ({
   PlaybookPanel: () => null,
+}));
+
+const captionsSpy = vi.hoisted(() => ({ fn: vi.fn() }));
+vi.mock("@/lib/captions/use-captions", () => ({
+  useCaptions: (track: MediaStreamTrack | null) => {
+    captionsSpy.fn(track);
+    return { finals: track ? ["could I get a late checkout"] : [], partial: "", status: track ? "live" : "idle" };
+  },
 }));
 
 import { VideoCall } from "@/components/video-call/video-call";
@@ -159,5 +171,22 @@ describe("VideoCall — stale-closure regression (H1)", () => {
     expect(onClose).not.toHaveBeenCalled();
     // The agent is told they're audio-only.
     expect(screen.getByText(/camera is unavailable/i)).toBeTruthy();
+  });
+
+  it("captions the guest audio: captures the remote track and renders the band", async () => {
+    render(<VideoCall callId="call-cap" onClose={vi.fn()} propertyName="The Sample Hotel" />);
+    await waitFor(() => expect(agora.client.join).toHaveBeenCalled());
+
+    const guestTrack = { kind: "audio" } as unknown as MediaStreamTrack;
+    const remoteUser = {
+      audioTrack: { play: vi.fn(), getMediaStreamTrack: () => guestTrack },
+    };
+
+    await act(async () => {
+      agora.client.triggerUserPublished(remoteUser, "audio");
+    });
+
+    await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(guestTrack));
+    expect(screen.getAllByText(/could I get a late checkout/i).length).toBeGreaterThan(0);
   });
 });
