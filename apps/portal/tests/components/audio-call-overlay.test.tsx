@@ -25,6 +25,8 @@ const baseProps = {
   onRoomNumberChange: vi.fn(),
   onNotesChange: vi.fn(),
   onSaveNotes: vi.fn().mockResolvedValue(true),
+  captionFinals: [] as string[],
+  captionPartial: "",
 };
 
 afterEach(() => cleanup());
@@ -71,6 +73,11 @@ describe("AudioCallOverlay", () => {
   it("hides local time for an invalid timezone (no crash)", () => {
     render(<AudioCallOverlay {...baseProps} timeZone="Not/AZone" />);
     expect(screen.queryByText(/hotel local time/i)).toBeNull();
+  });
+
+  it("renders the caption band with the guest's words", () => {
+    render(<AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} captionPartial="" />);
+    expect(screen.getByText(/I need extra towels/i)).toBeTruthy();
   });
 
   it("saves notes on Enter and shows a saved indicator", async () => {

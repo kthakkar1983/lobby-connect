@@ -34,6 +34,7 @@ const twilio = vi.hoisted(() => {
     reject: vi.fn(),
     disconnect: vi.fn(),
     mute: vi.fn(),
+    getRemoteStream: () => ({ getAudioTracks: () => [{ kind: "audio" }] }),
     on: (event: string, cb: () => void) => {
       callListeners[event] = cb;
     },
@@ -76,6 +77,14 @@ vi.mock("@/lib/voice/device-resilience", () => ({
 }));
 
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+
+const captionsSpy = vi.hoisted(() => ({ fn: vi.fn() }));
+vi.mock("@/lib/captions/use-captions", () => ({
+  useCaptions: (track: MediaStreamTrack | null) => {
+    captionsSpy.fn(track);
+    return { finals: track ? ["I need extra towels"] : [], partial: "", status: track ? "live" : "idle" };
+  },
+}));
 
 import { Softphone } from "@/components/softphone/softphone";
 
@@ -201,5 +210,17 @@ describe("Softphone — stale-closure regression (H1)", () => {
     // The in-call controls (now inside the overlay) are still present.
     expect(screen.getByPlaceholderText("Room #")).toBeTruthy();
     expect(screen.getByText("Hang up")).toBeTruthy();
+  });
+
+  it("captions the guest after answering a phone call", async () => {
+    const user = userEvent.setup();
+    render(<Softphone role="AGENT" />);
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+    await act(async () => twilio.fireIncoming());
+    await user.click(screen.getByText("Accept"));
+
+    // The remote audio track is captured shortly after accept and captioned.
+    await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(expect.objectContaining({ kind: "audio" })));
+    await waitFor(() => expect(screen.getByText(/I need extra towels/i)).toBeTruthy());
   });
 });

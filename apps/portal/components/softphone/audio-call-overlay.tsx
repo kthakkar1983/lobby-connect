@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
+import { CaptionBand } from "@/components/call/caption-band";
 
 function formatElapsed(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -36,6 +37,8 @@ export function AudioCallOverlay({
   onRoomNumberChange,
   onNotesChange,
   onSaveNotes,
+  captionFinals,
+  captionPartial,
 }: {
   readonly propertyName: string;
   readonly callId: string;
@@ -51,6 +54,8 @@ export function AudioCallOverlay({
   readonly onRoomNumberChange: (value: string) => void;
   readonly onNotesChange: (value: string) => void;
   readonly onSaveNotes: () => Promise<boolean>;
+  readonly captionFinals: string[];
+  readonly captionPartial: string;
 }) {
   // Call duration — self-tracked from mount (≈ answer time; not server-authoritative).
   const startRef = useRef(Date.now());
@@ -177,6 +182,11 @@ export function AudioCallOverlay({
         <PlaybookPanel callId={callId} basis="basis-[63%]" />
       </div>
 
+      <CaptionBand
+        finals={captionFinals}
+        partial={captionPartial}
+        className="mx-3 mb-2"
+      />
       {/* Control bar — Room#/Notes (left, Enter-to-save) · Mute/Hang up (right). */}
       <div className="flex items-center justify-between gap-3 border-t border-border bg-card p-3">
         <div className="flex flex-1 items-center gap-2" style={{ maxWidth: 560 }}>
