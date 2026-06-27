@@ -22,6 +22,12 @@ vi.mock("@speechmatics/real-time-client", () => ({ RealtimeClient: sm.RealtimeCl
 // Web Audio + MediaStream do not exist in the node test env — stub the minimum.
 const audioCtxClose = vi.fn().mockResolvedValue(undefined);
 const audioCtxArgs: Array<{ sampleRate?: number } | undefined> = [];
+// Shared across instances so a test can assert the buffer size the provider requests.
+const scriptProcessorSpy = vi.fn((_bufferSize?: number, _inCh?: number, _outCh?: number) => ({
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  onaudioprocess: null,
+}));
 class FakeAudioContext {
   sampleRate: number;
   constructor(opts?: { sampleRate?: number }) {
@@ -31,7 +37,7 @@ class FakeAudioContext {
   }
   destination = {};
   createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
-  createScriptProcessor = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null }));
+  createScriptProcessor = scriptProcessorSpy;
   createGain = vi.fn(() => ({ gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() }));
   close = audioCtxClose;
 }
@@ -93,6 +99,16 @@ describe("createCaptionStream", () => {
     // The speedup must not sacrifice accent robustness.
     const cfg = sm.client.start.mock.calls[0]?.[1]?.transcription_config;
     expect(cfg?.max_delay).toBeLessThan(4);
+  });
+
+  it("sends audio in small chunks so captions appear sooner", async () => {
+    const stream = createCaptionStream("jwt");
+    await stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
+    // A small ScriptProcessor buffer = a short capture cadence. At 16 kHz the
+    // old 4096-sample buffer spanned ~256ms before any audio was sent; a
+    // 1024-sample buffer is ~64ms, trimming local latency before the engine.
+    const bufferSize = scriptProcessorSpy.mock.calls[0]?.[0];
+    expect(bufferSize).toBeLessThanOrEqual(2048);
   });
 
   it("falls back to a native-rate context if the browser rejects the requested rate", async () => {

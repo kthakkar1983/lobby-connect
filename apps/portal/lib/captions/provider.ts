@@ -35,6 +35,13 @@ const SPEECHMATICS_RT_URL = "wss://us.rt.speechmatics.com/v2";
 // freezes). The browser resamples the source once into this context.
 const TARGET_SAMPLE_RATE = 16000;
 
+// ScriptProcessor buffer (sample-frames). The capture cadence is buffer ÷
+// sample-rate, i.e. how often we hand audio to the engine — pure onset latency
+// before any word is recognized. At 16 kHz, 1024 ≈ 64ms (vs 4096 ≈ 256ms).
+// Smaller also means shorter main-thread slices per callback. 1024 is the
+// smallest size that's glitch-safe across browsers.
+const CAPTURE_BUFFER_SIZE = 1024;
+
 // Seconds between end-of-word and the Final transcript. Lower than the service
 // default = captions settle faster; partials already stream live regardless.
 // 2s stays within the enhanced model's supported range. Tune at the speed/
@@ -94,7 +101,7 @@ export function createCaptionStream(token: string): CaptionStream {
       audioCtx = createAudioContext();
       const sample_rate = audioCtx.sampleRate;
       source = audioCtx.createMediaStreamSource(new MediaStream([track]));
-      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processor = audioCtx.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
       // Zero-gain sink: the processor must reach a destination to run, but the
       // guest audio is already played by Agora/Twilio — gain 0 prevents echo.
       sink = audioCtx.createGain();
