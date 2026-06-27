@@ -27,6 +27,8 @@ const baseProps = {
   onSaveNotes: vi.fn().mockResolvedValue(true),
   captionFinals: [] as string[],
   captionPartial: "",
+  captionsEnabled: true,
+  onToggleCaptions: vi.fn(),
 };
 
 afterEach(() => cleanup());
@@ -78,6 +80,14 @@ describe("AudioCallOverlay", () => {
   it("renders the caption band with the guest's words", () => {
     render(<AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} captionPartial="" />);
     expect(screen.getByText(/I need extra towels/i)).toBeTruthy();
+  });
+
+  it("toggles captions from the control bar", async () => {
+    const user = userEvent.setup();
+    const onToggleCaptions = vi.fn();
+    render(<AudioCallOverlay {...baseProps} onToggleCaptions={onToggleCaptions} />);
+    await user.click(screen.getByRole("button", { name: /captions/i }));
+    expect(onToggleCaptions).toHaveBeenCalledOnce();
   });
 
   it("saves notes on Enter and shows a saved indicator", async () => {

@@ -29,6 +29,28 @@ export interface CaptionStream {
 // US realtime region (verified Task 0; default endpoint is EU).
 const SPEECHMATICS_RT_URL = "wss://us.rt.speechmatics.com/v2";
 
+// Capture at 16 kHz: speech STT gains nothing above it, and the browser-native
+// rate (commonly 48 kHz) tripled the raw-PCM uplink — ~768→256 kbps — which on
+// a weak connection competes with the live Agora/Twilio media (degraded video,
+// freezes). The browser resamples the source once into this context.
+const TARGET_SAMPLE_RATE = 16000;
+
+// Seconds between end-of-word and the Final transcript. Lower than the service
+// default = captions settle faster; partials already stream live regardless.
+// 2s stays within the enhanced model's supported range. Tune at the speed/
+// accuracy gate if needed.
+const MAX_DELAY_SECONDS = 2;
+
+function createAudioContext(): AudioContext {
+  // A few browsers throw on an unsupported explicit rate — fall back to native
+  // (the actual rate is always read back from the context before we send it).
+  try {
+    return new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+  } catch {
+    return new AudioContext();
+  }
+}
+
 export function createCaptionStream(token: string): CaptionStream {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   let client: any = null;
@@ -69,7 +91,7 @@ export function createCaptionStream(token: string): CaptionStream {
 
       // Build the audio graph BEFORE start() so we know the sample rate, but
       // connect it AFTER start() resolves so no audio is sent pre-session.
-      audioCtx = new AudioContext();
+      audioCtx = createAudioContext();
       const sample_rate = audioCtx.sampleRate;
       source = audioCtx.createMediaStreamSource(new MediaStream([track]));
       processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -85,6 +107,7 @@ export function createCaptionStream(token: string): CaptionStream {
             language: "en",
             enable_partials: true,
             operating_point: "enhanced", // accent-robust; the whole point
+            max_delay: MAX_DELAY_SECONDS, // settle finals faster; partials still stream live
           },
         });
       } catch (err) {

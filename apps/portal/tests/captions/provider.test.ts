@@ -21,8 +21,14 @@ vi.mock("@speechmatics/real-time-client", () => ({ RealtimeClient: sm.RealtimeCl
 
 // Web Audio + MediaStream do not exist in the node test env — stub the minimum.
 const audioCtxClose = vi.fn().mockResolvedValue(undefined);
+const audioCtxArgs: Array<{ sampleRate?: number } | undefined> = [];
 class FakeAudioContext {
-  sampleRate = 16000;
+  sampleRate: number;
+  constructor(opts?: { sampleRate?: number }) {
+    audioCtxArgs.push(opts);
+    // Emulate a browser honoring the requested rate; native (no opts) is 48k.
+    this.sampleRate = opts?.sampleRate ?? 48000;
+  }
   destination = {};
   createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
   createScriptProcessor = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null }));
@@ -32,6 +38,7 @@ class FakeAudioContext {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  audioCtxArgs.length = 0;
   vi.stubGlobal("AudioContext", FakeAudioContext);
   vi.stubGlobal("MediaStream", vi.fn());
 });
@@ -63,6 +70,49 @@ describe("createCaptionStream", () => {
     sm.emit({ message: "EndOfTranscript" });
     expect(onPartial).toHaveBeenCalledTimes(1);
     expect(onFinal).toHaveBeenCalledTimes(1);
+  });
+
+  it("captures at 16 kHz (cuts uplink bandwidth) and tightens the final-transcript delay", async () => {
+    const stream = createCaptionStream("jwt");
+    await stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
+
+    // Requests a 16 kHz context so the browser resamples once at the source —
+    // speech STT gains nothing above 16 kHz and the native 48 kHz tripled the
+    // upstream bandwidth competing with the live Agora/Twilio media.
+    expect(audioCtxArgs[0]).toEqual({ sampleRate: 16000 });
+    expect(sm.client.start).toHaveBeenCalledWith(
+      "jwt",
+      expect.objectContaining({
+        audio_format: expect.objectContaining({ sample_rate: 16000 }),
+        transcription_config: expect.objectContaining({
+          operating_point: "enhanced",
+          max_delay: expect.any(Number),
+        }),
+      }),
+    );
+    // The speedup must not sacrifice accent robustness.
+    const cfg = sm.client.start.mock.calls[0]?.[1]?.transcription_config;
+    expect(cfg?.max_delay).toBeLessThan(4);
+  });
+
+  it("falls back to a native-rate context if the browser rejects the requested rate", async () => {
+    // Some browsers throw on an unsupported explicit sampleRate — captions must
+    // still start (sending whatever rate the native context reports).
+    vi.stubGlobal(
+      "AudioContext",
+      class extends FakeAudioContext {
+        constructor(opts?: { sampleRate?: number }) {
+          if (opts?.sampleRate) throw new Error("unsupported sampleRate");
+          super(undefined);
+        }
+      },
+    );
+    const stream = createCaptionStream("jwt");
+    await stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
+    expect(sm.client.start).toHaveBeenCalledWith(
+      "jwt",
+      expect.objectContaining({ audio_format: expect.objectContaining({ sample_rate: 48000 }) }),
+    );
   });
 
   it("stop() stops recognition and closes the audio context", async () => {

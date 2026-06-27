@@ -11,7 +11,9 @@ import type {
 } from "agora-rtc-sdk-ng";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
+import { CaptionToggle } from "@/components/call/caption-toggle";
 import { useCaptions } from "@/lib/captions/use-captions";
+import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
@@ -36,7 +38,10 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
-  const captions = useCaptions(guestAudioTrack);
+  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
+  // Gating the track (not just hiding the band) tears down the STT stream when
+  // captions are off — stops the upstream audio + the per-minute billing.
+  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
 
   // Accept the call, then join Agora.
   // NOTE: the cleanup must tear down the client/tracks, and we must bail on
@@ -280,6 +285,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
           {cameraOff ? "Cam on" : "Cam off"}
         </button>
+        <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} />
         <button
           type="button"
           disabled
