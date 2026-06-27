@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // vi.hoisted: variables created here are available inside vi.mock() factories,
@@ -106,6 +106,7 @@ describe("VideoCall — stale-closure regression (H1)", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    cleanup();
   });
 
   it("saves typed roomNumber+notes when guest hangs up (user-left), not stale empty strings", async () => {
@@ -187,6 +188,6 @@ describe("VideoCall — stale-closure regression (H1)", () => {
     });
 
     await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(guestTrack));
-    expect(screen.getAllByText(/could I get a late checkout/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/could I get a late checkout/i)).toBeTruthy();
   });
 });
