@@ -168,3 +168,29 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Companion (also deferred).** Harden routing to gate on **real Twilio Device registration** state, not just the 20s presence heartbeat — the heartbeat lags Device-down by up to 90s, so a just-closed browser is dialed into a 0s-fail leg (observed 2026-06-19). Was the lower-priority §A follow-up in `docs/v1-punchlist.md`.
 
 **Acceptance.** With the cap raised, a call rings 2+ reachable targets simultaneously and the first to answer wins; the others stop ringing; no 10004 alerts.
+
+---
+
+## Hosting cost / architecture (scale)
+
+### Polling → Supabase Realtime (push) — make hosting cost track calls, not fleet size
+
+**Status:** open · **Raised:** 2026-06-28 (pilot cost signals) · **Pilot workaround:** stay on free / upgrade Vercel Pro for the auto-pause cliff; cost is fine at 1 property.
+
+**Problem.** Per decision #4 the app polls (20s dashboards/presence, **3s** incoming-video, **30s** kiosk heartbeat 24/7). Cost therefore scales with **devices online × time**, decoupled from actual call volume — and each poll double-bills (a Vercel function invocation *and* a Supabase query). Pilot portal already burned **3h 3m / 4h** free Fluid Active CPU in 30 days at one property; at 20 properties / 5–10 agents this balloons.
+
+**Why it matters.** At fleet scale the bill is dominated by idle polling, not work. Realtime (already in the stack, idle-cheap, ~30 connections needed vs ~200 free) makes both the Vercel and Supabase bills track real calls, and makes the product snappier.
+
+**Where it lives.** `app/api/calls/incoming-video` + `components/video-call/incoming-video-banner.tsx` (3s poll); `components/softphone/softphone.tsx` + `app/api/presence` (20s presence); `apps/kiosk/src/App.tsx` + `app/api/kiosk/heartbeat` (30s); `components/auto-refresh.tsx` (20s dashboards). Reverses **locked decision #4**.
+
+**Fix sketch.** Brainstorm → spec → plan. Priority: (1) incoming-call push (biggest), (2) presence, (3) kiosk liveness, (4) dashboards via "subscribe + refetch-on-change". Keep low-frequency request/response on Vercel.
+
+**Full context:** `docs/handoffs/2026-06-28-realtime-and-hosting-cost-handoff.md`.
+
+### Owner-home N+1 query (cheap standalone fix)
+
+**Status:** open · **Raised:** 2026-06-28 · **Pilot workaround:** none needed (tiny at 1 property).
+
+**Problem.** `app/(owner)/owner/page.tsx:193` fires 2 queries per property (count + last-call) via `props.map(async …)` → ~2N queries per load (40 at 20 properties). Agent + admin dashboards are NOT N+1 (Phase 3 optimized).
+
+**Fix sketch.** Mirror the agent/admin pattern — one batched `.in("property_id", propIds)` fetch of today's calls, then count + last-call per property in memory → 2N becomes 2. Small, low-risk, independent of the realtime work.
