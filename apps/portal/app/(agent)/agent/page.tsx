@@ -23,6 +23,7 @@ import {
 } from "@/lib/dashboard/calls";
 import { formatDuration } from "@/lib/owner/format";
 import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
@@ -81,6 +82,7 @@ export default async function AgentDashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <AutoRefresh />
       <h1 className="sr-only">Agent dashboard</h1>
 
       <div className="flex gap-3">

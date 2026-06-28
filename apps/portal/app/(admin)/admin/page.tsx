@@ -34,6 +34,7 @@ import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/for
 import { effectivePresence } from "@/lib/voice/presence";
 import { cn } from "@/lib/utils";
 import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
@@ -205,6 +206,7 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <AutoRefresh />
       <h1 className="sr-only">Admin command center</h1>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

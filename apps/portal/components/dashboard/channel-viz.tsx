@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { HourBucket } from "@/lib/dashboard/calls";
 import { CHANNEL_COLOR } from "@/lib/dashboard/channel-colors";
+import { niceAxisMax, axisTicks } from "@/lib/dashboard/chart";
 
 /**
  * Shared channel visualisations for the dashboards (spec §5): phone/video split
@@ -64,45 +65,61 @@ export function HourlyVolumeChart({
   readonly data: ReadonlyArray<HourBucket>;
   readonly className?: string;
 }) {
-  const max = Math.max(1, ...data.flatMap((b) => [b.audio, b.video, b.missed]));
+  const peak = Math.max(0, ...data.flatMap((b) => [b.audio, b.video, b.missed]));
+  // Scale bars to the rounded "nice" max so the tallest bar lines up with the
+  // top gridline label rather than overshooting an unlabelled height.
+  const max = niceAxisMax(peak);
+  const ticks = axisTicks(peak);
 
   return (
     <div className={className}>
-      <div className="relative h-32">
-        {/* Light horizontal gridlines (0 / ⅓ / ⅔ / baseline). Decorative. */}
-        <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="border-t border-border/60" />
+      <div className="flex gap-1.5">
+        {/* Y axis: the four gridline values (max → 0), aligned to the gridlines. */}
+        <div
+          aria-hidden="true"
+          className="flex h-32 w-5 shrink-0 flex-col justify-between text-right text-[10px] leading-none text-text-muted tabular-nums"
+        >
+          {ticks.map((t, i) => (
+            <span key={i}>{t}</span>
           ))}
         </div>
-        <div
-          className="relative flex h-full items-end gap-[3px]"
-          role="img"
-          aria-label="Calls by hour: answered phone, answered video, and missed"
-        >
-          {data.map((b) => (
-            <div
-              key={b.hour}
-              className="flex h-full flex-1 items-end justify-center gap-[2px]"
-              title={`${hourLabel(b.hour)}: ${b.audio} phone, ${b.video} video, ${b.missed} missed`}
-            >
-              {HOURLY_SERIES.map((s) => {
-                const v = b[s.key];
-                return (
-                  <div
-                    key={s.key}
-                    className={cn("max-w-[5px] flex-1 self-end rounded-t-[2px]", s.color)}
-                    // `max(2px, …)` keeps a non-zero count visible even when tiny vs the
-                    // night's peak; a zero count collapses to 0 (an empty, aligned slot).
-                    style={{ height: v > 0 ? `max(2px, ${(v / max) * 100}%)` : "0px" }}
-                  />
-                );
-              })}
-            </div>
-          ))}
+        <div className="relative h-32 flex-1">
+          {/* Light horizontal gridlines (max / ⅔ / ⅓ / baseline). Decorative. */}
+          <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="border-t border-border/60" />
+            ))}
+          </div>
+          <div
+            className="relative flex h-full items-end gap-[3px]"
+            role="img"
+            aria-label="Calls by hour: answered phone, answered video, and missed"
+          >
+            {data.map((b) => (
+              <div
+                key={b.hour}
+                className="flex h-full flex-1 items-end justify-center gap-[2px]"
+                title={`${hourLabel(b.hour)}: ${b.audio} phone, ${b.video} video, ${b.missed} missed`}
+              >
+                {HOURLY_SERIES.map((s) => {
+                  const v = b[s.key];
+                  return (
+                    <div
+                      key={s.key}
+                      className={cn("max-w-[5px] flex-1 self-end rounded-t-[2px]", s.color)}
+                      // `max(2px, …)` keeps a non-zero count visible even when tiny vs the
+                      // night's peak; a zero count collapses to 0 (an empty, aligned slot).
+                      style={{ height: v > 0 ? `max(2px, ${(v / max) * 100}%)` : "0px" }}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="mt-1.5 flex justify-between text-[10px] text-text-muted">
+      {/* Pad left by the axis gutter (w-5 + gap-1.5) so hour labels sit under the bars. */}
+      <div className="mt-1.5 flex justify-between pl-[26px] text-[10px] text-text-muted">
         <span>12a</span>
         <span>6a</span>
         <span>12p</span>

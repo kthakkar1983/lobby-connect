@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 
-import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
+import {
+  attachTokenAutoRefresh,
+  shouldReconnectDevice,
+} from "@/lib/voice/device-resilience";
 
 /** Minimal stand-in for the Twilio Voice Device's event + token surface. */
 function makeFakeDevice() {
@@ -50,5 +53,23 @@ describe("attachTokenAutoRefresh", () => {
     device.emit("registered");
 
     expect(fetchToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("shouldReconnectDevice", () => {
+  it("reconnects when a visible tab is sitting in the error state", () => {
+    expect(shouldReconnectDevice("error", "visible")).toBe(true);
+  });
+
+  it("does not reconnect while the tab is still hidden", () => {
+    // The overnight freeze case: only retry once the agent actually returns,
+    // so we don't thrash the token endpoint on a backgrounded tab.
+    expect(shouldReconnectDevice("error", "hidden")).toBe(false);
+  });
+
+  it("does not reconnect a line that is already up", () => {
+    expect(shouldReconnectDevice("ready", "visible")).toBe(false);
+    expect(shouldReconnectDevice("in-call", "visible")).toBe(false);
+    expect(shouldReconnectDevice("connecting", "visible")).toBe(false);
   });
 });

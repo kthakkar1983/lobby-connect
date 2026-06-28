@@ -112,18 +112,14 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
         <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
           Video
         </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-            ringing ? "bg-live/15 text-live-foreground" : "bg-muted text-text-muted",
-          )}
-        >
+        {/* Always green when mounted: video has no persistent "line", but the
+            host is polling and ready to receive a call — so the status colour
+            matches the softphone's idle "Line ready" instead of a misleading
+            grey. Only the label changes when a call comes in. */}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-0.5 text-xs font-medium text-live-foreground">
           <span
             aria-hidden="true"
-            className={cn(
-              "inline-block h-1.5 w-1.5 rounded-full",
-              ringing ? "bg-live" : "bg-muted-foreground/50",
-            )}
+            className="inline-block h-1.5 w-1.5 rounded-full bg-live"
           />
           {ringing ? "Incoming" : "Ready"}
         </span>

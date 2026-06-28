@@ -34,3 +34,19 @@ export function attachTokenAutoRefresh(
     })();
   });
 }
+
+/**
+ * Whether to re-register the Device when the tab regains focus/visibility.
+ *
+ * `attachTokenAutoRefresh` keeps a *live* page registered, but it can't help a
+ * tab the browser froze overnight: its timers and `tokenWillExpire` never fire,
+ * the token lapses, and the Device drops to the `error` state. The fix is to
+ * self-heal when the agent comes back — but only then, so we never thrash the
+ * token endpoint from a hidden/backgrounded tab.
+ */
+export function shouldReconnectDevice(
+  phase: string,
+  visibilityState: string,
+): boolean {
+  return visibilityState === "visible" && phase === "error";
+}

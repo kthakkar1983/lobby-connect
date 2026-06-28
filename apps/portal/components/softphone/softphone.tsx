@@ -5,7 +5,7 @@ import { Phone, PhoneOff } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
-import { attachTokenAutoRefresh } from "@/lib/voice/device-resilience";
+import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
@@ -64,6 +64,12 @@ export function Softphone({ role }: SoftphoneProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callRef = useRef<any>(null);
   const callIdRef = useRef<string>("");
+  // Mirror phase + guard reconnects so the focus/visibility self-heal can read
+  // the latest phase and never run two registrations at once.
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const connectingRef = useRef(false);
+  const mountedRef = useRef(true);
   const readyRef = useRef(ready);
   readyRef.current = ready;
   // Ref-mirror roomNumber/notes so the stale SDK event-listener closures
@@ -137,72 +143,102 @@ export function Softphone({ role }: SoftphoneProps) {
     incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call",
   );
 
-  // Register the Twilio Device once.
+  // Connect (or reconnect) the Twilio Device: tear down any prior instance,
+  // mint a token, register, and wire the call handlers. Reused by the initial
+  // mount and the focus/visibility self-heal below.
+  const connect = useCallback(async () => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    try {
+      deviceRef.current?.destroy();
+    } catch {
+      // ignore
+    }
+    deviceRef.current = null;
+    setPhase("connecting");
+    try {
+      const token = await fetchVoiceToken();
+
+      const { Device } = await import("@twilio/voice-sdk");
+      const device = new Device(token, {
+        closeProtection: true,
+        tokenRefreshMs: TOKEN_REFRESH_LEAD_MS,
+      });
+      deviceRef.current = device;
+
+      // The access token is short-lived (1h). Refresh it in place before it
+      // expires so the Device never deregisters mid-shift — otherwise the
+      // line silently drops and only a page reload recovers it.
+      attachTokenAutoRefresh(device, {
+        fetchToken: fetchVoiceToken,
+        onRefreshError: (error) =>
+          console.error("[softphone] token refresh failed:", error),
+      });
+
+      device.on("registered", () => {
+        if (mountedRef.current) setPhase("ready");
+      });
+      device.on("error", () => {
+        if (mountedRef.current) setPhase("error");
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      device.on("incoming", (call: any) => {
+        callRef.current = call;
+        callIdRef.current = call.customParameters?.get("callId") ?? "";
+        if (mountedRef.current) {
+          setIncomingProperty(call.customParameters?.get("propertyName") ?? "");
+          setPhase("incoming");
+        }
+        call.on("disconnect", () => {
+          void endCall();
+        });
+        call.on("cancel", () => {
+          callRef.current = null;
+          if (mountedRef.current) setPhase("ready");
+        });
+      });
+
+      await device.register();
+      await postPresence("AVAILABLE");
+    } catch {
+      if (mountedRef.current) setPhase("error");
+    } finally {
+      connectingRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Register the Twilio Device on mount; destroy it on unmount.
   useEffect(() => {
-    let cancelled = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let device: any;
-
-    (async () => {
-      try {
-        const token = await fetchVoiceToken();
-
-        const { Device } = await import("@twilio/voice-sdk");
-        device = new Device(token, {
-          closeProtection: true,
-          tokenRefreshMs: TOKEN_REFRESH_LEAD_MS,
-        });
-        deviceRef.current = device;
-
-        // The access token is short-lived (1h). Refresh it in place before it
-        // expires so the Device never deregisters mid-shift — otherwise the
-        // line silently drops and only a page reload recovers it.
-        attachTokenAutoRefresh(device, {
-          fetchToken: fetchVoiceToken,
-          onRefreshError: (error) =>
-            console.error("[softphone] token refresh failed:", error),
-        });
-
-        device.on("registered", () => {
-          if (!cancelled) setPhase("ready");
-        });
-        device.on("error", () => {
-          if (!cancelled) setPhase("error");
-        });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        device.on("incoming", (call: any) => {
-          callRef.current = call;
-          callIdRef.current = call.customParameters?.get("callId") ?? "";
-          if (!cancelled) {
-            setIncomingProperty(call.customParameters?.get("propertyName") ?? "");
-            setPhase("incoming");
-          }
-          call.on("disconnect", () => {
-            void endCall();
-          });
-          call.on("cancel", () => {
-            callRef.current = null;
-            if (!cancelled) setPhase("ready");
-          });
-        });
-
-        await device.register();
-        await postPresence("AVAILABLE");
-      } catch {
-        if (!cancelled) setPhase("error");
-      }
-    })();
-
+    mountedRef.current = true;
+    void connect();
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
       try {
-        device?.destroy();
+        deviceRef.current?.destroy();
       } catch {
         // ignore
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [connect]);
+
+  // Self-heal: a tab the browser froze overnight drops to `error` (its token
+  // lapses with no `tokenWillExpire` firing, so attachTokenAutoRefresh can't
+  // help). Re-register when the agent returns to the tab — but only then, so we
+  // never thrash the token endpoint from a hidden/backgrounded tab.
+  useEffect(() => {
+    const maybeReconnect = () => {
+      if (shouldReconnectDevice(phaseRef.current, document.visibilityState)) {
+        void connect();
+      }
+    };
+    window.addEventListener("focus", maybeReconnect);
+    document.addEventListener("visibilitychange", maybeReconnect);
+    return () => {
+      window.removeEventListener("focus", maybeReconnect);
+      document.removeEventListener("visibilitychange", maybeReconnect);
+    };
+  }, [connect]);
 
   // Heartbeat: keep last_seen + status fresh while mounted.
   useEffect(() => {
