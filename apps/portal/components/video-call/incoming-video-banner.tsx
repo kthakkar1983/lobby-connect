@@ -5,6 +5,7 @@ import { Video } from "lucide-react";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
+import { unlockAudioPlayback } from "@/lib/video/audio-unlock";
 import { cn } from "@/lib/utils";
 
 export interface IncomingVideoCall {
@@ -146,7 +147,12 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
           </div>
           <button
             type="button"
-            onClick={() => onAccept(call!)}
+            // Unlock audio output on this gesture so the guest's audio plays
+            // even after the cold join chain (no "tap to hear" prompt needed).
+            onClick={() => {
+              unlockAudioPlayback();
+              onAccept(call!);
+            }}
             className="mt-3 w-full rounded-button bg-live px-3 py-2 font-medium text-primary"
           >
             Accept video call

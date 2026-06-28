@@ -1,9 +1,12 @@
+import * as Sentry from "@sentry/react";
 import type {
   IAgoraRTCClient,
   ICameraVideoTrack,
   IMicrophoneAudioTrack,
   IAgoraRTCRemoteUser,
+  IRemoteAudioTrack,
 } from "agora-rtc-sdk-ng";
+import { recoverAudioOnNextGesture } from "./audio-unlock";
 
 export interface KioskAgoraSession {
   client: IAgoraRTCClient;
@@ -26,6 +29,18 @@ export async function joinChannel(opts: {
   const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
   const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
+  // The agent's remote audio track, kept so a blocked autoplay can be re-played
+  // on the guest's next interaction — no "tap to hear" prompt on the kiosk.
+  let remoteAudio: IRemoteAudioTrack | null = null;
+  AgoraRTC.onAutoplayFailed = () => {
+    Sentry.addBreadcrumb({
+      category: "agora",
+      level: "warning",
+      message: "remote audio autoplay blocked; recovering on next interaction",
+    });
+    recoverAudioOnNextGesture(() => void remoteAudio?.play());
+  };
+
   client.on("user-published", async (user, mediaType) => {
     await client.subscribe(user, mediaType);
     if (mediaType === "video") {
@@ -33,7 +48,10 @@ export async function joinChannel(opts: {
       // Fire "agent present" once, on video — not on each published track.
       opts.onAgentJoined();
     }
-    if (mediaType === "audio") user.audioTrack?.play();
+    if (mediaType === "audio") {
+      remoteAudio = user.audioTrack ?? null;
+      user.audioTrack?.play();
+    }
   });
   client.on("user-left", () => opts.onAgentLeft());
   client.on("connection-state-change", (cur, prev, reason) =>

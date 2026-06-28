@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 import type {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
   ICameraVideoTrack,
   IMicrophoneAudioTrack,
+  IRemoteAudioTrack,
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
+import { recoverAudioOnNextGesture } from "@/lib/video/audio-unlock";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
@@ -30,6 +33,9 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const videoRef = useRef<ICameraVideoTrack | null>(null);
+  // The guest's remote audio track, kept so the silent autoplay-recovery can
+  // re-play it on the agent's next interaction if the browser blocked it.
+  const remoteAudioRef = useRef<IRemoteAudioTrack | null>(null);
   const finalizingRef = useRef(false);
   // Ref-mirror roomNumber/notes so the Agora "user-left" event listener (which
   // captures handleEnd at mount time) always reads the current values.
@@ -76,6 +82,17 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
 
         const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
         if (cancelled) return;
+        // If the browser blocks remote-audio autoplay (common on a cold first
+        // call after idle), recover silently on the agent's next interaction —
+        // no customer-facing prompt. A breadcrumb confirms cause/recovery in prod.
+        AgoraRTC.onAutoplayFailed = () => {
+          Sentry.addBreadcrumb({
+            category: "agora",
+            level: "warning",
+            message: "remote audio autoplay blocked; recovering on next interaction",
+          });
+          recoverAudioOnNextGesture(() => void remoteAudioRef.current?.play());
+        };
         const c = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
         client = c;
         clientRef.current = c;
@@ -84,6 +101,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           if (mediaType === "video" && remoteRef.current)
             (user.videoTrack as IRemoteVideoTrack)?.play(remoteRef.current);
           if (mediaType === "audio") {
+            remoteAudioRef.current = user.audioTrack ?? null;
             user.audioTrack?.play();
             setGuestAudioTrack(user.audioTrack?.getMediaStreamTrack() ?? null);
           }

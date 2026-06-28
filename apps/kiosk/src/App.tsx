@@ -5,6 +5,7 @@ import { RING_WINDOW_MS } from "@lc/shared";
 import { reduce, initialState, shouldFireRingTimeout } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
+import { unlockAudioPlayback } from "./lib/audio-unlock";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
 import { SeamShimmer } from "./components/brand";
@@ -61,6 +62,9 @@ export function App() {
   }, []);
 
   const onStartCall = useCallback(async () => {
+    // Unlock audio output on this tap so the agent's audio plays even after the
+    // cold join chain (keeps the guest screen prompt-free).
+    unlockAudioPlayback();
     callIdRef.current = null; // clear any prior call's id while the new one sets up
     const gen = ++callGenRef.current; // this attempt's token; teardown() bumps it to abort
     const aborted = () => callGenRef.current !== gen;
