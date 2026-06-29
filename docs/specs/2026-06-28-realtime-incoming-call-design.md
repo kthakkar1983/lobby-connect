@@ -1,6 +1,6 @@
 # Realtime incoming-call signaling (video) — design
 
-**Date:** 2026-06-28 · **Status:** design approved, spec under review · **Branch:** TBD (`realtime-incoming-call`)
+**Date:** 2026-06-28 · **Status:** SHIPPED in v1.2 (branch `realtime-incoming-call`, merged to `main`; migration 0018 applied to prod; live prod smoke pending) · **Branch:** `realtime-incoming-call`
 
 Replaces the 3-second `/api/calls/incoming-video` poll with a Supabase Realtime **broadcast-ping + refetch** signal. This is the first surface in the realtime-migration program described in `docs/handoffs/2026-06-28-realtime-and-hosting-cost-handoff.md`. It is the deliberate, scoped reversal of locked **decision #4** (20s polling, no subscriptions) for this one signaling path.
 
