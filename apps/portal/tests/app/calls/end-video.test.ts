@@ -85,6 +85,8 @@ describe("POST /api/calls/[id]/end-video", () => {
     const res = await call("call-1");
     expect(res.status).toBe(200);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+    // Broadcast must fire only inside the IN_PROGRESS guard, not on the no-op path.
+    expect(broadcastCallsChanged).not.toHaveBeenCalled();
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
