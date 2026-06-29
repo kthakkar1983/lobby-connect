@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAnswer, claimCall } from "@/lib/voice/call-state";
@@ -37,8 +37,9 @@ export async function POST(
   // ON_CALL only for the winner — losers must not corrupt presence.
   await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
 
-  // The claim removes this call from every other agent's incoming list.
-  void broadcastCallsChanged(actor.operatorId);
+  // The claim removes this call from every other agent's incoming list. after()
+  // (waitUntil-backed) guarantees the broadcast fires before the function freezes.
+  after(() => broadcastCallsChanged(actor.operatorId));
 
   return NextResponse.json({ channelName: call.agora_channel_name });
 }

@@ -10,6 +10,20 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+// The broadcast must be scheduled via next/server `after()` (guaranteed
+// post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
+// run before the serverless function freezes. The spy runs its callback so the
+// broadcastCallsChanged assertions still hold.
+const after = vi.hoisted(() =>
+  vi.fn((cb: () => unknown) => {
+    void cb();
+  }),
+);
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after };
+});
+
 let callRow: Record<string, unknown> | null = null;
 // Controls what the guarded UPDATE returns — default winner (one row claimed).
 let callUpdateResult: Array<{ id: string }> = [{ id: "call-1" }];
@@ -51,6 +65,7 @@ beforeEach(() => {
   callUpdateSpy.mockClear();
   profileUpdateSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  after.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   callRow = { id: "call-1", state: "RINGING", operator_id: "op-1", agora_channel_name: "call_abc" };
   callUpdateResult = [{ id: "call-1" }];
@@ -103,5 +118,6 @@ describe("POST /api/calls/[id]/answer-video", () => {
     const res = await call("call-1");
     expect(res.status).toBe(200);
     expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
+    expect(after).toHaveBeenCalledTimes(1);
   });
 });

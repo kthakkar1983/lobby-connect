@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
@@ -44,8 +44,9 @@ export async function POST(
       .eq("id", id)
       .eq("state", "IN_PROGRESS");
 
-    // Clear the banner on any other tab still showing this call.
-    void broadcastCallsChanged(actor.operatorId);
+    // Clear the banner on any other tab still showing this call. after()
+    // (waitUntil-backed) guarantees the broadcast fires before the function freezes.
+    after(() => broadcastCallsChanged(actor.operatorId));
   }
 
   return NextResponse.json({ ok: true });

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
@@ -48,7 +48,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     .eq("property_id", verified.propertyId)
     .in("state", ACTIVE_CALL_STATES);
 
-  void broadcastCallsChanged(call.operator_id);
+  // Run AFTER the response via after() (waitUntil-backed) so the platform keeps
+  // the function alive until the broadcast HTTP call completes. A bare `void`
+  // detached fetch is not guaranteed to run before the serverless function
+  // freezes — that dropped the call-ended push and left the agent banner ringing
+  // until the 60s fallback poll. Non-blocking (does not delay the 204).
+  after(() => broadcastCallsChanged(call.operator_id));
 
   return new NextResponse(null, { status: 204 });
 }

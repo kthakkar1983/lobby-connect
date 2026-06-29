@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,7 +77,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Nudge agent tabs to refetch — the ring starts via Realtime push, not the poll.
-  void broadcastCallsChanged(property.operator_id);
+  // after() (waitUntil-backed) guarantees the broadcast fires before the function
+  // freezes; a bare `void` detached fetch is not guaranteed to run. Non-blocking.
+  after(() => broadcastCallsChanged(property.operator_id));
 
   const payload: CallStartResult = { callId: inserted.id, channelName };
   return NextResponse.json(payload);

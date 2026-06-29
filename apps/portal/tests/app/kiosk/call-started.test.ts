@@ -9,6 +9,20 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+// The broadcast must be scheduled via next/server `after()` (guaranteed
+// post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
+// run before the serverless function freezes. The spy runs its callback so the
+// broadcastCallsChanged assertions still hold.
+const after = vi.hoisted(() =>
+  vi.fn((cb: () => unknown) => {
+    void cb();
+  }),
+);
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after };
+});
+
 let propertyRow: { id: string; operator_id: string; active: boolean } | null = null;
 let existingActiveRow: Record<string, unknown> | null = null;
 let insertResult: { data: { id: string } | null; error: { code: string } | null } = {
@@ -64,6 +78,7 @@ function req(token?: string) {
 beforeEach(() => {
   insertSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  after.mockClear();
   propertyRow = { id: "prop-1", operator_id: "op-1", active: true };
   existingActiveRow = null;
   insertResult = { data: { id: "call-1" }, error: null };
@@ -122,5 +137,6 @@ describe("POST /api/kiosk/call-started", () => {
     const res = await POST(req(token));
     expect(res.status).toBe(200);
     expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
+    expect(after).toHaveBeenCalledTimes(1);
   });
 });
