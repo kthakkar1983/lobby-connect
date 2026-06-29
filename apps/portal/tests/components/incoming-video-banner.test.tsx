@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/browser", () => ({
   createBrowserSupabaseClient: () => ({
     realtime: { setAuth: () => setAuth() },
     channel: () => channel,
-    removeChannel: () => removeChannel(),
+    removeChannel: (ch: unknown) => removeChannel(ch),
   }),
 }));
 vi.mock("@/lib/video/ringtone", () => ({
@@ -88,10 +88,32 @@ describe("IncomingVideoBanner Realtime", () => {
     vi.useFakeTimers();
     render(<IncomingVideoBanner operatorId="op-1" onAccept={vi.fn()} />);
     channel.getStatusCb()?.("CHANNEL_ERROR");
-    expect(removeChannel).toHaveBeenCalled();
+    // Removed the dead channel before the second subscribe heals it.
+    expect(removeChannel).toHaveBeenCalledWith(channel);
+    expect(channel.subscribe).toHaveBeenCalledTimes(1);
     await act(async () => {
       vi.advanceTimersByTime(1_000);
     });
     expect(channel.subscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("fires the 60s safety-net poll", async () => {
+    vi.useFakeTimers();
+    render(<IncomingVideoBanner operatorId="op-1" onAccept={vi.fn()} />);
+    // subscribe + the interval are set up synchronously in the effect — no
+    // waitFor (which would hang under fake timers).
+    expect(channel.subscribe).toHaveBeenCalled();
+    fetchMock.mockClear();
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("removes the channel on unmount", async () => {
+    const { unmount } = render(<IncomingVideoBanner operatorId="op-1" onAccept={vi.fn()} />);
+    await waitFor(() => expect(channel.subscribe).toHaveBeenCalled());
+    unmount();
+    expect(removeChannel).toHaveBeenCalled();
   });
 });

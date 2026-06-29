@@ -46,6 +46,7 @@ export function IncomingVideoBanner({
 
     const supabase = createBrowserSupabaseClient();
     // Attach the agent JWT so the private-channel RLS authorizes the subscribe.
+    // Fire-and-forget: setAuth attaches the JWT before subscribe sends its frame. On a cold first subscribe the SUBSCRIBE may race the token and bounce once to CHANNEL_ERROR; the 1s resubscribe below heals it.
     void supabase.realtime.setAuth();
 
     const subscribe = () => {
