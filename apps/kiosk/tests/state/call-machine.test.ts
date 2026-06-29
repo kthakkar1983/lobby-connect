@@ -3,6 +3,7 @@ import {
   initialState,
   reduce,
   shouldFireRingTimeout,
+  shouldEndForMaxDuration,
   type KioskState,
 } from "@/state/call-machine";
 
@@ -86,5 +87,17 @@ describe("shouldFireRingTimeout (no-answer cutoff guard)", () => {
   it("does NOT fire on home or apology", () => {
     expect(shouldFireRingTimeout("home")).toBe(false);
     expect(shouldFireRingTimeout("apology")).toBe(false);
+  });
+});
+
+describe("shouldEndForMaxDuration (connected-call cost cap guard)", () => {
+  it("ends the call only while it is connected", () => {
+    expect(shouldEndForMaxDuration("connected")).toBe(true);
+  });
+
+  it("is inert on every non-connected screen (already ended/home/ringing/apology)", () => {
+    expect(shouldEndForMaxDuration("ringing")).toBe(false);
+    expect(shouldEndForMaxDuration("home")).toBe(false);
+    expect(shouldEndForMaxDuration("apology")).toBe(false);
   });
 });

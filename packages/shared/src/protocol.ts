@@ -19,6 +19,19 @@ export const INCOMING_VIDEO_FALLBACK_POLL_MS = 60_000;
 
 /** A connected (answered) video call alive longer than this is treated as dead (reaper). */
 export const REAP_IN_PROGRESS_AFTER_MS = 30 * 60_000;
+
+/**
+ * Hard client-side cap on a CONNECTED video call's wall-clock duration, enforced
+ * on BOTH the kiosk and the agent. A real front-desk video call lasts a few
+ * minutes; this exists so an ABANDONED call (guest walks away from the kiosk,
+ * agent leaves a tab open) cannot keep an Agora channel — and its per-participant
+ * billing — alive. It MUST stay under the Agora token TTL (3600s, no renewal in
+ * this app) so OUR cap, not a silent token-expiry disconnect, is what ends the
+ * call. Aligned with REAP_IN_PROGRESS_AFTER_MS: the client ends the call at the
+ * same point the daily reaper would have considered it dead — just immediately,
+ * not up to a day later.
+ */
+export const MAX_CALL_DURATION_MS = REAP_IN_PROGRESS_AFTER_MS;
 /** A ringing video call older than this is treated as a dead kiosk (reaper). */
 export const REAP_RINGING_AFTER_MS = 10 * 60_000;
 
@@ -35,4 +48,11 @@ export const CRON_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // at module load; protocol.test.ts pins the same invariant.
 if (REAP_RINGING_AFTER_MS <= RING_WINDOW_MS) {
   throw new Error("protocol: REAP_RINGING_AFTER_MS must exceed RING_WINDOW_MS");
+}
+
+// The call cap must end an abandoned call BEFORE the 3600s Agora token would
+// silently expire it, or the cap is pointless. (Token TTL lives in the agora/token
+// route; pinned numerically here since this module has no app imports.)
+if (MAX_CALL_DURATION_MS >= 3_600_000) {
+  throw new Error("protocol: MAX_CALL_DURATION_MS must stay under the 3600s Agora token TTL");
 }
