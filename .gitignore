@@ -49,3 +49,12 @@ supabase/.temp/
 # Local tooling artifacts (knowledge-graph cache + Studio query exports)
 graphify-out/
 supabase/snippets/
+
+# Local working artifacts at repo root — research docs, exports, DB-GUI session
+# files. NEVER commit: these are large binaries and may embed secrets/PII.
+# (A leaked Google API key in "Lobby Connect Session.session.data" was the reason
+# this block exists — see security note.)
+/*.pdf
+/*.docx
+/*.session
+/*.session.*
