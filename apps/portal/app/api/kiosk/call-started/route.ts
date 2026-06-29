@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
+import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
 import type { CallStartResult } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -74,6 +75,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!inserted) {
     return NextResponse.json({ error: "Could not start call" }, { status: 500 });
   }
+
+  // Nudge agent tabs to refetch — the ring starts via Realtime push, not the poll.
+  void broadcastCallsChanged(property.operator_id);
 
   const payload: CallStartResult = { callId: inserted.id, channelName };
   return NextResponse.json(payload);

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { finalizeCallPayload, ACTIVE_CALL_STATES, resolveFinalState } from "@/lib/voice/call-state";
+import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const admin = createAdminClient();
   const { data: call } = await admin
     .from("calls")
-    .select("id, property_id, state, answered_at")
+    .select("id, property_id, state, answered_at, operator_id")
     .eq("id", body.callId)
     .maybeSingle();
 
@@ -46,6 +47,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     .eq("id", body.callId)
     .eq("property_id", verified.propertyId)
     .in("state", ACTIVE_CALL_STATES);
+
+  void broadcastCallsChanged(call.operator_id);
 
   return new NextResponse(null, { status: 204 });
 }

@@ -9,7 +9,7 @@ export default async function AgentLayout({
   const actor = await requireRole("AGENT");
 
   return (
-    <AppShell role="AGENT" fullName={actor.full_name} email={actor.email}>
+    <AppShell role="AGENT" fullName={actor.full_name} email={actor.email} operatorId={actor.operator_id}>
       {children}
     </AppShell>
   );

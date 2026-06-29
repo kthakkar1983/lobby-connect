@@ -9,7 +9,7 @@ export default async function AdminLayout({
   const profile = await requireRole("ADMIN");
 
   return (
-    <AppShell role="ADMIN" fullName={profile.full_name} email={profile.email}>
+    <AppShell role="ADMIN" fullName={profile.full_name} email={profile.email} operatorId={profile.operator_id}>
       {children}
     </AppShell>
   );

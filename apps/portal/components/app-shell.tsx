@@ -17,11 +17,13 @@ export function AppShell({
   role,
   fullName,
   email,
+  operatorId,
   children,
 }: {
   readonly role: Role;
   readonly fullName: string;
   readonly email: string;
+  readonly operatorId: string;
   readonly children: React.ReactNode;
 }) {
   const firstName =
@@ -43,6 +45,7 @@ export function AppShell({
             role={role}
             fullName={fullName}
             email={email}
+            operatorId={operatorId}
             firstName={firstName}
           >
             {children}

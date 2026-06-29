@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { finalizeCallPayload } from "@/lib/voice/call-state";
+import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -42,6 +43,9 @@ export async function POST(
       .update(finalizeCallPayload("COMPLETED", call.answered_at, endedAt))
       .eq("id", id)
       .eq("state", "IN_PROGRESS");
+
+    // Clear the banner on any other tab still showing this call.
+    void broadcastCallsChanged(actor.operatorId);
   }
 
   return NextResponse.json({ ok: true });

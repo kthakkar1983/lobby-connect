@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { unlockAudioPlayback } from "@/lib/video/audio-unlock";
 import { cn } from "@/lib/utils";
+import { INCOMING_VIDEO_FALLBACK_POLL_MS } from "@lc/shared";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { operatorCallsChannelTopic, CALLS_CHANGED_EVENT } from "@/lib/realtime/calls-channel";
 
 export interface IncomingVideoCall {
   id: string;
@@ -14,16 +18,21 @@ export interface IncomingVideoCall {
   propertyName: string;
 }
 
-// Poll briskly so the ring starts within a few seconds of the guest tapping
-// Call (the agent has no push signal for video — see the kiosk-video design doc).
-const POLL_MS = 3_000;
-
-export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVideoCall) => void }) {
+export function IncomingVideoBanner({
+  operatorId,
+  onAccept,
+}: {
+  operatorId: string;
+  onAccept: (call: IncomingVideoCall) => void;
+}) {
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
   const ringtoneRef = useRef<Ringtone | null>(null);
 
   useEffect(() => {
     let active = true;
+    let channel: RealtimeChannel | null = null;
+    let resubscribeTimer: ReturnType<typeof setTimeout> | undefined;
+
     const tick = async () => {
       try {
         const res = await fetch("/api/calls/incoming-video");
@@ -34,16 +43,46 @@ export function IncomingVideoBanner({ onAccept }: { onAccept: (call: IncomingVid
         /* ignore */
       }
     };
+
+    const supabase = createBrowserSupabaseClient();
+    // Attach the agent JWT so the private-channel RLS authorizes the subscribe.
+    // Fire-and-forget: setAuth attaches the JWT before subscribe sends its frame. On a cold first subscribe the SUBSCRIBE may race the token and bounce once to CHANNEL_ERROR; the 1s resubscribe below heals it.
+    void supabase.realtime.setAuth();
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(operatorCallsChannelTopic(operatorId), { config: { private: true } })
+        .on("broadcast", { event: CALLS_CHANGED_EVENT }, () => void tick())
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            // Catch up on (re)connect — the refetch is authoritative, so any
+            // broadcast missed while disconnected is reconciled here.
+            void tick();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            // Self-heal: drop the dead channel and resubscribe shortly.
+            if (channel) void supabase.removeChannel(channel);
+            channel = null;
+            resubscribeTimer = setTimeout(subscribe, 1_000);
+          }
+        });
+    };
+    subscribe();
+
+    // Initial load + slow safety-net poll + focus refetch. Realtime push is the
+    // primary path; this 60s poll only backstops a silently-dead subscription.
     void tick();
-    const id = setInterval(tick, POLL_MS);
+    const pollId = setInterval(tick, INCOMING_VIDEO_FALLBACK_POLL_MS);
     const onFocus = () => void tick();
     window.addEventListener("focus", onFocus);
+
     return () => {
       active = false;
-      clearInterval(id);
+      clearInterval(pollId);
+      if (resubscribeTimer) clearTimeout(resubscribeTimer);
       window.removeEventListener("focus", onFocus);
+      if (channel) void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [operatorId]);
 
   // Build the ringtone once, on the client only (new Audio needs the browser).
   useEffect(() => {

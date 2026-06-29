@@ -4,6 +4,11 @@ import { signKioskToken } from "@/lib/kiosk/config-token";
 const SECRET = "unit-secret";
 vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
 
+const broadcastCallsChanged = vi.fn();
+vi.mock("@/lib/realtime/broadcast", () => ({
+  broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
+}));
+
 let propertyRow: { id: string; operator_id: string; active: boolean } | null = null;
 let existingActiveRow: Record<string, unknown> | null = null;
 let insertResult: { data: { id: string } | null; error: { code: string } | null } = {
@@ -58,6 +63,7 @@ function req(token?: string) {
 
 beforeEach(() => {
   insertSpy.mockClear();
+  broadcastCallsChanged.mockClear();
   propertyRow = { id: "prop-1", operator_id: "op-1", active: true };
   existingActiveRow = null;
   insertResult = { data: { id: "call-1" }, error: null };
@@ -109,5 +115,12 @@ describe("POST /api/kiosk/call-started", () => {
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error).toContain("already active");
+  });
+
+  it("broadcasts calls-changed with the property's operator_id on success", async () => {
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req(token));
+    expect(res.status).toBe(200);
+    expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
   });
 });

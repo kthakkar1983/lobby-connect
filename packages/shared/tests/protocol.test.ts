@@ -6,11 +6,17 @@ import {
   REAP_RINGING_AFTER_MS,
   REAP_IN_PROGRESS_AFTER_MS,
   CRON_SWEEP_INTERVAL_MS,
+  INCOMING_VIDEO_FALLBACK_POLL_MS,
 } from "../src/protocol";
 
 describe("protocol timing invariants", () => {
   it("reaper ringing cutoff outlasts the ring window", () => {
     expect(REAP_RINGING_AFTER_MS).toBeGreaterThan(RING_WINDOW_MS);
+  });
+
+  it("incoming-video fallback poll is a slow safety net (much slower than the old 3s poll)", () => {
+    expect(INCOMING_VIDEO_FALLBACK_POLL_MS).toBe(60_000);
+    expect(INCOMING_VIDEO_FALLBACK_POLL_MS).toBeGreaterThanOrEqual(30_000);
   });
 
   it("pins the documented values (no accidental drift)", () => {

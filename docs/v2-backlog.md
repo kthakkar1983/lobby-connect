@@ -175,9 +175,11 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 
 ### Polling → Supabase Realtime (push) — make hosting cost track calls, not fleet size
 
-**Status:** open · **Raised:** 2026-06-28 (pilot cost signals) · **Pilot workaround:** stay on free / upgrade Vercel Pro for the auto-pause cliff; cost is fine at 1 property.
+**Status:** **partially shipped** — (1) incoming-call push DONE in **v1.2** (2026-06-28, branch `realtime-incoming-call`): the 3s `/api/calls/incoming-video` poll replaced by a content-free `calls-changed` broadcast on a private per-operator channel + refetch, behind a 60s safety-net poll; migration 0018 (RLS on `realtime.messages`) applied to prod. Spec/plan: `docs/specs/2026-06-28-realtime-incoming-call-design.md` · `docs/plans/2026-06-28-realtime-incoming-call.md`. **Remaining open:** (2) presence, (3) kiosk liveness, (4) dashboards. · **Pilot workaround:** stay on free / upgrade Vercel Pro for the auto-pause cliff; cost is fine at 1 property.
 
-**Problem.** Per decision #4 the app polls (20s dashboards/presence, **3s** incoming-video, **30s** kiosk heartbeat 24/7). Cost therefore scales with **devices online × time**, decoupled from actual call volume — and each poll double-bills (a Vercel function invocation *and* a Supabase query). Pilot portal already burned **3h 3m / 4h** free Fluid Active CPU in 30 days at one property; at 20 properties / 5–10 agents this balloons.
+**v1.2 follow-ups (small):** (a) `IncomingVideoBanner` does not re-call `realtime.setAuth()` on `TOKEN_REFRESHED`/`onAuthStateChange` — for a long-lived agent tab a stale socket JWT could bounce the subscribe; it self-heals via the `CHANNEL_ERROR` resubscribe + the 60s cookie-authed fallback, so worst case is bounded latency, not a missed ring. (b) Harden the Realtime channel by turning OFF Supabase "Allow public access" (Realtime Settings) so the operator topic can't be joined as a non-private channel — non-blocking in v1 (single-tenant, content-free nudge).
+
+**Problem.** Per decision #4 the app polls (20s dashboards/presence, ~~3s incoming-video~~ → now push, **30s** kiosk heartbeat 24/7). Cost therefore scales with **devices online × time**, decoupled from actual call volume — and each poll double-bills (a Vercel function invocation *and* a Supabase query). Pilot portal already burned **3h 3m / 4h** free Fluid Active CPU in 30 days at one property; at 20 properties / 5–10 agents this balloons.
 
 **Why it matters.** At fleet scale the bill is dominated by idle polling, not work. Realtime (already in the stack, idle-cheap, ~30 connections needed vs ~200 free) makes both the Vercel and Supabase bills track real calls, and makes the product snappier.
 

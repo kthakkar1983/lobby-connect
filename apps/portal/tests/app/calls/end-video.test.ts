@@ -5,6 +5,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
+const broadcastCallsChanged = vi.fn();
+vi.mock("@/lib/realtime/broadcast", () => ({
+  broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
+}));
+
 let callRow: Record<string, unknown> | null = null;
 const callUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
@@ -40,6 +45,7 @@ function call(id: string) {
 beforeEach(() => {
   getUser.mockReset();
   callUpdateSpy.mockClear();
+  broadcastCallsChanged.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   callRow = {
     id: "call-1",
@@ -79,11 +85,19 @@ describe("POST /api/calls/[id]/end-video", () => {
     const res = await call("call-1");
     expect(res.status).toBe(200);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+    // Broadcast must fire only inside the IN_PROGRESS guard, not on the no-op path.
+    expect(broadcastCallsChanged).not.toHaveBeenCalled();
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
     profileFetch.mockResolvedValueOnce({ data: { id: "u1", operator_id: "op-1", role: "OWNER" } });
     expect((await call("call-1")).status).toBe(403);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts calls-changed with the actor's operatorId on success", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
   });
 });

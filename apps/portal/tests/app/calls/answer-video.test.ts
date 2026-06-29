@@ -5,6 +5,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
+const broadcastCallsChanged = vi.fn();
+vi.mock("@/lib/realtime/broadcast", () => ({
+  broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
+}));
+
 let callRow: Record<string, unknown> | null = null;
 // Controls what the guarded UPDATE returns — default winner (one row claimed).
 let callUpdateResult: Array<{ id: string }> = [{ id: "call-1" }];
@@ -45,6 +50,7 @@ beforeEach(() => {
   getUser.mockReset();
   callUpdateSpy.mockClear();
   profileUpdateSpy.mockClear();
+  broadcastCallsChanged.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   callRow = { id: "call-1", state: "RINGING", operator_id: "op-1", agora_channel_name: "call_abc" };
   callUpdateResult = [{ id: "call-1" }];
@@ -91,5 +97,11 @@ describe("POST /api/calls/[id]/answer-video", () => {
     expect(callUpdateSpy).toHaveBeenCalled();
     // The loser must NOT stamp itself ON_CALL.
     expect(profileUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts calls-changed with the actor's operatorId on success", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
   });
 });
