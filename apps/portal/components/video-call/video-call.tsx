@@ -12,6 +12,7 @@ import type {
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
 import { recoverAudioOnNextGesture } from "@/lib/video/audio-unlock";
+import { reportGuestAudioDiagnostics } from "@/lib/video/diag-audio";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
@@ -28,6 +29,11 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [guestAudioTrack, setGuestAudioTrack] = useState<MediaStreamTrack | null>(null);
+  // Set when Agora reports the cold first-call autoplay of the guest audio as
+  // blocked — surfaces a deterministic "Tap to hear guest" control rather than
+  // relying on a stray pointer/keydown the listening agent may never make.
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const autoplayFailedRef = useRef(false);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -86,12 +92,19 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         // call after idle), recover silently on the agent's next interaction —
         // no customer-facing prompt. A breadcrumb confirms cause/recovery in prod.
         AgoraRTC.onAutoplayFailed = () => {
+          autoplayFailedRef.current = true;
           Sentry.addBreadcrumb({
             category: "agora",
             level: "warning",
             message: "remote audio autoplay blocked; recovering on next interaction",
           });
-          recoverAudioOnNextGesture(() => void remoteAudioRef.current?.play());
+          // Deterministic recovery: a visible control the agent can tap. Keep the
+          // stray-gesture backstop too — whichever fires first restores audio.
+          if (!cancelled) setAudioBlocked(true);
+          recoverAudioOnNextGesture(() => {
+            void remoteAudioRef.current?.play();
+            if (!cancelled) setAudioBlocked(false);
+          });
         };
         const c = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
         client = c;
@@ -103,6 +116,13 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           if (mediaType === "audio") {
             remoteAudioRef.current = user.audioTrack ?? null;
             user.audioTrack?.play();
+            // TEMPORARY DIAGNOSTIC — report whether the guest audio actually
+            // produces energy at the agent (output/device issue vs never-arrived).
+            reportGuestAudioDiagnostics(
+              user.audioTrack,
+              () => autoplayFailedRef.current,
+              () => cancelled,
+            );
             setGuestAudioTrack(user.audioTrack?.getMediaStreamTrack() ?? null);
           }
         });
@@ -218,6 +238,22 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           On video · {propertyName}
         </span>
       </div>
+
+      {audioBlocked && (
+        <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
+          <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
+          <button
+            type="button"
+            onClick={() => {
+              void remoteAudioRef.current?.play();
+              setAudioBlocked(false);
+            }}
+            className="shrink-0 rounded-button bg-live px-3 py-1.5 font-medium text-primary"
+          >
+            Tap to hear guest
+          </button>
+        </div>
+      )}
 
       {mediaWarning && (
         <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">

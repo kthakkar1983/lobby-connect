@@ -32,6 +32,12 @@ const agora = vi.hoisted(() => {
     triggerUserLeft: () => userLeftListeners.forEach((cb) => cb()),
     triggerUserPublished: (user: unknown, mediaType: string) =>
       userPublishedListeners.forEach((cb) => cb(user, mediaType)),
+    // Listener arrays live in the hoisted closure; clearAllMocks() doesn't touch
+    // them, so without this they accumulate one stale listener per mounted test.
+    resetListeners: () => {
+      userLeftListeners.length = 0;
+      userPublishedListeners.length = 0;
+    },
   };
   const audioTrack = { setMuted: vi.fn(), close: vi.fn() };
   const videoTrack = {
@@ -42,22 +48,29 @@ const agora = vi.hoisted(() => {
   // vi.fn wrappers so a test can make a device fail (e.g. webcam busy).
   const createMicrophoneAudioTrack = vi.fn(async () => audioTrack);
   const createCameraVideoTrack = vi.fn(async () => videoTrack);
+  // The mocked AgoraRTC default. The component assigns AgoraRTC.onAutoplayFailed
+  // here, so a test can invoke it to simulate a blocked cold-call autoplay.
+  const AgoraRTC: {
+    createClient: () => typeof client;
+    createMicrophoneAudioTrack: typeof createMicrophoneAudioTrack;
+    createCameraVideoTrack: typeof createCameraVideoTrack;
+    onAutoplayFailed?: () => void;
+  } = {
+    createClient: () => client,
+    createMicrophoneAudioTrack,
+    createCameraVideoTrack,
+  };
   return {
     client,
     audioTrack,
     videoTrack,
     createMicrophoneAudioTrack,
     createCameraVideoTrack,
+    AgoraRTC,
   };
 });
 
-vi.mock("agora-rtc-sdk-ng", () => ({
-  default: {
-    createClient: () => agora.client,
-    createMicrophoneAudioTrack: agora.createMicrophoneAudioTrack,
-    createCameraVideoTrack: agora.createCameraVideoTrack,
-  },
-}));
+vi.mock("agora-rtc-sdk-ng", () => ({ default: agora.AgoraRTC }));
 
 // Stub PlaybookPanel to prevent its own fetch calls from polluting assertions.
 vi.mock("@/components/call/playbook-panel", () => ({
@@ -79,6 +92,7 @@ describe("VideoCall — stale-closure regression (H1)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    agora.client.resetListeners();
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/answer-video")) {
         return Promise.resolve({
@@ -189,5 +203,40 @@ describe("VideoCall — stale-closure regression (H1)", () => {
 
     await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(guestTrack));
     expect(screen.getByText(/could I get a late checkout/i)).toBeTruthy();
+  });
+
+  // Hardening: when the browser blocks the cold first-call autoplay of the guest
+  // audio, the recovery must NOT depend on a stray pointer/keydown the agent may
+  // never make. Surface a deterministic "Tap to hear guest" control that re-plays
+  // on click. (The first-call no-audio symptom.)
+  it("surfaces a 'Tap to hear guest' control on blocked autoplay and retries play() on click", async () => {
+    const user = userEvent.setup();
+    render(<VideoCall callId="call-autoplay" onClose={vi.fn()} propertyName="The Sample Hotel" />);
+    await waitFor(() => expect(agora.client.join).toHaveBeenCalled());
+
+    const playFn = vi.fn();
+    const remoteUser = {
+      audioTrack: { play: playFn, getMediaStreamTrack: () => ({ kind: "audio" }) },
+    };
+    await act(async () => {
+      agora.client.triggerUserPublished(remoteUser, "audio");
+    });
+    expect(playFn).toHaveBeenCalledTimes(1); // initial play attempt
+
+    // No control while audio is presumed playing.
+    expect(screen.queryByRole("button", { name: /tap to hear guest/i })).toBeNull();
+
+    // Agora reports the cold autoplay as blocked.
+    await act(async () => {
+      agora.AgoraRTC.onAutoplayFailed?.();
+    });
+
+    const btn = screen.getByRole("button", { name: /tap to hear guest/i });
+    await user.click(btn);
+
+    // play() was retried (>=2: the click handler, plus the gesture backstop) and
+    // the control cleared once recovered.
+    expect(playFn.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole("button", { name: /tap to hear guest/i })).toBeNull();
   });
 });
