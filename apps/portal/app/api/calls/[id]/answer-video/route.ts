@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAnswer, claimCall } from "@/lib/voice/call-state";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
+import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -35,6 +36,9 @@ export async function POST(
 
   // ON_CALL only for the winner — losers must not corrupt presence.
   await admin.from("profiles").update({ status: "ON_CALL" }).eq("id", actor.userId);
+
+  // The claim removes this call from every other agent's incoming list.
+  void broadcastCallsChanged(actor.operatorId);
 
   return NextResponse.json({ channelName: call.agora_channel_name });
 }
