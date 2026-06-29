@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-const createBrowserClient = vi.fn(() => ({ realtime: {}, channel: vi.fn() }));
+const createBrowserClient = vi.fn((..._a: unknown[]) => ({ realtime: {}, channel: vi.fn() }));
 vi.mock("@supabase/ssr", () => ({
   createBrowserClient: (...a: unknown[]) => createBrowserClient(...a),
 }));

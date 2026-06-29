@@ -20,7 +20,7 @@ describe("broadcastCallsChanged", () => {
     vi.stubGlobal("fetch", fetchMock);
     await broadcastCallsChanged("op-1");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://proj.supabase.co/realtime/v1/api/broadcast");
     expect(init.method).toBe("POST");
     expect(init.headers.apikey).toBe("service-key");
