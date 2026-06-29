@@ -4,6 +4,11 @@ import { signKioskToken } from "@/lib/kiosk/config-token";
 const SECRET = "unit-secret";
 vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
 
+const broadcastCallsChanged = vi.fn();
+vi.mock("@/lib/realtime/broadcast", () => ({
+  broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
+}));
+
 let callRow: Record<string, unknown> | null = null;
 let lastFilters: Record<string, unknown> = {};
 const updateSpy = vi.fn();
@@ -45,8 +50,9 @@ function req(body: unknown, token?: string) {
 
 beforeEach(() => {
   updateSpy.mockClear();
+  broadcastCallsChanged.mockClear();
   lastFilters = {};
-  callRow = { id: "call-1", property_id: "prop-1", state: "IN_PROGRESS", answered_at: "2026-06-01T00:00:00.000Z" };
+  callRow = { id: "call-1", property_id: "prop-1", state: "IN_PROGRESS", answered_at: "2026-06-01T00:00:00.000Z", operator_id: "op-1" };
 });
 
 describe("POST /api/kiosk/call-ended", () => {
@@ -66,7 +72,7 @@ describe("POST /api/kiosk/call-ended", () => {
   });
 
   it("maps no-answer → NO_ANSWER", async () => {
-    callRow = { id: "call-1", property_id: "prop-1", state: "RINGING", answered_at: null };
+    callRow = { id: "call-1", property_id: "prop-1", state: "RINGING", answered_at: null, operator_id: "op-1" };
     const token = signKioskToken("prop-1", SECRET);
     await POST(req({ callId: "call-1", reason: "no-answer" }, token));
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ state: "NO_ANSWER" }));
@@ -81,6 +87,7 @@ describe("POST /api/kiosk/call-ended", () => {
       property_id: "prop-1",
       state: "IN_PROGRESS",
       answered_at: "2026-06-22T05:38:53.944Z",
+      operator_id: "op-1",
     };
     const token = signKioskToken("prop-1", SECRET);
     await POST(req({ callId: "call-1", reason: "cancelled" }, token));
@@ -100,5 +107,12 @@ describe("POST /api/kiosk/call-ended", () => {
     const token = signKioskToken("prop-1", SECRET);
     await POST(req({ callId: "call-1", reason: "failed" }, token));
     expect(lastFilters.state).toEqual(["RINGING", "IN_PROGRESS"]);
+  });
+
+  it("broadcasts calls-changed with the call's operator_id on success", async () => {
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req({ callId: "call-1", reason: "completed" }, token));
+    expect(res.status).toBe(204);
+    expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
   });
 });
