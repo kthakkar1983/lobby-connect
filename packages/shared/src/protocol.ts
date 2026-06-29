@@ -9,6 +9,14 @@ export const RING_WINDOW_MS = RING_WINDOW_SECONDS * 1000;
 /** A browser heartbeat older than this is stale: swept OFFLINE by cron, OFFLINE at read. */
 export const PRESENCE_STALE_AFTER_MS = 90_000;
 
+/**
+ * Safety-net cadence for the agent's incoming-video banner. Realtime push is the
+ * primary signal (~1s ring); this slow poll only backstops a silently-dead
+ * subscription. 60s is 20x cheaper than the retired 3s poll while push covers
+ * real latency. Tunable: raise, or drop to 0 (pure push), once Realtime is proven.
+ */
+export const INCOMING_VIDEO_FALLBACK_POLL_MS = 60_000;
+
 /** A connected (answered) video call alive longer than this is treated as dead (reaper). */
 export const REAP_IN_PROGRESS_AFTER_MS = 30 * 60_000;
 /** A ringing video call older than this is treated as a dead kiosk (reaper). */
