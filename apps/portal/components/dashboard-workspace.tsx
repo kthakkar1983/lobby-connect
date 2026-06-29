@@ -27,12 +27,14 @@ export function DashboardWorkspace({
   role,
   fullName,
   email,
+  operatorId,
   firstName,
   children,
 }: {
   readonly role: Role;
   readonly fullName: string;
   readonly email: string;
+  readonly operatorId: string;
   readonly firstName: string;
   readonly children: React.ReactNode;
 }) {
@@ -54,7 +56,7 @@ export function DashboardWorkspace({
               softphone, instead of floating over the screen. The active VideoCall
               is fixed full-screen (it escapes this container and blocks nav, so
               the aside never hides mid-call). */}
-          <VideoCallHost />
+          <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>
 

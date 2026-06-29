@@ -10,12 +10,12 @@ const VideoCall = dynamic(() => import("./video-call").then((m) => m.VideoCall),
   ssr: false,
 });
 
-export function VideoCallHost() {
+export function VideoCallHost({ operatorId }: { operatorId: string }) {
   const [active, setActive] = useState<IncomingVideoCall | null>(null);
 
   return (
     <>
-      {!active && <IncomingVideoBanner onAccept={setActive} />}
+      {!active && <IncomingVideoBanner operatorId={operatorId} onAccept={setActive} />}
       {active && <VideoCall callId={active.id} onClose={() => setActive(null)} propertyName={active.propertyName} />}
     </>
   );
