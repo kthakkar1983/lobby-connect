@@ -30,7 +30,9 @@ export async function broadcastCallsChanged(operatorId: string): Promise<void> {
       }),
     });
     if (!res.ok) {
-      Sentry.captureMessage(`broadcastCallsChanged non-2xx: ${res.status}`);
+      Sentry.captureMessage(`broadcastCallsChanged non-2xx: ${res.status}`, {
+        extra: { operatorId, status: res.status },
+      });
     }
   } catch (err) {
     Sentry.captureException(err);
