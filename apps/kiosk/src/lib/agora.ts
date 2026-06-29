@@ -59,9 +59,28 @@ export async function joinChannel(opts: {
   );
 
   await client.join(opts.appId, opts.channel, opts.token, opts.uid);
+  // Publish the mic the instant it's ready, BEFORE acquiring the camera. The
+  // first-call `createCameraVideoTrack()` pays a cold device warm-up (and a
+  // permission prompt on a fresh device) that can run for seconds; bundling
+  // audio+video into one publish gated the guest's voice behind that delay, so
+  // the agent heard nothing until the camera came up. Mic-first decouples them.
+  const tJoined = performance.now();
   const localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+  await client.publish(localAudio);
+  const tAudioPublished = performance.now();
   const localVideo = await AgoraRTC.createCameraVideoTrack();
-  await client.publish([localAudio, localVideo]);
+  await client.publish(localVideo);
+  // TEMPORARY DIAGNOSTIC — quantify how much the camera warm-up delayed audio.
+  // (Remove with the agent-side probe once the no-audio cause is pinned.) The
+  // camWarmup bucket is in the message so it reads straight from the issue list.
+  if (!import.meta.env.DEV) {
+    const micToPublishMs = Math.round(tAudioPublished - tJoined);
+    const camToPublishMs = Math.round(performance.now() - tAudioPublished);
+    Sentry.captureMessage(
+      `DIAG kiosk-publish: camWarmup=${camToPublishMs > 1500 ? "SLOW" : "fast"}`,
+      { level: "warning", extra: { micToPublishMs, camToPublishMs } },
+    );
+  }
 
   return {
     client,
