@@ -29,6 +29,18 @@ interface VolumeSource {
 const SAMPLE_INTERVAL_MS = 500;
 const SAMPLE_COUNT = 12; // ~6s window
 
+// POST the reading to a server route that logs it to SERVER Sentry + Vercel logs.
+// This is the transport we can actually read off the agent's machine: it needs no
+// DevTools and no client Sentry DSN, and the POST arriving at all proves the agent
+// is on the fresh build (the old bundle never calls this). Best-effort.
+function postDiag(payload: Record<string, unknown>): void {
+  void fetch("/api/diag/audio", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 export function reportGuestAudioDiagnostics(
   track: VolumeSource | null | undefined,
   getAutoplayFailed: () => boolean,
@@ -40,6 +52,7 @@ export function reportGuestAudioDiagnostics(
   // subscribed to the guest audio. If this never prints on an answered call,
   // the browser is on a stale bundle or the guest audio never arrived.
   console.log("[LC DIAG] guest-audio probe started");
+  postDiag({ phase: "started" });
 
   const samples: number[] = [];
   const id = setInterval(() => {
@@ -62,6 +75,7 @@ export function reportGuestAudioDiagnostics(
         `[LC DIAG] guest-audio RESULT: energy=${energy} autoplayBlocked=${autoplayBlocked} maxVolume=${maxVolume}`,
         samples,
       );
+      postDiag({ phase: "result", energy, autoplayBlocked, maxVolume, samples });
       Sentry.captureMessage(
         `DIAG guest-audio: energy=${energy} autoplayBlocked=${autoplayBlocked}`,
         { level: "warning", extra: { maxVolume, samples } },
