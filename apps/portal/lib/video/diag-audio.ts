@@ -14,6 +14,11 @@ import * as Sentry from "@sentry/nextjs";
 // `autoplayFailed` tells us whether Agora reported the cold `<audio>.play()` as
 // blocked (it plays remote audio through an HTMLAudioElement by default).
 //
+// Reported BOTH to Sentry AND console.log("[LC DIAG] …") — the console line is a
+// fallback in case the client Sentry DSN isn't wired (open DevTools on the agent
+// to read it). The "probe started" line also confirms the fresh build is loaded
+// and the agent actually subscribed to the guest audio.
+//
 // Production-only (mirrors the Sentry init gate) so it never runs in tests or
 // `next dev`, and never schedules a timer there.
 
@@ -31,6 +36,11 @@ export function reportGuestAudioDiagnostics(
 ): void {
   if (process.env.NODE_ENV !== "production") return;
 
+  // Immediate marker: confirms this (fresh) build ran the probe + the agent
+  // subscribed to the guest audio. If this never prints on an answered call,
+  // the browser is on a stale bundle or the guest audio never arrived.
+  console.log("[LC DIAG] guest-audio probe started");
+
   const samples: number[] = [];
   const id = setInterval(() => {
     if (isCancelled()) {
@@ -47,8 +57,13 @@ export function reportGuestAudioDiagnostics(
       //   energy=POSITIVE => guest audio decodes at the agent => OUTPUT/device.
       //   energy=ZERO     => guest audio never reached the agent => publish path.
       const energy = maxVolume > 0 ? "POSITIVE" : "ZERO";
+      const autoplayBlocked = getAutoplayFailed();
+      console.log(
+        `[LC DIAG] guest-audio RESULT: energy=${energy} autoplayBlocked=${autoplayBlocked} maxVolume=${maxVolume}`,
+        samples,
+      );
       Sentry.captureMessage(
-        `DIAG guest-audio: energy=${energy} autoplayBlocked=${getAutoplayFailed()}`,
+        `DIAG guest-audio: energy=${energy} autoplayBlocked=${autoplayBlocked}`,
         { level: "warning", extra: { maxVolume, samples } },
       );
     }

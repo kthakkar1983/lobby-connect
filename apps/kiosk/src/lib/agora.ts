@@ -76,6 +76,11 @@ export async function joinChannel(opts: {
   if (!import.meta.env.DEV) {
     const micToPublishMs = Math.round(tAudioPublished - tJoined);
     const camToPublishMs = Math.round(performance.now() - tAudioPublished);
+    // console.log so it's readable in the kiosk's DevTools even though the kiosk's
+    // Sentry DSN may not be wired in prod (the agent-side probe is the decisive one).
+    console.log(
+      `[LC DIAG] kiosk-publish: micToPublishMs=${micToPublishMs} camToPublishMs=${camToPublishMs}`,
+    );
     Sentry.captureMessage(
       `DIAG kiosk-publish: camWarmup=${camToPublishMs > 1500 ? "SLOW" : "fast"}`,
       { level: "warning", extra: { micToPublishMs, camToPublishMs } },
