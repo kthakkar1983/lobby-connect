@@ -34,6 +34,14 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   // relying on a stray pointer/keydown the listening agent may never make.
   const [audioBlocked, setAudioBlocked] = useState(false);
   const autoplayFailedRef = useRef(false);
+  // TEMP on-screen diagnostic (enable with ?diag=1 on the portal URL). Shows the
+  // live energy of the GUEST's received audio so we can tell — with no DevTools
+  // and no Sentry — whether the guest audio is reaching the agent at all. Its mere
+  // presence also confirms the fresh build is loaded (busts the cache doubt).
+  const [diagOn] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("diag"),
+  );
+  const [diagEnergy, setDiagEnergy] = useState(-1);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -174,6 +182,16 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
 
+  // TEMP: poll the guest audio energy for the on-screen ?diag meter.
+  useEffect(() => {
+    if (!diagOn) return;
+    const id = setInterval(() => {
+      const lvl = remoteAudioRef.current?.getVolumeLevel?.();
+      setDiagEnergy(typeof lvl === "number" ? lvl : -1);
+    }, 300);
+    return () => clearInterval(id);
+  }, [diagOn]);
+
   async function saveNotes(): Promise<boolean> {
     if (!roomNumberRef.current && !notesRef.current) return true; // nothing to save
     setSaving(true);
@@ -238,6 +256,15 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           On video · {propertyName}
         </span>
       </div>
+
+      {diagOn && (
+        <div className="border-b border-attention/60 bg-attention/15 px-4 py-2 text-center font-mono text-sm font-semibold text-attention-text">
+          DIAG · guest audio level:{" "}
+          {diagEnergy < 0 ? "— (no guest track yet)" : diagEnergy.toFixed(3)}
+          {diagEnergy >= 0 ? (diagEnergy > 0 ? "  ✓ ARRIVING" : "  ✗ SILENT") : ""}
+          {audioBlocked ? "  · ⚠ AUTOPLAY BLOCKED" : ""}
+        </div>
+      )}
 
       {audioBlocked && (
         <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
