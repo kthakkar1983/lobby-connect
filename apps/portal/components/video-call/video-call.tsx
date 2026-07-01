@@ -299,9 +299,11 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         {/* 40% guest video (left) — deep-navy video stage */}
         <div className="relative basis-2/5 bg-[var(--color-call)]">
           <div ref={remoteRef} className="absolute inset-0" />
+          {/* Self-view sits top-right (matches the kiosk) so the bottom-anchored
+              caption band below never covers it. */}
           <div
             ref={localRef}
-            className="absolute bottom-4 right-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
+            className="absolute right-4 top-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
           />
           <CaptionBand
             finals={captions.finals}
