@@ -17,6 +17,44 @@ person — a remote agent — answers by phone or video. Phone routing (Twilio) 
 a portal where agents take calls, admins manage properties/users, and owners watch their hotels.
 v1 = a single-hotel pilot. Single-tenant now, multi-tenant-ready.
 
+## Operating model — how it actually works
+
+Lobby Connect sells **outsourced night-shift front-desk agents**, not just a kiosk. The guest-facing
+kiosk/phone is one half; the other half is that each agent **remotes into the hotel's own PC
+(RustDesk) and does the real front-desk work** — checks guests in, creates/modifies reservations,
+runs the night audit.
+
+**Why remote-desktop (load-bearing, not a crutch):** all sensitive work — credit cards, guest PII,
+the PMS — stays **on the hotel's machine**. Lobby Connect never handles cardholder data, so it stays
+**out of PCI-DSS scope** and clear of payment-processing law. Do **not** design toward pulling
+PMS/payments into Lobby Connect — that would break the firewall the whole model is built on.
+
+**Pod model — dedicated virtual employees:** Lobby Connect staffs hotels with *virtual employees*,
+not an anonymous call center. One agent **owns** a **pod of ~5 properties** and stays with them — the
+**same couple of faces** week to week, so owners and guests get a familiar, dedicated front desk. This
+maps onto the persistent per-property primary-agent assignment (one agent is primary on several
+properties). Ringing/routing is per-property; the agent's attention is split across the pod.
+
+**Overflow is human-coordinated, not automated:** a small, consistent bench of **admins** floats as
+backup — they flip a `covering` toggle on/off **by hand**, reactively, when a pod is busy or an agent
+steps away (break, restroom, last-minute emergency). No fixed admin↔pod assignment, and **no
+auto-widening of the answer pool** — internal SOPs plus live agent/admin communication handle the
+away/emergency case. At launch, Twilio concurrency is raised so the already-built parallel dial
+(primary agent + covering admins) can actually place multiple legs. If every eligible human is busy,
+the extra call gets the apology (no queue / hold / voicemail in v1) — an accepted rare tail, since the
+cases that matter are pre-coordinated by SOP.
+
+**Runtime reality:** the agent's foreground app is the **remote session into the hotel PC**; the
+Lobby Connect portal sits in the **background**. Two consequences: (1) call alerting must be
+**OS-level / persistent** — an in-tab ring is invisible to an agent driving a full-screen remote
+session; (2) the emerging direction (a pilot finding) is to **integrate the remote session into the
+agent dashboard** rather than keep it a separate program, since agents juggling ~5 properties need it
+streamlined. Integration approach is TBD.
+
+**Remote-desktop tooling:** RustDesk today (the one trained agent is comfortable with it). Pilot uses
+the public/free relay; the target is a **self-hosted relay on a VPS** (no public servers — for speed
+and security). Selection criteria: free / open-source + self-hostable on a VPS. Not finally locked.
+
 ## Users & surfaces
 
 - **Agent** — takes inbound calls/video on a desktop dashboard + softphone. Glanceable line status,

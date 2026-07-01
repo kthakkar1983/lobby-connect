@@ -1619,3 +1619,17 @@ Kumar's s1 smoke surfaced 3 issues; investigation found a 4th (a data-correctnes
 **Gates:** full suite (+ new specs) · typecheck · lint · check:routes · portal build · CI — all green. Zero migrations / RLS / new routes / service-role. Cross-session memory [[voice-vs-video-incoming]] updated.
 
 **v1 status (Kumar, 2026-06-22): COMPLETE.** §A (call reliability) smoke passed — audio connects reliably with the presence-gated single-agent routing. The **Twilio concurrent-call cap (=1) + multi-agent fan-out are deferred to v2** (`docs/v2-backlog.md` → Agents/routing). v1 (pilot, one hotel end-to-end) is done; remaining `docs/v1-punchlist.md` items are non-blocking niceties or v2 pointers.
+
+---
+
+## 2026-07-01 — STACK-CONSOLIDATION rethink + business-model correction (brainstorm; nothing built)
+
+*(Sessions between v1.0.1 and here — v1.1 captions, v1.2 realtime, first-call-audio debug, background-alerting design — are captured in their own handoffs + auto-memory, not re-logged here.)*
+
+A pure strategy session — **no code changed; docs/memory updated.** Two outcomes:
+
+1. **Business model was undocumented and is now committed.** Lobby Connect provides **virtual night-shift front-desk employees** who **remote into the hotel PC (RustDesk)** to do check-ins / reservations / night audit — remote-desktop is a **deliberate PCI firewall** (card/PII/PMS stays on the hotel PC → LC out of PCI scope). **Pod model:** 1 agent owns ~5 properties, same faces (employees, not a call center). **Overflow:** manual admin `covering` toggle, SOP-coordinated, **no auto-widening**; raise Twilio concurrency at launch so the built-in parallel dial (agent + covering admins) places multiple legs. Written into `CLAUDE.md`, `docs/PRODUCT.md` ("Operating model"), memory `business-model-remote-desktop`.
+
+2. **Major stack-consolidation direction agreed (high-level, NOT designed/locked):** move ~9-10 rented vendors → ~3-4 on **owned servers**. **Keep Twilio.** **Drop Agora** (opaque billing — a 7:39 call showed 71 min). Self-host **video** (LiveKit/Jitsi), the **app** (off Vercel via Coolify/Dokku — re-host, not rewrite), and the **RustDesk relay**; **database = open "keep managed?" call** (only irreplaceable asset). Captions/Sentry/analytics = minor/low-priority. Kumar has an unshared idea for **folding RustDesk into the agent dashboard** — which ≈ most of the background-alerting fix (LC becomes foreground → Web Push demotes to backstop), so prior threads (**Web Push alerting, realtime phases 2-4, Vercel Pro**) are **on hold / reframed.**
+
+**START HERE next chat: `docs/handoffs/2026-07-01-stack-consolidation-strategy-handoff.md`.** First action: **pull Kumar's RustDesk-into-dashboard idea out**, then decide the DB question, then design the target architecture. **`CLAUDE.md` + `docs/PRODUCT.md` edits are UNCOMMITTED** (load from disk regardless; commit if desired).

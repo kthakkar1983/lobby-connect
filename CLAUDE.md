@@ -4,7 +4,9 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 
 ## What this is
 
-**Lobby Connect** — after-hours outsourced front-desk service for hotels. Phone routing + tablet video. Solo build (Kumar + Claude). v1 = pilot one hotel end-to-end.
+**Lobby Connect** — after-hours outsourced **virtual front-desk agents** for hotels that can't staff night shifts. Phone routing + tablet video is only the *guest-facing half*; the other half is that agents **remote into the hotel's own PC (RustDesk) to do the real front-desk work** — check-ins, creating/modifying reservations, night audit. Remote-desktop is a **deliberate PCI firewall**: all card/PII/PMS work stays on the hotel PC, so Lobby Connect **never touches cardholder data and stays out of PCI-DSS scope**. Do NOT design toward pulling payments/PMS into Lobby Connect — that breaks the firewall the model is built on. One agent **owns** a **dedicated pod of ~5 properties** — same faces week to week (virtual *employees*, not an anonymous call center) — with a small admin bench as **manual, SOP-coordinated** overflow (admins flip a `covering` toggle by hand; **no auto-widening**). At launch, Twilio concurrency is raised so the already-built parallel dial (primary agent + covering admins) can place multiple legs; if all eligible humans are busy, the extra call gets the apology (no queue/hold in v1). The agent's *foreground* app is the remote session; the portal sits in the *background* → **OS-level call alerting is mandatory** (an in-tab ring is invisible). Solo build (Kumar + Claude). v1 = pilot one hotel end-to-end. See `docs/PRODUCT.md` "Operating model" for the full framing.
+
+**Current focus (2026-07-01):** a **major stack-consolidation / self-hosting rethink** is in progress (consolidate ~9-10 rented vendors → ~3-4 on owned servers; keep Twilio, drop Agora, self-host video + app + RustDesk relay; DB is the open "keep managed?" call). Agreed high-level, **not designed/locked.** **START HERE: `docs/handoffs/2026-07-01-stack-consolidation-strategy-handoff.md`** — and pull Kumar's RustDesk-into-dashboard idea out FIRST. Several prior threads (Web Push alerting, realtime phases 2-4, Vercel Pro) are **on hold / reframed** by this. The Stack list below is the *current* (pre-consolidation) setup.
 
 ## Stack
 
@@ -13,6 +15,7 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 - **Database/auth**: Supabase (Postgres + Auth + Storage)
 - **Voice**: Twilio
 - **Video**: Agora
+- **Remote desktop** (agent → hotel PC): RustDesk. Pilot uses the public/free relay; target = **self-hosted relay on a VPS** (no public servers — speed + security). Criteria = free/OSS + self-hostable. Treated as a separate program today, but the pilot showed it **needs to be integrated into the agent dashboard** (agents juggle ~5 properties) — integration approach TBD (Kumar has an idea). A first-class stack pillar, not incidental.
 - **Errors**: Sentry
 - **Icons**: lucide-react
 - **UI library**: shadcn (light mode only)
