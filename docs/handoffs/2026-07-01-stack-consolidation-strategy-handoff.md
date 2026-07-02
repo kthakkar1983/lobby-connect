@@ -1,3 +1,5 @@
+> **SUPERSEDED (later on 2026-07-01):** the direction below was designed + locked the same day. START HERE instead: `docs/handoffs/2026-07-01-stack-consolidation-design-complete-handoff.md` (+ the spec/migration plan it points to). This file stays as the strategy-session record.
+
 # Handoff — Stack consolidation strategy (self-host most of it, keep Twilio) + business-model correction
 
 **Date:** 2026-07-01 · **Branch:** `main` · **Status:** mid-brainstorm on a **major stack-consolidation / self-hosting direction.** Agreed at a high level; **NOT designed, NOT locked.** Kumar has a specific idea — especially **how to fold RustDesk into the agent dashboard** — that he has **not yet described.** The fresh chat must **pull that idea out FIRST**, before any design work.
