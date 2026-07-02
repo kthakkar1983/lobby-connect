@@ -24,9 +24,9 @@ Kumar's RustDesk-into-dashboard idea was pulled out (a Connect button in the cal
 
 ## Next actions (in order)
 
-1. **Phase 0:** merge `fix/max-call-duration-cap` (caps Agora exposure during the transition), tag `pre-consolidation-baseline`.
-2. **Phase 1:** buy domain, provision the DO box, Coolify, staging portal/kiosk on it, ops runbook.
-3. Then Phases 2–5 per the migration plan (relay → workspace feature → LiveKit → cutover).
+1. ~~**Phase 0:** merge `fix/max-call-duration-cap`, tag `pre-consolidation-baseline`.~~ **DONE same session:** tag `pre-consolidation-baseline` @ `47b6a49`; merge `d9f04da` — 30-minute hard cap on connected video calls, enforced kiosk + agent side, module-guard kept under the 3600s Agora token TTL. Full suite (93 files portal + kiosk + shared) + typecheck + lint green post-merge.
+2. **Phase 1 (START HERE next chat):** buy domain, provision the DO box, Coolify, staging portal/kiosk on it, ops runbook.
+3. Then Phases 2–5 per the migration plan (relay → workspace feature [Gate 3.0 first] → LiveKit → cutover).
 
 ## Carry-forward hygiene (unchanged)
 

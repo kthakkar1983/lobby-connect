@@ -18,6 +18,8 @@
 
 **Rollback:** n/a. **Done when:** cap merged + baseline tagged.
 
+**STATUS: DONE 2026-07-01** — tag `pre-consolidation-baseline` @ `47b6a49`; merge `d9f04da` (30-min connected-video-call cap on both clients, guarded under the Agora token TTL; full suite + typecheck + lint green). The two tracked-not-done items (temp diagnostics removal, secret-scanning alert) carry forward as noted above; staging health gets re-confirmed as part of Phase 1 preflight.
+
 ## Phase 1 — The box, the domain, staging hosting
 
 - Buy the domain. Provision the DO 4c/8GB droplet (region chosen by measured RTT to OKC); harden (SSH keys only, firewall, fail2ban, unattended upgrades) — write `docs/setup/` ops runbook as we go (the India-maintainer artifact).
