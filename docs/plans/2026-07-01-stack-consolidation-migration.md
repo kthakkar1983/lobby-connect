@@ -28,6 +28,8 @@
 
 **Rollback:** destroy droplet; nothing depends on it. **Done when:** staging runs fully on the owned box for a week without babysitting.
 
+**Kickoff 2026-07-02 (brainstorm dialogue done; decisions locked):** region **ATL1** (measured 30 ms from OKC vs 54–58 ms SFO/NYC/TOR; verify 4c/8GB availability at provision, fallback NYC3) · registrar/DNS = **Cloudflare at-cost** (infra hosts grey-cloud/DNS-only) · **one domain**, apex reserved for the ~1-month-out landing page (name = Kumar + partner, pending) · DO auto-backups deferred to Phase 5 (phase-boundary snapshots instead) · Supabase Pro deferred to Phase 5 · **new Phase-1 deliverable: nightly prod `pg_dump` from the box via a read-only DB role** (free tier has zero backups — prod pilot data otherwise unprotected) · migration-period net-new ≈ $49/mo. Preflight: staging Supabase restored ACTIVE_HEALTHY; `staging` branch 66 behind `main` (re-sync at build); no SSH keys/`doctl` on the Mac yet. Full detail + next-session runsheet: `docs/handoffs/2026-07-02-phase1-kickoff-handoff.md`.
+
 ## Phase 2 — Self-hosted RustDesk relay (first prod win)
 
 - Deploy hbbs/hbbr containers; `relay.<domain>`; pin our server key; keep web-client ports 21118/21119 closed.

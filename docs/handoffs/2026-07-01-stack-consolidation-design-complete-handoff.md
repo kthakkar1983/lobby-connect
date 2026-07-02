@@ -1,4 +1,6 @@
-# Handoff — Stack consolidation DESIGNED + LOCKED (start here)
+# Handoff — Stack consolidation DESIGNED + LOCKED
+
+> **SUPERSEDED 2026-07-02** by `2026-07-02-phase1-kickoff-handoff.md` (Phase 1 kickoff — region/registrar/deferral decisions; awaiting domain + DO creds). Start there.
 
 **Date:** 2026-07-01 (second session that day) · **Branch:** `main` · **Supersedes:** `2026-07-01-stack-consolidation-strategy-handoff.md`
 
