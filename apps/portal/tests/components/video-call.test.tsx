@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MAX_CALL_DURATION_MS } from "@lc/shared";
 
 // vi.hoisted: variables created here are available inside vi.mock() factories,
 // which are hoisted before top-level module code.
@@ -238,5 +239,36 @@ describe("VideoCall — stale-closure regression (H1)", () => {
     // the control cleared once recovered.
     expect(playFn.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByRole("button", { name: /tap to hear guest/i })).toBeNull();
+  });
+
+  // Cost backstop: an abandoned connected call (agent leaves the tab open) must
+  // auto-end at the max-duration cap so the Agora channel + its billing stop —
+  // rather than lingering to the 1h token expiry / daily reaper.
+  it("auto-ends the call at the max-duration cap (finalizes + leaves Agora)", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const onClose = vi.fn();
+    render(<VideoCall callId="call-cap" onClose={onClose} propertyName="The Sample Hotel" />);
+    await waitFor(() => expect(agora.client.join).toHaveBeenCalled());
+
+    // The cap timer is armed with MAX_CALL_DURATION_MS once the call is joined.
+    await waitFor(() =>
+      expect(setTimeoutSpy.mock.calls.some((c) => c[1] === MAX_CALL_DURATION_MS)).toBe(true),
+    );
+    const capCall = setTimeoutSpy.mock.calls.find((c) => c[1] === MAX_CALL_DURATION_MS);
+    const fireCap = capCall![0] as () => void;
+
+    // Fire the cap: the call finalizes (end-video) and the client leaves Agora.
+    await act(async () => {
+      fireCap();
+      await Promise.resolve();
+    });
+
+    const endVideoCalls = fetchMock.mock.calls.filter((a) =>
+      (a[0] as string).includes("/end-video"),
+    );
+    expect(endVideoCalls.length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => expect(agora.client.leave).toHaveBeenCalled());
+
+    setTimeoutSpy.mockRestore();
   });
 });

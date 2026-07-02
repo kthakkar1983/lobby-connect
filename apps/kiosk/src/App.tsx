@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
-import { RING_WINDOW_MS } from "@lc/shared";
+import { RING_WINDOW_MS, MAX_CALL_DURATION_MS } from "@lc/shared";
 
-import { reduce, initialState, shouldFireRingTimeout } from "./state/call-machine";
+import * as Sentry from "@sentry/react";
+import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
 import { joinChannel, type KioskAgoraSession } from "./lib/agora";
 import { unlockAudioPlayback } from "./lib/audio-unlock";
@@ -30,6 +31,9 @@ export function App() {
   const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const callIdRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cost backstop: caps a CONNECTED call's duration (armed on connect, cleared on
+  // teardown) so an abandoned call can't hold the Agora channel + billing open.
+  const maxCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every teardown to abort an in-flight call setup (see onStartCall).
   const callGenRef = useRef(0);
 
@@ -51,6 +55,7 @@ export function App() {
     // an uncancellable call ringing for the full window.
     callGenRef.current += 1;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (maxCallTimeoutRef.current) clearTimeout(maxCallTimeoutRef.current);
     await sessionRef.current?.leave();
     sessionRef.current = null;
     localAudioRef.current = null;
@@ -88,6 +93,16 @@ export function App() {
             timeoutRef.current = null;
           }
           dispatch({ type: "AGENT_JOINED" });
+          // Arm the max-duration cost cap. If the guest walks away mid-call, this
+          // ends it (leave Agora + close the row) instead of letting the channel
+          // bill on to the 1h token expiry. The guard keeps a late fire inert.
+          maxCallTimeoutRef.current = setTimeout(() => {
+            if (!shouldEndForMaxDuration(screenRef.current)) return;
+            Sentry.captureMessage("kiosk call hit max-duration cap; ending", { level: "warning" });
+            if (callIdRef.current) void endCall(callIdRef.current, "completed");
+            void teardown();
+            dispatch({ type: "END_CALL" });
+          }, MAX_CALL_DURATION_MS);
         },
         onAgentLeft: () => {
           void teardown();

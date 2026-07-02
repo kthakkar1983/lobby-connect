@@ -34,6 +34,15 @@ export function shouldFireRingTimeout(screen: KioskScreen): boolean {
   return screen === "ringing";
 }
 
+/**
+ * The max-call-duration cap (cost backstop) ends a call only while it is
+ * connected. If the cap timer ever fires after the call already returned
+ * home/apology, this guard keeps it inert so it can't disturb a fresh state.
+ */
+export function shouldEndForMaxDuration(screen: KioskScreen): boolean {
+  return screen === "connected";
+}
+
 function home(): KioskState {
   return initialState();
 }

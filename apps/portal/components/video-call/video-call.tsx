@@ -11,6 +11,7 @@ import type {
   IRemoteAudioTrack,
   IRemoteVideoTrack,
 } from "agora-rtc-sdk-ng";
+import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import { recoverAudioOnNextGesture } from "@/lib/video/audio-unlock";
 import { reportGuestAudioDiagnostics } from "@/lib/video/diag-audio";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
@@ -74,6 +75,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     let client: IAgoraRTCClient | null = null;
     let audio: IMicrophoneAudioTrack | null = null;
     let video: ICameraVideoTrack | null = null;
+    let capTimer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       try {
         const ans = await fetch(`/api/calls/${callId}/answer-video`, { method: "POST" });
@@ -139,6 +141,17 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         await c.join(tok.appId, tok.channelName, tok.token, tok.uid);
         if (cancelled) return; // do NOT publish on an abandoned (e.g. StrictMode) mount
 
+        // Cost backstop: hard-cap a connected call's duration so an abandoned
+        // call (agent leaves the tab open) can't keep the Agora channel — and its
+        // per-participant billing — alive to the 1h token expiry. handleEnd is
+        // idempotent (finalizingRef), so this is safe alongside End / user-left.
+        capTimer = setTimeout(() => {
+          Sentry.captureMessage("agent video call hit max-duration cap; ending", {
+            level: "warning",
+          });
+          void handleEnd();
+        }, MAX_CALL_DURATION_MS);
+
         // Acquire mic + camera INDEPENDENTLY and resiliently. A device that's
         // busy (e.g. the webcam held by another app) or permission-denied must
         // NOT abandon the call — otherwise the agent silently drops while the
@@ -175,6 +188,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     })();
     return () => {
       cancelled = true;
+      if (capTimer) clearTimeout(capTimer);
       audio?.close();
       video?.close();
       if (client) client.leave().catch(() => {});
