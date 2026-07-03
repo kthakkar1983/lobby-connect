@@ -34,6 +34,7 @@ House workflow applies: brainstorm (dialogue register) → spec → Kumar gate �
 - **The relay-vs-P2P smoke MUST include a real India-side agent** — consequence of the Phase-1 region decision record (~95% of agents are India-based; their path India↔US is the one that matters). Kumar coordinates who.
 - Document the per-hotel-PC provisioning script (silent install + config + unattended password) — becomes the Phase-3 onboarding tool.
 - **Rollback:** repoint clients to the public relay (one config swap). **Done when:** the pilot agent works a real night through our relay.
+- **Agent-workflow note (confirmed with Kumar 2026-07-03):** the pilot agent keeps her standalone-RustDesk-via-public-relay routine untouched until the deliberately-scheduled cutover moment (daytime, with her available — there is NO forced date); the cutover changes only the app's server config, not her workflow; the standalone path remains the documented fallback forever. Her workflow only *changes* at Phase 3 (Connect button + tile), which she co-judges at Gate 3.0.
 
 ## Build gotchas worth carrying (learned in Phase 1)
 
