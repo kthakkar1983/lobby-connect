@@ -1,0 +1,47 @@
+# RustDesk OSS relay (hbbs = ID/rendezvous, hbbr = relay) — stack-consolidation Phase 2.
+# Runs OUTSIDE Coolify, as plain docker compose at /opt/rustdesk/compose.yaml on lc-box-1;
+# this repo copy is the source of truth (deploy = copy + `docker compose up -d`).
+# Ops: docs/setup/2026-07-02-box-ops-runbook.md §12 · design: docs/specs/2026-07-03-phase2-rustdesk-relay-design.md
+#
+# Load-bearing choices (spec §2):
+# - network_mode: host — hbbs/hbbr must see real client IPs for NAT hole-punching (direct
+#   P2P is the norm, relay the fallback); also keeps ufw authoritative (no Docker DNAT).
+# - -k _ — only clients presenting OUR public key may use the server (key = ./data/id_ed25519.pub).
+# - extra_hosts — hbbs DNS-resolves the -r hostname at startup and silently drops it on
+#   failure; this pins it locally so first boot works before/without public DNS.
+# - ./data holds the server keypair (id_ed25519 + .pub) — back up to PM, NEVER commit.
+# - Web-client ports 21118/21119 still listen under host networking; both firewalls block
+#   them (locked: web client unused). Do not open them.
+
+services:
+  hbbs:
+    container_name: hbbs
+    image: rustdesk/rustdesk-server:1.1.15
+    command: hbbs -r relay.lobby-connect.com -k _
+    volumes:
+      - ./data:/root
+    network_mode: host
+    extra_hosts:
+      - "relay.lobby-connect.com:159.203.124.112"
+    depends_on:
+      - hbbr
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  hbbr:
+    container_name: hbbr
+    image: rustdesk/rustdesk-server:1.1.15
+    command: hbbr -k _
+    volumes:
+      - ./data:/root
+    network_mode: host
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

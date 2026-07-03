@@ -134,7 +134,20 @@ DO email alerts (to kthakkar.1983@gmail.com, created via `doctl monitoring alert
 
 ## 11. Seams (later phases)
 
-- **Phase 2 (RustDesk relay):** will open 21115/tcp, 21116/tcp+udp, 21117/tcp on the DO firewall + ufw (web-client ports 21118/21119 stay CLOSED).
+- **Phase 2 (RustDesk relay): DONE 2026-07-03 — see §12.** Ports 21115/tcp, 21116/tcp+udp, 21117/tcp opened on DO fw + ufw (web-client ports 21118/21119 stay CLOSED — the processes listen on them under host networking; both firewalls block).
 - **Phase 3:** agent-machine SOP (dedicated Chrome profile, notification settings) gets its own section here.
 - **Phase 4 (LiveKit):** TURN 5349/tcp + 3478/udp or second IP — decide at build.
 - **Phase 5 (prod cutover):** enable DO weekly auto-backups; move prod apps here; Twilio webhook URLs + Supabase Auth URLs + kiosk links + Sentry origins all repoint (checklist in the migration plan).
+
+## 12. RustDesk relay (hbbs/hbbr — as built 2026-07-03)
+
+Design: `docs/specs/2026-07-03-phase2-rustdesk-relay-design.md` · plan/runsheet: `docs/plans/2026-07-03-phase2-rustdesk-relay.md`.
+
+- **What/where:** `hbbs` (ID/rendezvous) + `hbbr` (relay), image `rustdesk/rustdesk-server:1.1.15`, plain docker compose at `/opt/rustdesk/` — **deliberately NOT a Coolify app** (host networking; disjoint failure domain). Repo source of truth: `ops/rustdesk/compose.yaml` (deploy = scp + `docker compose up -d`). Data (keypair + peer sqlite) in `/opt/rustdesk/data/`.
+- **Client config (all clients — agent machines + hotel PCs):** ID server `relay.lobby-connect.com` · Relay server `relay.lobby-connect.com` · API server blank · Key = the server public key (fingerprint `oH2Lzh…3GY=`). **The full key string is deliberately NOT in this public repo** — under `-k _` it doubles as the relay's access token (anyone holding it can relay traffic through our box). Get it from: the box (`cat /opt/rustdesk/data/id_ed25519.pub`) · the Mac (`cat ~/.ssh/lc_relay_id_ed25519.pub`) · PM. Mass deploy: `ops/rustdesk/provision-hotel-pc.ps1` (same rule for the exported config string — it encodes the key).
+- **Manage:** `cd /opt/rustdesk && docker compose ps|logs|restart|down|up -d`. Health = both containers Up + `docker logs hbbs` shows `Listening on tcp/udp :21116` and `relay-servers=["relay.lobby-connect.com"]` + **both** hbbs and hbbr log the same `Key:` line.
+- **DNS gotcha (learned at build):** hbbs DNS-resolves its `-r` hostname at startup and silently drops it on failure → the compose pins `relay.lobby-connect.com → 159.203.124.112` via `extra_hosts` (+ the same line in the box's `/etc/hosts`). If the box IP ever changes: update DNS + both pins + this section.
+- **Upgrade:** check [rustdesk-server releases](https://github.com/rustdesk/rustdesk-server/releases) → bump the tag in `ops/rustdesk/compose.yaml` (repo) → scp to `/opt/rustdesk/compose.yaml` → `docker compose up -d`. Keypair persists in `./data` (that's the identity — clients notice nothing).
+- **Key rotation (disruptive — every client must re-pin):** stop stack → move `id_ed25519{,.pub}` out of `/opt/rustdesk/data/` → `up -d` (new pair generated) → update the Key in: this section, all clients, provisioning script's exported config string, PM backup.
+- **Keypair backup:** Kumar's PM ("LC relay server keypair") + Mac `~/.ssh/lc_relay_id_ed25519{,.pub}`. Losing it = rotation (above) forced on every client.
+- **Incident ("can't connect through our relay"):** 1) containers up? (`docker compose ps`) 2) `docker logs hbbs --tail 50` — "Authentication failed … invalid key" = a client with a wrong/missing key; 3) ports from outside: `nc -vz 159.203.124.112 21115` (also 21116, 21117 tcp) — if closed, check ufw + DO fw `lc-box-fw`; 4) **fallback: repoint the affected client to the public relay** (one Network-settings swap — the permanent, documented escape hatch), debug after.
