@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
@@ -9,6 +11,14 @@ const KIOSK_CORS = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Coolify/Docker builds only (BUILD_STANDALONE=1): emit the self-contained
+  // server bundle. Unset on Vercel, so the prod build is byte-identical.
+  ...(process.env.BUILD_STANDALONE === "1"
+    ? {
+        output: "standalone" as const,
+        outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
+      }
+    : {}),
   transpilePackages: ["@lc/shared", "@lc/ui"],
   typedRoutes: true,
   experimental: {
