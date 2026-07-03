@@ -19,6 +19,9 @@ The India-maintainer artifact: everything needed to operate the box without this
 - **SSH:** `ssh -i ~/.ssh/lc_box root@<droplet-IP>` (key generated 2026-07-02, lives only on Kumar's Mac; passphrase-less). Password auth is OFF. Port 22 is firewalled to Kumar's static IP — if his IP ever changes: DO console → Networking → Firewalls → `lc-box-fw` → edit the 22/tcp source.
 - **Coolify UI:** admin account (password manager) + 2FA.
 - **DO console/API:** Kumar's account; the provisioning API token should be revoked/rotated after Phase-1 build (DO console → API).
+- **Coolify API token** (`lc-claude`, root permissions, created for the Phase-1 build): revoke alongside the DO token after the build (Coolify → Keys & Tokens → API tokens). Day-2 ops work fine through the UI.
+- **Coolify first-boot access** (before the instance domain existed): SSH tunnel `ssh -i ~/.ssh/lc_box -L 8000:localhost:8000 root@<IP>` → http://localhost:8000. Same trick works if Traefik is ever broken.
+- **Coolify instance secrets** (`/data/coolify/source/.env`): backed up in Kumar's password manager (2026-07-03). Re-copy after any Coolify major upgrade.
 - **Break-glass order:** DO console Recovery Console → SSH → Coolify UI.
 
 ## 3. Provisioning record (as executed 2026-07-02)
@@ -75,7 +78,20 @@ DO email alerts (to kthakkar.1983@gmail.com, created via `doctl monitoring alert
 
 ## 5. Coolify how-tos
 
-_(filled during Tasks 8–10: deploy, env change [build-var vs runtime], logs, rollback to a previous image, scheduled-task history)_
+**Layout:** project `lobby-connect` → environment `staging` → three apps:
+
+| App | uuid | Source |
+|---|---|---|
+| `lc-portal-staging` | `lg2rzpmcxrxistxou7h07fd0` | repo branch `staging`, Dockerfile `apps/portal/Dockerfile` |
+| `lc-kiosk-staging` | `ziqzypp2wokei0adv10o6vze` | same branch, `apps/kiosk/Dockerfile` |
+| `lc-ops` | `su8p4jpng7izpzl7e7sw4k8o` | same branch, `ops/Dockerfile`; no domain; volume `/data/lc-backups`↔`/backups` |
+
+- **Deploy:** app → Deploy button (or push to `staging` — the GitHub App `lc-coolify` webhooks auto-deploy). API: `POST /api/v1/deploy?uuid=<app>`.
+- **Env change:** app → Environment Variables. Vars flagged **Build Variable** (`NEXT_PUBLIC_*`, `VITE_*`) are baked into the image → need a redeploy; runtime vars need only a **Restart**. The "latest config not applied" banner means exactly that. **Quirk:** every key shows a second `is_preview=true` row — those apply only to PR-preview deploys (unused); ignore them.
+- **Secrets discipline:** `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `KIOSK_CONFIG_SECRET`, `PROD_DB_URL` were pasted by Kumar directly in the UI (values in his password manager); everything non-secret was set via API.
+- **Logs:** app → Logs (runtime) or Deployments → click a deployment (build). On the host: `docker logs <container>` (names start with the app uuid).
+- **Rollback:** app → Deployments → previous successful deployment → Redeploy. (Images are on the box; rollback is a re-tag, fast.)
+- **Scheduled tasks:** on `lc-ops` → Scheduled Tasks — run history + output per execution lives there.
 
 ## 6. Cron + backup matrix
 
@@ -89,8 +105,10 @@ _(filled during Tasks 8–10: deploy, env change [build-var vs runtime], logs, r
 
 - **What the dump covers:** `public` (app data) + `auth` (users) + `storage` (object metadata) schemas of PROD, `pg_dump -Fc --no-owner --no-privileges`, as role `lc_backup` (read-only + BYPASSRLS; never the master password).
 - **Known gap:** Storage BINARIES (playbook PDFs) are not in `pg_dump` — they live in Supabase Storage's object store. Accepted: playbooks are re-uploadable by owners.
-- **Retention:** newest 14 dumps on the `/backups` volume.
-- **Restore drill (run quarterly + after any backup change):** `ops/restore-drill.sh <dump>` on the box host; PASS = `public.calls` + `auth.users` counts match prod (check prod counts in the Supabase dashboard SQL editor).
+- **Retention:** newest 14 dumps on the `/backups` volume (= host `/data/lc-backups`).
+- **Connection:** IPv6 direct to `db.ztunzdpmazwwwkxcpyfp.supabase.co:5432` — worked first try from the droplet (IPv6 enabled at creation). If it ever breaks, the session-pooler IPv4 fallback is `postgres://lc_backup.ztunzdpmazwwwkxcpyfp:<pw>@<pooler-host>:5432/postgres` (pooler host shown in Supabase dashboard → Connect).
+- **Role facts (as built 2026-07-03):** prod is PostgreSQL 17.6; `create role lc_backup login password '…' bypassrls` + `grant pg_read_all_data` ran cleanly in the dashboard SQL editor (no fallback needed). `BYPASSRLS` is required — without it `pg_dump` errors on RLS-enabled tables.
+- **Restore drill (run quarterly + after any backup change):** `ops/restore-drill.sh <dump>` on the box host; PASS = `public.calls` + `auth.users` counts match prod (check prod counts in the Supabase dashboard SQL editor). **First drill 2026-07-03: PASS** — dump `prod-20260703-031334.dump` (240 KB) restored; `calls=225`, `auth.users=5`, exact match; 22 ignored `pg_restore` errors, all storage-policy/ACL class (expected — scratch container lacks Supabase-managed roles).
 
 ## 8. Incidents ("staging is down")
 
@@ -110,6 +128,7 @@ _(filled during Tasks 8–10: deploy, env change [build-var vs runtime], logs, r
 - One shared user `staging`; bcrypt hash lives in a Traefik label on both apps (Coolify → app → Advanced → Container Labels), NOT in the repo.
 - **Carve-outs (bypass basic auth), and why:** `/api/kiosk/*` (kiosk HMAC token protects it; the kiosk fetches cross-origin and cannot answer a browser basic-auth challenge), `/api/agora/*` (same cross-origin kiosk caller; route has its own dual auth), `/api/cron/*` (`CRON_SECRET` bearer; called by the ops container).
 - **Rotate the password:** generate a new hash `docker run --rm httpd:2.4-alpine htpasswd -nbB staging '<new-pw>'`, double every `$` → `$$`, replace in both apps' labels, redeploy.
+- **As-built label anatomy (2026-07-03):** portal https router `https-0-lg2rzpmcxrxistxou7h07fd0` carries `middlewares=gzip,lc-staging-auth`; the bypass router `lc-portal-carveouts` (priority 100, same service, NO auth middleware) matches the three carve-out path prefixes. Kiosk has its own independently-named `lc-staging-auth-kiosk` middleware (same hash) so a portal redeploy can never break the kiosk router. Verified 2026-07-03: anon → 401+Basic on both hosts; all three carve-outs answer with app-level auth, no Basic challenge.
 
 ## 11. Seams (later phases)
 
