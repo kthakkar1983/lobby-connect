@@ -121,6 +121,11 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 
 ## Infrastructure / environments
 
+### Self-registering hotel-PC provisioning (enrollment token)
+
+**Added 2026-07-03 (Phase-2 relay session; Kumar's "fire and forget for hotels" question).** Today `ops/rustdesk/provision-hotel-pc.ps1` prints the peer ID and generates the unattended password locally — two values a human relays back to LC (PM today; typed into `property_remote_access` admin CRUD at Phase 3). The endgame: generate each hotel a one-time download link carrying an enrollment token; the script POSTs `{peer_id, unattended_password}` straight into `property_remote_access` via an audited service-role route, so onboarding = "right-click → Run as administrator", nothing read back by phone. Small addition once the Phase-3 table + API exist (same route pattern as the other service-role writes); the same delivery mechanism later carries the per-connect password-rotation hook (target spec §4 security notes). MSI variant for chain-IT deployments is officially documented if a franchise group ever wants GPO/Intune delivery.
+
+
 ### Broaden the staging DB to all preview branches
 
 **Status:** open · **Raised:** 2026-06-21 (staging env build) · **Pilot workaround:** n/a — staging works for its purpose; this is an enhancement.
