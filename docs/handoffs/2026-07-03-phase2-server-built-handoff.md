@@ -13,6 +13,8 @@ Two concurrent threads, exactly as planned:
 
 ## Kumar's Phase-2 runsheet (each step gates the next — full detail in the plan's H1–H5)
 
+> **Progress (2026-07-03, same day):** **H1–H4 DONE.** DNS verified end-to-end; keypair in PM; Kumar's Mac (`139513354`) + test PC + the **India admin** (`250885235`, Airtel) all registered key-authenticated; two hbbr relay sessions paired on the India↔US leg; **admin's verdict: definite speed improvement — "snappy" — on the relayed worst case.** Export-config string → PM. **Only H5 remains** (+ the real-night done-when). Gotcha to remember until then: any client pointed at OUR server can't see peers on the public relay — if the admin might need to cover the pilot hotel tonight, his daily client goes back to public until H5 swaps both ends together.
+
 1. **H1 — DNS (2 min):** Cloudflare → `lobby-connect.com` → A · name `relay` · `159.203.124.112` · **DNS only (grey cloud)**. Until this lands, no client can be tested.
 2. **H2 — PM backup (5 min, don't defer):** PM secure note "LC relay server keypair" ← `~/.ssh/lc_relay_id_ed25519` (+ `.pub`). Top of the never-lose list.
 3. **H3 — Your client:** Settings → Network → ID server `relay.lobby-connect.com` · Relay `relay.lobby-connect.com` · Key = `cat ~/.ssh/lc_relay_id_ed25519.pub` (kept out of the public repo — it's the relay's access token under `-k _`; runbook §12). Expect **Ready**. Test a session; check the lock icon (encrypted, direct-vs-relay). Then **Export Server Config** → PM entry "RustDesk exported server config" (paste into a local copy of the provisioning script at provision time; the repo keeps the placeholder).
