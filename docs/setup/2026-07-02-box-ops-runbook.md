@@ -16,6 +16,8 @@ The India-maintainer artifact: everything needed to operate the box without this
 
 ## 2. Access
 
+> Full account/credential register (every login, token, key, where each secret lives, revocation checklist): `docs/setup/2026-07-03-accounts-credentials-inventory.md`.
+
 - **SSH:** `ssh -i ~/.ssh/lc_box root@<droplet-IP>` (key generated 2026-07-02, lives only on Kumar's Mac; passphrase-less). Password auth is OFF. Port 22 is firewalled to Kumar's static IP — if his IP ever changes: DO console → Networking → Firewalls → `lc-box-fw` → edit the 22/tcp source.
 - **Coolify UI:** admin account (password manager) + 2FA.
 - **DO console/API:** Kumar's account; the provisioning API token should be revoked/rotated after Phase-1 build (DO console → API).
