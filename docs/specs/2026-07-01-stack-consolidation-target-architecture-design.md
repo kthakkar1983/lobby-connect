@@ -37,7 +37,7 @@ Scale envelope this design targets: **10–25 properties, 5–10 agents, a coupl
 
 ## 3. The server
 
-**Pick: DigitalOcean Basic Regular droplet, 4 vCPU / 8 GB / 160 GB, $48/mo, 5 TB transfer included** ([DO pricing](https://www.digitalocean.com/pricing/droplets), fetched 2026-07-01). US region nearest the pilot (NYC/SFO→ choose lowest RTT to OKC; measure at provision).
+**Pick: DigitalOcean Basic Regular droplet, 4 vCPU / 8 GB / 160 GB, $48/mo, 5 TB transfer included** ([DO pricing](https://www.digitalocean.com/pricing/droplets), fetched 2026-07-01). US region nearest the pilot (NYC/SFO→ choose lowest RTT to OKC; measure at provision). *(Resolved 2026-07-02: **NYC3** — ATL1 lacks the size, and the ~95%-India agent workforce anchors US-East either way; decision record in the Phase-1 spec §1.)*
 
 Why not the usual suspects:
 - **Hetzner US is out** — a 2026-06-15 price adjustment raised US prices ~3× (CPX31 4c/8GB now **$73.49/mo**, and US locations include only 3–4 TB traffic vs 20 TB EU) ([official price-adjustment doc](https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/)). EU regions stay cheap but are wrong for US-hotel RTT on TURN/remote-desktop relay.
