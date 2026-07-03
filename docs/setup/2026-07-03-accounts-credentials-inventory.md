@@ -19,8 +19,8 @@
 | Credential | Identifier / location | Secret lives in | Purpose | Lifecycle |
 |---|---|---|---|---|
 | SSH keypair for the box | `~/.ssh/lc_box` (+ `.pub`) on Kumar's Mac; registered in DO as `lc-box-key` (ID 57536116) | the private key file itself — never leaves the Mac; no passphrase | `root@159.203.124.112` (only from Kumar's static IP 70.184.31.21) | permanent; if the Mac is lost: DO console → droplet → Access → reset via Recovery Console, add a new key |
-| DO API token `lc-claude` | DO console → API | pasted in chat 2026-07-02 (Kumar's call), stored in `~/.config/doctl/config.yaml` | provisioning via `doctl` | **REVOKE after Phase-1 build** (or let 90-day expiry lapse if set) |
-| Coolify API token `lc-claude` | Coolify → Keys & Tokens | pasted in chat 2026-07-03, used ephemerally | app/env/task creation via API during the build | **REVOKE after Phase-1 build** |
+| DO API token `lc-claude` | DO console → API | pasted in chat 2026-07-02 (Kumar's call), stored in `~/.config/doctl/config.yaml` | provisioning + debugging via `doctl` | **kept through the migration for debugging (Kumar, 2026-07-03) — REVOKE at migration end (Phase-5 close)** |
+| Coolify API token `lc-claude` | Coolify → Keys & Tokens | pasted in chat 2026-07-03 | app/env/task management + log pulls via API | **kept through the migration for debugging (Kumar, 2026-07-03) — REVOKE at migration end (Phase-5 close)** |
 | Coolify GitHub App `lc-coolify` | app ID 4204806, installation 144083654, scoped to `kthakkar1983/lobby-connect` only | private key held inside Coolify (`coolify-db`) | auto-deploy webhooks + repo pulls | permanent; rotate via GitHub App settings if ever compromised |
 | Coolify instance secrets | `/data/coolify/source/.env` on the box | PM (copied 2026-07-03, installer's advice) | Coolify's own encryption keys — needed to rebuild/restore Coolify itself | re-copy to PM after any Coolify major upgrade |
 | Staging Supabase `service_role` key | Supabase dashboard → project `cgtvqjxhbojztzumshca` → Settings → API Keys → Legacy | Coolify → `lc-portal-staging` env `SUPABASE_SERVICE_ROLE_KEY` (pasted by Kumar in UI) | portal server-side admin operations on staging | rotate in Supabase dashboard if leaked → update Coolify env → restart app |
@@ -38,11 +38,11 @@
 | Box SSH | root@159.203.124.112 (IPv6 2604:a880:800:14:0:3:316e:3000) | key-only + DO firewall (22 restricted to Kumar's static IP) |
 | Prod portal/kiosk | still on Vercel (unchanged until Phase 5) | — |
 
-## 4. Post-Phase-1 revocation checklist
+## 4. Revocation checklist — at migration end (Phase-5 close; timing per Kumar 2026-07-03)
 
-- [ ] DO API token `lc-claude` — revoke in DO console → API (after the soak completes)
+- [ ] DO API token `lc-claude` — revoke in DO console → API
 - [ ] Coolify API token `lc-claude` — revoke in Coolify → Keys & Tokens
-- [ ] Confirm PM has all 7 "PM" rows from §1 + the `lc_backup` password + the Coolify `.env` copy
+- [ ] Confirm PM has all 7 "PM" rows from §1 + the `lc_backup` password + the Coolify `.env` copy *(do this one now, not at migration end)*
 
 ## 5. PM entry checklist (mirror this in the password manager)
 
