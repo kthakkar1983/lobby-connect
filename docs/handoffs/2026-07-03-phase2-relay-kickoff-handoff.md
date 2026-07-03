@@ -1,14 +1,14 @@
-# Handoff — Phase 2 kickoff: verify the soak, then the RustDesk relay (START HERE)
+# Handoff — Phase 2 kickoff: RustDesk relay (soak runs in parallel) (START HERE)
 
 **Written:** 2026-07-03 (~04:45 UTC, the same session that built Phase 1) · **Supersedes:** `2026-07-02-phase1-kickoff-handoff.md` · **Branch:** `main`
 
 ## Where things stand
 
-**Phase 1 is BUILT + SMOKE-PASSED (2026-07-02→03, one session) but NOT yet DONE** — the locked done-when gate is **staging running a week unattended, target ~2026-07-10**. The soak began 2026-07-03 ~04:00 UTC. Full build record: migration plan Phase-1 STATUS block + `memory/project-status.md` 2026-07-03 entry. Ops reference: `docs/setup/2026-07-02-box-ops-runbook.md` · credentials: `docs/setup/2026-07-03-accounts-credentials-inventory.md`.
+**Phase 1 is BUILT + SMOKE-PASSED (2026-07-02→03, one session) but NOT yet DONE** — the done-when gate is **staging running a week unattended, checkpoint ~2026-07-10**. The soak began 2026-07-03 ~04:00 UTC. **Sequencing decision (Kumar + Claude, 2026-07-03): Phase 2 STARTS NOW, concurrent with the soak** — the plan itself marks Phase 2 "independent of everything else — do it early"; the soak is passive observation and July 10 is a *checkpoint inside whatever we're doing that day*, not a start gate. Named trade-off: two variables on one box if something misbehaves mid-week — mitigated by the pre-phase2 snapshot (mandatory FIRST step below) and near-disjoint failure domains. Full build record: migration plan Phase-1 STATUS block + `memory/project-status.md` 2026-07-03 entry. Ops reference: `docs/setup/2026-07-02-box-ops-runbook.md` · credentials: `docs/setup/2026-07-03-accounts-credentials-inventory.md`.
 
 Standing access decision (Kumar, 2026-07-03): **both `lc-claude` API tokens (DO + Coolify) stay active through the migration** for debugging; revoke at Phase-5 close. `doctl` is authed on the Mac; the Coolify token is in the transcript/register.
 
-## First action next session: VERIFY THE SOAK HELD (do not skip to Phase 2)
+## The July-10 checkpoint: VERIFY THE SOAK HELD (run this on/after ~2026-07-10, whatever else is in flight)
 
 All checks have exact how-tos in the runbook; expected values assume ~7 soak days:
 
@@ -21,9 +21,9 @@ All checks have exact how-tos in the runbook; expected values assume ~7 soak day
 
 **All green → close Phase 1:** stamp `STATUS: DONE` in the migration plan Phase-1 section · `git tag plan-phase1-box-staging-complete && git push --tags` · update CLAUDE.md current-focus + `MEMORY.md` + `memory/project-status.md`. **Any check red → debug first** (runbook §8); the soak gate exists precisely to catch this.
 
-## Then Phase 2 — self-hosted RustDesk relay (first prod-facing win)
+## Phase 2 — self-hosted RustDesk relay (first prod-facing win; start immediately)
 
-House workflow applies: brainstorm (dialogue register) → spec → Kumar gate → plan → build. Locked scope from the migration plan + target spec §4:
+House workflow applies: brainstorm (dialogue register) → spec → Kumar gate → plan → build. Locked scope from the migration plan + target spec §4. **Internal sequencing rule (the real safety mechanism): snapshot → deploy hbbs/hbbr → test with Kumar's own client first → India-side agent test → repoint the PILOT hotel PC LAST** — the pilot PC is the only step with real-world stakes (the agent's actual front-desk path), and its safety comes from Phase 2's instant rollback (one config swap back to the public relay) + the standalone-RustDesk fallback, not from the soak.
 
 - **Step 0: snapshot** — `doctl compute droplet-action snapshot 581936683 --snapshot-name pre-phase2-relay --wait` (phase-boundary rule).
 - Deploy **hbbs (ID/rendezvous) + hbbr (relay)** — official `rustdesk/rustdesk-server` OSS images — on the box. Note: raw TCP/UDP services → **Traefik is NOT in the path**; host-published ports (Coolify service with published ports, or compose network_mode host — decide at build).
