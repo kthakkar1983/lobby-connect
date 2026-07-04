@@ -1237,6 +1237,10 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 
 **Fix-loop item (from the Gate-3.1 drill, Kumar 2026-07-04): ring-silence control** on ringing cards — agent + admin (and the Phase-D tile later): stops the LOCAL ringer only; the card keeps ringing visually and stays answerable; resets on the next ring. Build AFTER the staging smoke passes so the deploy does not move under the test, then re-smoke just the ring beat.
 
+**Fix-loop item 2 (staging smoke attempt 1, 2026-07-04, systematic-debugging): kiosk setup-failure catch leaks the call row.** `apps/kiosk/src/App.tsx` `onStartCall`'s catch (~line 149) tears down and shows the apology but never closes the row it already created (`callIdRef.current` is set once `startCall()` returns) → any post-create setup failure (e.g. Agora token 500) leaves a live ring under an apology screen; if someone answers it, the call sticks IN_PROGRESS (the guest can never join) and 0016's one-active-per-property index 409-blocks the property for up to 30 min (reaper IN_PROGRESS cutoff). Fix: in the catch, `if (callIdRef.current) void endCall(callIdRef.current, "failed")` — mirrors the existing terminal-connection path. Latent on prod `main` too (predates Phase 3); surfaced on staging because `AGORA_APP_CERTIFICATE` was missing there. Ship in the same fix loop as the silence control.
+
+**Staging environment corrections applied during that debug (2026-07-04):** stuck IN_PROGRESS row finalized reaper-style via MCP (FAILED + real duration; presence self-corrected on the next heartbeat, proving the S3 inference) · **migration 0018 applied to staging via MCP** (staging was built 2026-06-21, v1.2/0018 landed 06-28 and was never back-applied → the realtime subscribe was authz-denied, so rings surfaced only via the 60s fallback poll / refetch-on-focus) · `AGORA_APP_CERTIFICATE` identified as MISSING on the Coolify staging portal env (`AGORA_APP_ID` present; token route 500s without it) — Kumar adds the env + redeploys before the retest.
+
 ---
 
 # PHASE C — Push productionized + duty controls (D3, D5, D6, D7)
