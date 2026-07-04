@@ -59,27 +59,36 @@ export function TileWindow({
 
   if (ringing) {
     const ringingFor = Math.max(0, Math.floor((now - ringing.startedAt) / 1_000));
+    // Same vocabulary as the softphone's incoming state (quiet eyebrow, big
+    // display-font property name, mint Accept): an incoming ring is a LIVE
+    // event, so it speaks mint-on-navy — blaze/red stay reserved for
+    // attention/911 per the brand severity rules. Eye-catch comes from the
+    // pulsing mint edge, not a colored fill.
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-attention p-4 font-sans text-ink">
+      <div className="relative flex min-h-dvh flex-col items-center justify-center gap-4 bg-primary p-4 font-sans text-primary-foreground">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 animate-pulse border-4 border-live"
+        />
         <div className="animate-pulse text-center">
-          <p className="font-label text-xs font-semibold uppercase tracking-[0.2em]">
+          <p className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-live">
             Incoming call
           </p>
           <p className="mt-1 font-display text-2xl font-bold">The Sample Hotel</p>
-          <p className="text-sm">Phone · ringing {ringingFor}s</p>
+          <p className="text-sm text-primary-foreground/80">Phone · ringing {ringingFor}s</p>
         </div>
         <div className="flex w-full max-w-64 flex-col gap-2">
           <button
             type="button"
             onClick={onAnswer}
-            className="w-full rounded-lg bg-live px-4 py-3 text-base font-semibold text-ink shadow-sm hover:bg-live/90"
+            className="w-full rounded-lg bg-live px-4 py-3 text-base font-semibold text-primary shadow-sm hover:bg-live/90"
           >
             Answer
           </button>
           <button
             type="button"
             onClick={onDismiss}
-            className="w-full rounded-lg bg-ink/10 px-4 py-2 text-sm font-medium hover:bg-ink/20"
+            className="w-full rounded-lg border border-primary-foreground/25 px-4 py-2 text-sm font-medium hover:bg-primary-foreground/10"
           >
             Dismiss
           </button>
