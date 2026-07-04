@@ -588,15 +588,23 @@ git commit -m "feat(gate3.1): push-ring spike — SW skeleton, subscribe panel, 
 
 ## Task 3: Gate 3.1 drill on staging (HUMAN GATE)
 
-- [ ] **Step 1:** Set the three VAPID env vars in Coolify (staging app) + Vercel. Merge `phase3-workspace` → `staging` branch and push (box auto-deploys).
-- [ ] **Step 2:** Kumar's drill on **both machines** (Windows PC first, then Mac), against `staging.lobby-connect.com/duty-tile-prototype`:
+- [x] **Step 1:** Set the three VAPID env vars in Coolify (staging app) + Vercel. Merge `phase3-workspace` → `staging` branch and push (box auto-deploys).
+- [x] **Step 2:** Kumar's drill on **both machines** (Windows PC first, then Mac), against `staging.lobby-connect.com/duty-tile-prototype`:
   1. Subscribe + prime audio (accept the notification permission prompt).
   2. Push in 15s → minimize the browser, RustDesk fullscreen → expect: loud ring within a few seconds of the scheduled time + OS toast naming "Push spike" + log line with delivery latency and `tab hidden`.
   3. Push in 60s → same drill.
   4. Push in 6m → the intensive-throttling case. Minimize immediately; do real RustDesk work for the wait.
   5. Click the toast once → portal focuses (observed, not gating).
   6. Copy report → paste back.
-- [ ] **Step 3: Judge.** **PASS** = loud ring within a few seconds on every drill on both machines (toast observed). Record the two reports in `docs/plans/2026-07-04-phase3-workspace.md` under this task (paste summaries) and proceed. **FAIL** = stop; the all-shift keepalive tile (Gate 3.0, proven) returns as Plan B — record the decision and re-plan Phase C around the tile before continuing.
+- [x] **Step 3: Judge.** **PASS** = loud ring within a few seconds on every drill on both machines (toast observed). Record the two reports in `docs/plans/2026-07-04-phase3-workspace.md` under this task (paste summaries) and proceed. **FAIL** = stop; the all-shift keepalive tile (Gate 3.0, proven) returns as Plan B — record the decision and re-plan Phase C around the tile before continuing.
+
+**RESULT — GATE 3.1 = PASS on both machines (2026-07-04). Phase C is GO; Plan B not needed.**
+
+- **Mac** (Chrome 149, ~15:14 CDT): 15s/60s/360s pushes all received tab-hidden; client-clock latencies **0.4/0.5/0.7s**; the 360s box delayed send fired exactly on schedule (the case Vercel cannot run).
+- **Windows PC** (Win10/Chrome 149, ~17:53 CDT): same drill clean; latencies **0.4/0.4/0.6s**; the 360s push landed at 5:36:02 inside a tab-hidden stretch (5:30:09→5:36:09).
+- **Throttling cross-proof (both machines):** the tile-prototype tab was open concurrently and logged **max tick gap 60.0s (THROTTLED)** during each 360s wait — the push still arrived sub-second. Push wake is independent of tab throttling, which is the thesis this gate existed to test.
+- The Gate-3.0 tile also re-rang on time on the A+B build on both OSes (prototype intact post-refactor). The Windows 360s tile ring went unanswered (Kumar away from the desk) and timed out at the prototype's 45s — behavior correct, but it surfaced a product finding:
+- **Product finding (Kumar): a ring-SILENCE control is needed on both agent and admin ringing surfaces** — mute the local ringer without rejecting; the ring stays visible and answerable. Logged under Task 10's fix loop; the Phase-D tile gets the same control.
 
 ---
 
@@ -1224,6 +1232,10 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 ## Task 10: Phase B staging + prod smoke (HUMAN)
 
 - [ ] Push to `staging`, then: kiosk video call → agent card expands + rings + Answer opens today's overlay; audio call → same on the audio card; admin with covering ON sees Answer, OFF sees ring-only; other placements gone; second browser answering first → loser card stops ringing (claim 409 path). Then PR → `main`, repeat the two-call smoke on prod. Record results in this file.
+
+**Staging scope note (2026-07-04):** staging receives NO Twilio webhooks (the number points at prod until Phase 5, and the staging front door has no `/api/twilio/*` basic-auth carve-out) → the **audio-card ring and the Decline-gone feel are PROD smoke items** after the merge. Staging covers: the video ring-on-card path, covering gates, toggle round-trip, and the two-browser race. Staging prep required first: the staging DB has only Staging Admin + Staging Test Hotel — provision a staging AGENT (`/admin/users`) and assign it as the hotel's primary agent (`/admin/properties` → detail) or no card will ring.
+
+**Fix-loop item (from the Gate-3.1 drill, Kumar 2026-07-04): ring-silence control** on ringing cards — agent + admin (and the Phase-D tile later): stops the LOCAL ringer only; the card keeps ringing visually and stays answerable; resets on the next ring. Build AFTER the staging smoke passes so the deploy does not move under the test, then re-smoke just the ring beat.
 
 ---
 
