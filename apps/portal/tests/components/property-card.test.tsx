@@ -174,4 +174,25 @@ describe("PropertyCard", () => {
     expect(screen.getByText(/Ringing/)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
+
+  it("renders footerSlot under the actions row (Task 9: the admin fleet board's Covering toggle)", () => {
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={p1} footerSlot={<button>Covering toggle stub</button>} />
+      </CallSurfaceProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Covering toggle stub" })).not.toBeNull();
+  });
+
+  it("renders nothing extra when footerSlot is omitted", () => {
+    const { container } = render(
+      <CallSurfaceProvider>
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Covering toggle stub" })).toBeNull();
+    expect(container).not.toBeNull();
+  });
 });

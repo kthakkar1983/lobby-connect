@@ -128,4 +128,26 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
 
     expect(calls).toEqual(["call-outside-pod"]);
   });
+
+  it("suppresses the unmatched-ring fallback when showUnmatchedRings={false} (Task 9: the fleet board hoists it instead)", async () => {
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PodCardGrid properties={[p1]} showUnmatchedRings={false} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptAudio").click();
+    });
+    await act(async () => {
+      screen.getByText("publish audio ring with null propertyId").click();
+    });
+
+    // No fallback card for the orphan ring — the per-pod grid suppressed it.
+    expect(screen.queryByText("Unknown property")).toBeNull();
+    expect(screen.queryByText("Incoming phone call")).toBeNull();
+    // p1's own card is unaffected either way.
+    expect(screen.getByText("Quiet")).not.toBeNull();
+  });
 });

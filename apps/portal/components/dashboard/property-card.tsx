@@ -30,12 +30,15 @@ export function PropertyCard({
   property,
   canAnswer = true,
   connectSlot = null,
+  footerSlot = null,
 }: {
   property: PropertyCardData;
   /** Admins: gated by covering (D11). Agents: always true. */
   canAnswer?: boolean;
   /** Phase E injects the Connect button here; null until then. */
   connectSlot?: React.ReactNode;
+  /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
+  footerSlot?: React.ReactNode;
 }): React.JSX.Element {
   const { rings, active, actions } = useCallSurface();
   const ring = rings.find((r) => r.propertyId === property.id) ?? null;
@@ -99,6 +102,7 @@ export function PropertyCard({
         )}
         {connectSlot}
       </div>
+      {footerSlot && <div className="mt-3 border-t border-border pt-3">{footerSlot}</div>}
     </div>
   );
 }
