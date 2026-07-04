@@ -165,7 +165,7 @@ export function Softphone({ role }: SoftphoneProps) {
       phase === "incoming"
         ? [
             {
-              key: callIdRef.current || "audio",
+              key: `audio:${callIdRef.current || "incoming"}`,
               channel: "AUDIO",
               callId: callIdRef.current || null,
               propertyId: incomingPropertyIdRef.current,

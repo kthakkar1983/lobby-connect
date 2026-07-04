@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 export interface IncomingRing {
-  key: string; // audio: twilio callId (or "audio"), video: calls.id
+  key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
   channel: "AUDIO" | "VIDEO";
   callId: string | null;
   propertyId: string | null;

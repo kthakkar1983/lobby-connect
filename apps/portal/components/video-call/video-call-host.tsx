@@ -38,12 +38,15 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
       active
         ? []
         : calls.map((c) => ({
-            key: c.id,
+            key: `video:${c.id}`,
             channel: "VIDEO" as const,
             callId: c.id,
             propertyId: c.propertyId,
             propertyName: c.propertyName,
-            since: Date.parse(c.ringStartedAt ?? "") || Date.now(),
+            since: (() => {
+              const parsed = Date.parse(c.ringStartedAt ?? "");
+              return Number.isNaN(parsed) ? Date.now() : parsed;
+            })(),
           })),
     );
   }, [publishRings, calls, active]);
@@ -74,7 +77,5 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
       propertyName={active.propertyName}
       onClose={() => setActive(null)}
     />
-  ) : (
-    <></>
-  );
+  ) : null;
 }
