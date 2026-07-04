@@ -74,11 +74,17 @@ export function DutyTilePrototype({ agentName }: { agentName: string }) {
     return () => clearInterval(id);
   }, []);
 
+  // Logged (not just displayed) so a pasted report proves the tab was hidden
+  // when a ring fired — the remote tester can't be asked follow-ups mid-shift.
   useEffect(() => {
-    const onVisibility = () => setParentHidden(document.visibilityState === "hidden");
+    const onVisibility = () => {
+      const hidden = document.visibilityState === "hidden";
+      setParentHidden(hidden);
+      addLog(hidden ? "Tab hidden" : "Tab visible again");
+    };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
+  }, [addLog]);
 
   // Flash the tab title while ringing (same affordance as real incoming calls).
   useRingingTabTitle(ringing !== null, "Incoming call · tile test");
@@ -123,6 +129,13 @@ export function DutyTilePrototype({ agentName }: { agentName: string }) {
       addLog(
         `RING fired ${formatGap(lateMs)} after its scheduled time${lateMs < 1_500 ? " (on time)" : " (LATE — throttled?)"}`,
       );
+      // createRingtone swallows play() rejections by design; for the gate we
+      // want an audio failure in the report, not a silent visual-only ring.
+      setTimeout(() => {
+        if (ringTimeoutRef.current && audioRef.current?.paused) {
+          addLog("Ring audio is NOT playing (blocked?) — ring was visual-only");
+        }
+      }, 600);
       ringTimeoutRef.current = setTimeout(() => {
         stopRing("missed (rang 45s unanswered)");
         addLog("Ring timed out after 45s — marked missed");
