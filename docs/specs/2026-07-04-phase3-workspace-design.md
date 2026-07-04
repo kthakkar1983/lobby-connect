@@ -1,6 +1,6 @@
 # Phase 3 — agent + admin workspace: property cards, push-first alerting, call tile, Connect, hold (design spec)
 
-**Date:** 2026-07-04 · **Status:** DESIGNED — brainstormed with Kumar 2026-07-03→04 (visual companion + Gate 3.0 evidence); this document is his review gate before the plan · **Parents:** target architecture `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` §4/§5/§5b · migration plan `docs/plans/2026-07-01-stack-consolidation-migration.md` (Phase 3) · kickoff handoff `docs/handoffs/2026-07-03-phase3-kickoff-handoff.md`
+**Date:** 2026-07-04 · **Status:** APPROVED — brainstormed with Kumar 2026-07-03→04 (visual companion + Gate 3.0 evidence); passed his spec gate 2026-07-04 with one edit folded in (**D12** — Connect from the in-call surfaces) and the palette stance settled (blaze stays: sparing attention accent, the non-emergency replacement for red; red itself reserved for 911/emergency) · **Parents:** target architecture `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` §4/§5/§5b · migration plan `docs/plans/2026-07-01-stack-consolidation-migration.md` (Phase 3) · kickoff handoff `docs/handoffs/2026-07-03-phase3-kickoff-handoff.md`
 
 Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floating-window + throttling behavior is **evidence-backed by Gate 3.0** (both OSes, real machines, logs pasted in-session). Web Push delivery behavior is *prior knowledge — deliberately verified by Gate 3.1 before anything depends on it*.
 
@@ -23,7 +23,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 | # | Decision | Note |
 |---|---|---|
 | D1 | **Dashboard-first answering:** the ringing property's **card expands + rings in place**; retires the static right-rail incoming placements (softphone incoming block + persistent video card + off-home toast) | The Twilio `Device`/`VideoCallHost` machinery stays mounted in the shared layout exactly as today — only the incoming *UI* moves |
-| D2 | **Today's full-screen in-call overlays are untouched** | Kumar: "lets not mess with todays working full screen in-call set up." Card expansion is for RINGING only; Answer opens the existing overlay |
+| D2 | **Today's full-screen in-call overlays are untouched** | Kumar: "lets not mess with todays working full screen in-call set up." Card expansion is for RINGING only; Answer opens the existing overlay. One additive exception folded in at the spec gate: the Connect control (D12) |
 | D3 | **Push-first alerting, audible contract** | OS toast = best-effort context (names the property; click focuses the portal — included but nothing depends on it) |
 | D4 | **Tile is call-scoped** | Opens on Answer (a real user gesture — DocPiP requires one), guest-video-first (eye contact), compact controls, closes at hang-up. Full brand-token binding — Kumar flagged the sketch's colors; no freehand styling in the build |
 | D5 | **"Go on duty" is slim + local** | One deliberate click: primes ring audio (session-22 pattern) + requests push permission / refreshes the subscription. No routing/presence semantics |
@@ -33,12 +33,13 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 | D9 | **Hold ships UI + AUDIO only in Phase 3** (Twilio Conference seam, the 6c precedent). **Video-hold wiring waits for LiveKit (Phase 4)** | Kumar correction — no Agora hold plumbing that Phase 4 would delete |
 | D10 | **Connect is per-need** at multi-property scale (all-shift RustDesk is a single-property training artifact) | Pre-warm: credentials fetched at Answer so Connect fires instantly |
 | D11 | Admin fleet = pod-grouped under the existing command strip; **Answer gated by `covering`; Connect never gated** | Restates the target-spec §5b locks |
+| D12 | **Connect is available from inside a live call** — the in-call overlays (audio + video) and the call tile carry a Connect action alongside the call controls | Kumar's spec-gate edit (2026-07-04). Additive button only — no other overlay change (scoped exception to D2); wired to the same pre-warmed credential fetch (D10) so an in-call Connect fires instantly |
 
 ## 3. Design
 
 ### 3.1 Property cards (shared component, two scopes)
 
-- **Anatomy:** property identity · live state line (quiet / **ringing** / on call / on hold, + open-incident chip in blaze per brand severity rules) · tonight-at-a-glance (calls tonight, last-call time) · actions: **Answer** (only while ringing; agents always, admins only where `covering` is on) and **Connect** (always, never gated).
+- **Anatomy:** property identity · live state line (quiet / **ringing** / on call / on hold, + open-incident chip in blaze per brand severity rules — palette stance settled at the spec gate: blaze stays as the sparing attention accent, red reserved for 911/emergency) · tonight-at-a-glance (calls tonight, last-call time) · actions: **Answer** (only while ringing; agents always, admins only where `covering` is on) and **Connect** (always, never gated).
 - **Ringing = the card expands in place** (grows, mint ring treatment — the same vocabulary as the softphone incoming state and the Gate-3.0 tile) with channel + elapsed. Answer claims the call through the **existing** answer/answer-video routes (first-wins claims unchanged), then opens the existing overlay (D2).
 - **Agent dashboard:** pod card grid replaces the current right-rail incoming placements; the rest of the agent bento (stats, chart, recent calls) stays.
 - **Admin dashboard:** command-center strip stays on top; below it, **pods grouped by agent** (agent header: name + derived presence + property count), each pod's cards beneath; unassigned properties in a trailing group.
@@ -59,7 +60,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 ### 3.3 The call tile (P2 — Document PiP, Chromium)
 
 - **Opens from the Answer click** — `requestWindow()` is called synchronously inside the click handler (gesture constraint, recorded from Gate 3.0), then the accept flow proceeds; if the tile fails to open, the call proceeds normally in the tab (tile is additive, never load-bearing).
-- **Faces:** VIDEO call → guest video fills the tile, compact bar beneath (timer · mute · hold · hang up · **911** · room#/quick-note ⏎ reusing the notes-durability path). AUDIO call → identity + hotel-local time + timer + the same controls. A **second-property ring** renders as a banner inside the tile (Answer there = D8 hold-then-answer).
+- **Faces:** VIDEO call → guest video fills the tile, compact bar beneath (timer · mute · hold · hang up · **911** · **Connect** (D12) · room#/quick-note ⏎ reusing the notes-durability path). AUDIO call → identity + hotel-local time + timer + the same controls. A **second-property ring** renders as a banner inside the tile (Answer there = D8 hold-then-answer).
 - **Authority:** the in-tab overlay remains the authoritative call surface (D2); the tile mirrors state through the same client call-state (one source of truth, two portals — the Gate-3.0 createPortal pattern). Closing the tile mid-call changes nothing about the call; the overlay shows a "reopen tile" affordance (the Back-to-tab accidental-close lesson).
 - **Brand binding:** tile document inherits the portal stylesheet (Gate-3.0 mechanism) and uses only brand tokens — the in-call face gets a proper design pass at build (Kumar's flag).
 - **Degradation:** non-Chromium/no-DocPiP → no tile; overlay-only (today's behavior). Chrome/Edge SOP stands (runbook §11 seam).
@@ -74,7 +75,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 
 - **Migration 0019 `property_remote_access`:** `property_id` (FK, unique) · `operator_id` · `peer_id` · `unattended_password` · timestamps. **RLS: no client read policy at all — service-role only**; admins CRUD through server actions (`requireRole(ADMIN)` + service client), agents never see the table.
 - **Credential API:** `GET /api/remote-access/[propertyId]` via `requireApiActor({allow:[AGENT,ADMIN]})` (operator-scoped — per-property tightening rides the existing v2 scoping seam), returns `{peerId, password}` just-in-time; audited `remote_access.credentials_issued` (+ `remote_access.updated`/`rotated` on admin writes). Credentials never render in UI.
-- **Connect:** card button → fetch (or use pre-warmed) credentials → programmatic navigation to `rustdesk://connection/new/<peerId>?password=<pw>` (format verified in the target spec §4). **Pre-warm at Answer:** the accept flow fetches credentials for the ringing property so an in-call Connect is instant.
+- **Connect surfaces (D12):** the property card, **and inside a live call** — both in-call overlays (audio + video) and the call tile. All placements share one client helper: fetch (or use pre-warmed) credentials → programmatic navigation to `rustdesk://connection/new/<peerId>?password=<pw>` (format verified in the target spec §4). **Pre-warm at Answer:** the accept flow fetches credentials for the ringing property so an in-call Connect is instant.
 - **Admin CRUD UI:** property detail gains a Remote access card (peer id, set/rotate password, last-issued audit line).
 - **Enrollment seam (v2, carried per handoff):** the provisioning script stays schema-free; a future self-registration endpoint can populate `property_remote_access` without changing this API's shape.
 
@@ -104,9 +105,9 @@ The entire dial/routing path (webhooks, HMAC, TwiML, parallel-dial, presence-gat
 2. **Property cards + ring-on-card** (agent pod grid + admin fleet; retire right-rail placements) — highest daily value, pure UI over existing state.
 3. **Push productionized** (SW, subscription lifecycle, send-side wiring, prune) + Go on duty / End shift.
 4. **Call tile** (answer-gesture open, faces, reopen affordance).
-5. **Remote access** (0019, admin CRUD, credential API, Connect + pre-warm; provisioning-script password moves from PM into the vault).
+5. **Remote access** (0019, admin CRUD, credential API, Connect on card + in-call overlays + tile (D12) + pre-warm; provisioning-script password moves from PM into the vault).
 6. **Hold (audio)** — last, alone, with the 911-grade review.
-- Prod smoke per step; the migration plan's Phase-3 **done-when is amended** (same commit as this spec) to the pivoted wording: answer on expanded card (agent + covering admin) · one-click Connect to the real hotel PC · admin-connect to a non-covered property · hold/resume on audio · **loud ring with the browser minimized behind fullscreen RustDesk (push path) + toast observed**.
+- Prod smoke per step; the migration plan's Phase-3 **done-when is amended** (same commit as this spec) to the pivoted wording: answer on expanded card (agent + covering admin) · one-click Connect to the real hotel PC **from the card and from inside a live call (D12)** · admin-connect to a non-covered property · hold/resume on audio · **loud ring with the browser minimized behind fullscreen RustDesk (push path) + toast observed**.
 
 ## 7. Non-goals / v2 seams
 
