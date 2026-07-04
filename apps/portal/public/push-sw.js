@@ -28,11 +28,14 @@ self.addEventListener("push", (event) => {
         tab.postMessage({ source: "lc-push", ...data, receivedAt: Date.now() });
       }
       if (type === "call-cleared") {
-        // Close the matching incoming toast; no new notification.
-        // Contract for the production sender (Task 12+): a call-cleared push MUST
-        // carry the same callId as its incoming push — an empty tag matches nothing.
-        const existing = await self.registration.getNotifications({ tag: data.callId || "" });
-        for (const n of existing) n.close();
+        // Close the matching incoming toast; no new notification. The production
+        // sender (Task 12+) MUST carry the same callId as the incoming push.
+        // getNotifications({tag:""}) returns ALL notifications (the spec bypasses
+        // an empty-string tag filter) — never call it without a callId.
+        if (data.callId) {
+          const existing = await self.registration.getNotifications({ tag: data.callId });
+          for (const n of existing) n.close();
+        }
         return;
       }
       await self.registration.showNotification("Lobby Connect — incoming call", {

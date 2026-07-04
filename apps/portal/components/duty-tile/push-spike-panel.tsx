@@ -40,6 +40,7 @@ export function PushSpikePanel() {
         receivedAt?: number;
       };
       if (data?.source !== "lc-push") return;
+      if (data.type === "focus-home") return; // notification-click nudge, not a push receipt
       const pending = pendingPushRef.current;
       // Client-clock latency: everything measured on THIS machine's clock —
       // (now - sentAt) minus the requested delay = delivery + request overhead.
