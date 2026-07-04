@@ -14,6 +14,7 @@ const opts = {
   apologyMessage: "Sorry, no one is available.",
   callId: "call-1",
   propertyName: "Grand Hotel",
+  propertyId: "prop-1",
 };
 
 describe("twiml builders", () => {
@@ -26,7 +27,8 @@ describe("twiml builders", () => {
         '<Dial timeout="120" action="https://x.test/api/twilio/voice/dial-result" method="POST">' +
         '<Client><Identity>lc_a1</Identity>' +
         '<Parameter name="callId" value="call-1"/>' +
-        '<Parameter name="propertyName" value="Grand Hotel"/></Client>' +
+        '<Parameter name="propertyName" value="Grand Hotel"/>' +
+        '<Parameter name="propertyId" value="prop-1"/></Client>' +
         "</Dial>" +
         "</Response>",
     );
@@ -40,11 +42,25 @@ describe("twiml builders", () => {
     expect(xml).toContain(
       '<Client><Identity>lc_a1</Identity>' +
         '<Parameter name="callId" value="call-1"/>' +
-        '<Parameter name="propertyName" value="Grand Hotel"/></Client>' +
+        '<Parameter name="propertyName" value="Grand Hotel"/>' +
+        '<Parameter name="propertyId" value="prop-1"/></Client>' +
         '<Client><Identity>lc_x1</Identity>' +
         '<Parameter name="callId" value="call-1"/>' +
-        '<Parameter name="propertyName" value="Grand Hotel"/></Client>',
+        '<Parameter name="propertyName" value="Grand Hotel"/>' +
+        '<Parameter name="propertyId" value="prop-1"/></Client>',
     );
+  });
+
+  it("includes a propertyId Parameter on every Client noun", () => {
+    const xml = buildIncomingTwiml(
+      [{ identity: "lc_a1" }, { identity: "lc_x1" }],
+      opts,
+    );
+    const matches = xml.match(/<Parameter name="propertyId" value="prop-1"\/>/g);
+    expect(matches).toHaveLength(2);
+    // The existing params are untouched:
+    expect(xml).toContain('<Parameter name="callId" value=');
+    expect(xml).toContain('<Parameter name="propertyName" value=');
   });
 
   it("passes the property name as a Client parameter, XML-escaped", () => {
