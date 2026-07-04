@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the approved Phase-3 workspace design (`docs/specs/2026-07-04-phase3-workspace-design.md`, D1–D12): push-first alerting with an audible contract, dashboard-first property-card answering, the call-scoped Document-PiP tile, RustDesk remote-access credentials + Connect (card and in-call), duty controls, and audio hold — with the dial/911/overlay machinery untouched except the additive, byte-reviewed seams this plan names explicitly.
+**Goal:** Ship the approved Phase-3 workspace design (`docs/specs/2026-07-04-phase3-workspace-design.md`, D1–D12): push-first alerting with an audible contract, dashboard-first property-card answering, the call-scoped Document-PiP tile, RustDesk remote-access credentials + Connect (card and in-call), and duty controls — with the dial/911/overlay machinery untouched except the additive, byte-reviewed seam this plan names explicitly (Task 4). **Hold is DEFERRED out of Phase 3** (Kumar, plan gate 2026-07-04: "push it to when we have more than one property") — the recorded design lives in spec §3.6; cards/tile/provider keep a dormant `on-hold` state seam and nothing sets it.
 
-**Architecture:** Six shippable phases in spec §6 order — (A) Gate 3.1 push-ring spike, (B) property cards + ring-on-card, (C) push productionized + Go on duty / End shift, (D) call tile, (E) remote access + Connect, (F) hold, last, alone. The client work pivots on one new context (`CallSurfaceProvider`, grown beside the existing `LineStatusProvider`) that `Softphone` and the video-incoming hook *publish into* and cards/tile *consume from* — the Twilio `Device` and Agora machinery stay mounted exactly where they are today (D1/D2). Push is a third transport for the existing "calls-changed" nudge (SW message → the same `tick()` refetch realtime triggers), not a new ring pathway. Hold mirrors the 6c conference choreography with a separate `hold-<callId>` namespace.
+**Architecture:** Five shippable phases in spec §6 order — (A) Gate 3.1 push-ring spike, (B) property cards + ring-on-card, (C) push productionized + Go on duty / End shift, (D) call tile, (E) remote access + Connect, then close-out. The client work pivots on one new context (`CallSurfaceProvider`, grown beside the existing `LineStatusProvider`) that `Softphone` and the video-incoming hook *publish into* and cards/tile *consume from* — the Twilio `Device` and Agora machinery stay mounted exactly where they are today (D1/D2). Push is a third transport for the existing "calls-changed" nudge (SW message → the same `tick()` refetch realtime triggers), not a new ring pathway.
 
 **Tech Stack:** Next.js 15 App Router (typed routes), React 19, Tailwind v4 brand tokens, Twilio Voice SDK + REST, Agora RTC, Supabase (Postgres + RLS + Realtime), `web-push@3.6.7` (new dep), Document Picture-in-Picture (Chromium), Vitest (node + jsdom profiles).
 
@@ -17,13 +17,13 @@
 - Commit after every task (`Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`, no emojis).
 - Branch: `phase3-workspace`. Staging = push the `staging` branch (box auto-deploys); prod = PR to `main` (Claude cannot push `main`).
 
-**Load-bearing DO-NOT-TOUCH list (spec §4):** dial/routing semantics (`plan-dial`, presence gating, apology TwiML), the 911 conference machinery (Tasks 4, 21–23 touch adjacent code and carry explicit byte-review steps), both in-call overlays' call logic (additive controls only), kiosk semantics, RLS posture, heartbeat presence model, reaper/finalization.
+**Load-bearing DO-NOT-TOUCH list (spec §4):** dial/routing semantics (`plan-dial`, presence gating, apology TwiML), the 911 conference machinery (with hold deferred, NOTHING in this plan touches it; Task 4 touches adjacent TwiML and carries an explicit byte-review step), both in-call overlays' call logic (additive controls only), kiosk semantics, RLS posture, heartbeat presence model, reaper/finalization.
 
 ---
 
 ## Migration renumbering note (vs spec §3.7)
 
-Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (Phase C), **0020 = `property_remote_access`** (Phase E), **0021 = `calls` hold columns** (Phase F — implied by spec §3.6's "plan-level" hold choreography; new here). The spec's §3.5/§3.7 lines are amended in the same commit as this plan.
+Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (Phase C), **0020 = `property_remote_access`** (Phase E). The spec's §3.5/§3.7 lines are amended accordingly. (The former 0021 hold-columns migration is deferred with hold.)
 
 ---
 
@@ -37,11 +37,11 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/app/duty-tile-prototype/push-spike.tsx` + `app/api/push-spike/route.ts` | Gate 3.1 spike UI + delayed-send route (temporary) | 2, 3 (drill), 13 (removed) |
 | `apps/portal/lib/voice/twiml.ts` | + `propertyId` `<Parameter>` (additive, reviewed) | 4 |
 | `apps/portal/lib/dashboard/pods.ts` | Pure pod-grouping + card live-state + duty-label helpers (TDD) | 5 |
-| `apps/portal/components/dashboard/call-surface-provider.tsx` | New context: incoming/active call state + accept/hold dispatchers | 6 |
+| `apps/portal/components/dashboard/call-surface-provider.tsx` | New context: incoming/active call state + accept dispatchers | 6 |
 | `apps/portal/lib/hooks/use-incoming-video-calls.ts` | Video-incoming detection (moved out of the banner; realtime + poll + focus + SW message) | 7 |
-| `apps/portal/components/softphone/softphone.tsx` | Publish into provider; incoming block UI retired; duty/heartbeat arm; hold branching (F) | 7, 15, 24 |
+| `apps/portal/components/softphone/softphone.tsx` | Publish into provider; incoming block UI retired; duty/heartbeat arm | 7, 15 |
 | `apps/portal/components/video-call/video-call-host.tsx` | Headless incoming publisher + overlay mount | 7 |
-| `apps/portal/components/dashboard/property-card.tsx` | Shared card (both scopes): identity, live state, tonight, Answer/Connect | 8, 18 (Connect), 24 (held) |
+| `apps/portal/components/dashboard/property-card.tsx` | Shared card (both scopes): identity, live state, tonight, Answer/Connect | 8, 19 (Connect) |
 | `apps/portal/app/(agent)/agent/page.tsx` | Pod card grid replaces right-rail placements | 8, 9 |
 | `apps/portal/app/(admin)/admin/page.tsx` | Pod-grouped fleet cards replace ops table | 9 |
 | `apps/portal/components/dashboard-workspace.tsx` | Aside → headless hosts; toast retired | 9 |
@@ -54,12 +54,11 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/lib/duty-tile/call-tile-manager.ts` + `components/call-tile/*` | Call-scoped DocPiP tile | 16, 17 |
 | `supabase/migrations/0020_property_remote_access.sql` | Credentials table, service-role only | 18 |
 | `apps/portal/app/api/remote-access/[propertyId]/route.ts` + `lib/remote-access/*` + admin CRUD | Credential API + Connect + pre-warm | 18, 19, 20 |
-| `supabase/migrations/0021_call_hold.sql` | `hold_conference_name` + `on_hold` on `calls` | 21 |
-| `apps/portal/lib/hold/conference.ts` + `app/api/calls/[id]/hold/route.ts` | Hold choreography (6c pattern) | 21, 22 |
-| `apps/portal/app/api/twilio/voice/dial-result/route.ts` + `app/api/calls/[id]/emergency/route.ts` | Hold routing + 911-after-hold (BYTE REVIEW) | 23 |
 | `packages/shared/src/protocol.ts` | + `PUSH_TTL_SECONDS` guard | 11 |
 
-Retired in place: softphone incoming block (7), `IncomingVideoBanner` UI + `IncomingCallToast` + persistent Video card (9), `/duty-tile-prototype` route (25).
+(Hold files — migration, `lib/hold/`, hold route, dial-result/emergency touches — are DEFERRED with hold; recorded design in spec §3.6.)
+
+Retired in place: softphone incoming block (7), `IncomingVideoBanner` UI + `IncomingCallToast` + persistent Video card (9), `/duty-tile-prototype` route (21).
 
 ---
 
@@ -953,7 +952,7 @@ useEffect(() => {
           channel: "AUDIO",
           propertyId: incomingPropertyIdRef.current,
           propertyName: incomingProperty ?? "Unknown property",
-          onHold: false, // Phase F wires this
+          onHold: false, // dormant seam — hold is deferred out of Phase 3 (spec §3.6)
           answeredAt: answeredAtRef.current,
           timeZone: callTimeZone, // captured from the answered route today
         }
@@ -1824,258 +1823,15 @@ Tests: URL encoding (peer with spaces/`?`/unicode password), 404 → null.
 
 ---
 
-# PHASE F — hold (audio), last, alone (D8, D9 — 911-grade review)
+# PHASE F — DEFERRED: hold (all of it) is out of Phase 3
 
-Design recap (from the 6c machinery): **Hold** stamps `hold_conference_name = hold-<callId>` then redirects the AGENT leg into that conference with `endConferenceOnExit="true"` (agent drop = conference dies = guest's call ends cleanly — no orphaned guest in hold music); the guest's `<Dial>` action then fires and `dial-result` routes the guest in with `endConferenceOnExit="false"`; the route then flips the guest participant `hold=true` (Twilio hold music) via a bounded participant poll. **Resume** = participant `hold=false` (both stay conferenced; audio identical to a bridge). **A previously-held call's 911** cannot rely on `dial-result` (it already fired) — the emergency route REST-redirects the GUEST first, then the agent (order matters: agent-leave would end the hold conference).
+**Plan-gate edit (Kumar, 2026-07-04): "lets simplify things here and push it to when we have more than one property."** The full choreography that was planned here (hold-<callId> conference mirroring 6c, agent leg `endConferenceOnExit=true`, dial-result guest routing, participant `hold=true`, 911-after-hold guest-first REST redirect, byte-review discipline) is **recorded in spec §3.6** as the design of record for the multi-property moment — likely riding Phase 4/LiveKit so audio + video hold land together. Consequences absorbed into the tasks above: no migration 0021; no hold controls anywhere; the `on-hold` state name in `cardLiveState`/`ActiveCallInfo` stays as a dormant seam nothing sets; the video overlay's existing greyed "Hold — coming soon" button stays as-is. With hold gone, **nothing in Phase 3 touches dial-result or the 911 route** — the only voice-path change is Task 4's additive TwiML Parameter.
 
-## Task 21: migration 0021 + hold conference helpers (TDD)
+## Task 21: Phase-3 close-out (HUMAN + docs)
 
-**Files:**
-- Create: `supabase/migrations/0021_call_hold.sql`
-- Create: `apps/portal/lib/hold/conference.ts`
-- Modify: `apps/portal/lib/emergency/conference.ts` (parameterize `endConferenceOnExit` — output byte-identical for existing callers)
-- Tests: `tests/lib/hold/conference.test.ts`, extend `tests/lib/emergency/conference.test.ts`
-
-- [ ] **Step 1: Migration:**
-
-```sql
--- 0021_call_hold.sql
--- Phase 3 (spec §3.6): audio hold via a Twilio conference (6c precedent).
--- hold_conference_name records "this call has been conferenced for hold"
--- (stable once set, like emergency_conference_name); on_hold tracks whether
--- the guest participant is currently held.
-
-alter table public.calls
-  add column hold_conference_name text,
-  add column on_hold boolean not null default false;
-```
-
-`pnpm gen:types`, commit generated file.
-
-- [ ] **Step 2: Parameterize the conference TwiML** — `buildConferenceTwiml(name, opts?: { endConferenceOnExit?: boolean })`, default `false`. Extend the emergency conference test FIRST with an exact-output regression: the no-opts call returns the **byte-identical** string it returns today (copy the current expected literal into the test before touching the code). Then add `buildConferenceTwiml("hold-1", { endConferenceOnExit: true })` asserting `endConferenceOnExit="true"`.
-
-- [ ] **Step 3: `lib/hold/conference.ts`** (TDD):
-
-```typescript
-import { buildConferenceTwiml } from "@/lib/emergency/conference";
-
-export function holdConferenceName(callId: string): string {
-  return `hold-${callId}`;
-}
-
-/** dial-result routing: emergency ALWAYS wins over hold. */
-export function conferenceRouteFor(row: {
-  emergency_conference_name: string | null;
-  hold_conference_name: string | null;
-}): string | null {
-  if (row.emergency_conference_name) return row.emergency_conference_name;
-  if (row.hold_conference_name) return row.hold_conference_name;
-  return null;
-}
-
-export function buildHoldAgentTwiml(name: string): string {
-  return buildConferenceTwiml(name, { endConferenceOnExit: true });
-}
-
-export function buildHoldGuestTwiml(name: string): string {
-  return buildConferenceTwiml(name, { endConferenceOnExit: false });
-}
-```
-
-Tests: precedence (both set → emergency name), null cases, agent/guest TwiML attribute assertions.
-
-- [ ] **Step 4: Gate + commit** (`feat(hold): 0021 hold columns + conference helpers; emergency TwiML byte-identical (regression-tested)`).
-
-## Task 22: the hold route
-
-**Files:**
-- Create: `apps/portal/app/api/calls/[id]/hold/route.ts`
-- Test: `tests/app/calls/hold.test.ts` (mirror `emergency.test.ts` mock pattern)
-
-- [ ] **Step 1: Route** — actions `hold | resume | leave`; guards: handler-only, AUDIO, IN_PROGRESS, **no active emergency** (`emergency_conference_name IS NULL` → else 409 "Resume-proof: emergency owns this call"):
-
-```typescript
-// apps/portal/app/api/calls/[id]/hold/route.ts
-// Audio hold via the 6c conference choreography. Same reliability toolkit:
-// withTimeout on every Twilio op, atomic stamp, idempotent re-entry.
-import { NextResponse } from "next/server";
-import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getTwilioRestClient } from "@/lib/twilio/client";
-import { findAgentLeg } from "@/lib/twilio/conference";
-import { buildHoldAgentTwiml, holdConferenceName } from "@/lib/hold/conference";
-import { withTimeout } from "@/lib/util/timeout";
-
-export const maxDuration = 30;
-const TWILIO_OP_TIMEOUT_MS = 8_000;
-const GUEST_JOIN_POLL_MS = 500;
-const GUEST_JOIN_POLL_TRIES = 12; // ≤6s
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-): Promise<NextResponse> {
-  const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
-  if (actor instanceof NextResponse) return actor;
-  const { id } = await params;
-  const body = (await request.json().catch(() => ({}))) as { action?: string };
-  if (!["hold", "resume", "leave"].includes(body.action ?? "")) {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  }
-
-  const call = await fetchOperatorCall<{
-    id: string;
-    state: string;
-    channel: string;
-    handled_by_user_id: string | null;
-    twilio_call_sid: string | null;
-    emergency_conference_name: string | null;
-    hold_conference_name: string | null;
-  }>(actor, id, "id, state, channel, handled_by_user_id, twilio_call_sid, emergency_conference_name, hold_conference_name");
-  if (call instanceof NextResponse) return call;
-
-  if (call.handled_by_user_id !== actor.userId) {
-    return NextResponse.json({ error: "Only the handling agent can hold" }, { status: 403 });
-  }
-  if (call.channel !== "AUDIO" || call.state !== "IN_PROGRESS" || !call.twilio_call_sid) {
-    return NextResponse.json({ error: "Call is not holdable" }, { status: 409 });
-  }
-  if (call.emergency_conference_name) {
-    return NextResponse.json({ error: "Emergency active — hold unavailable" }, { status: 409 });
-  }
-
-  const admin = createAdminClient();
-  const client = getTwilioRestClient();
-  const confName = call.hold_conference_name ?? holdConferenceName(call.id);
-
-  if (body.action === "hold") {
-    if (!call.hold_conference_name) {
-      // First hold: atomic stamp, then move the agent leg; dial-result routes the guest.
-      const { data: claimed } = await admin
-        .from("calls")
-        .update({ hold_conference_name: confName })
-        .eq("id", call.id)
-        .is("hold_conference_name", null)
-        .select("id");
-      if (!claimed || claimed.length === 0) {
-        return NextResponse.json({ error: "Hold already in progress" }, { status: 409 });
-      }
-      const agentLeg = await withTimeout(
-        findAgentLeg(client, call.twilio_call_sid),
-        TWILIO_OP_TIMEOUT_MS,
-        "findAgentLeg",
-      ).catch(() => null);
-      if (!agentLeg) {
-        // Roll the stamp back — nothing moved; the call is still a plain bridge.
-        await admin.from("calls").update({ hold_conference_name: null }).eq("id", call.id);
-        return NextResponse.json({ error: "Could not locate the agent leg" }, { status: 502 });
-      }
-      await withTimeout(
-        client.calls(agentLeg).update({ twiml: buildHoldAgentTwiml(confName) }),
-        TWILIO_OP_TIMEOUT_MS,
-        "redirect agent leg to hold",
-      );
-    }
-    // Wait for the guest participant, then hold them (Twilio hold music).
-    for (let i = 0; i < GUEST_JOIN_POLL_TRIES; i++) {
-      try {
-        await withTimeout(
-          client
-            .conferences(confName)
-            .participants(call.twilio_call_sid)
-            .update({ hold: true }),
-          TWILIO_OP_TIMEOUT_MS,
-          "hold guest participant",
-        );
-        await admin.from("calls").update({ on_hold: true }).eq("id", call.id);
-        return NextResponse.json({ ok: true, onHold: true });
-      } catch {
-        await new Promise((r) => setTimeout(r, GUEST_JOIN_POLL_MS));
-      }
-    }
-    // Guest never surfaced as holdable: they're conferenced un-held (audible to
-    // agent) — report failure so the UI can offer retry.
-    return NextResponse.json({ error: "Guest did not reach the hold conference" }, { status: 502 });
-  }
-
-  if (body.action === "resume") {
-    if (!call.hold_conference_name) {
-      return NextResponse.json({ error: "Call is not held" }, { status: 409 });
-    }
-    await withTimeout(
-      client.conferences(confName).participants(call.twilio_call_sid).update({ hold: false }),
-      TWILIO_OP_TIMEOUT_MS,
-      "resume guest participant",
-    );
-    await admin.from("calls").update({ on_hold: false }).eq("id", call.id);
-    return NextResponse.json({ ok: true, onHold: false });
-  }
-
-  // action === "leave": agent ends a conferenced call — complete the conference
-  // (drops everyone; status webhook finalizes the row as today).
-  if (call.hold_conference_name) {
-    await withTimeout(
-      client.conferences(confName).update({ status: "completed" }),
-      TWILIO_OP_TIMEOUT_MS,
-      "complete hold conference",
-    ).catch(() => {});
-  }
-  return NextResponse.json({ ok: true });
-}
-```
-
-- [ ] **Step 2: Route tests** (mirror the emergency mock pattern — Twilio client mock with `calls()`/`conferences().participants()` accessors): guards (403 non-handler, 409 video / not-in-progress / emergency-active), first hold stamps + redirects agent + holds guest + `on_hold=true`, agent-leg-missing rolls the stamp back, second `hold` after `resume` skips the redirect (already conferenced) and just re-holds, `resume` flips `hold:false` + `on_hold=false`, `leave` completes the conference, guest-never-joins path returns 502 after the poll budget (use fake timers).
-
-- [ ] **Step 3: Gate + commit** (`feat(hold): hold/resume/leave route via the 6c conference choreography (TDD)`).
-
-## Task 23: dial-result hold routing + 911-after-hold — **BYTE-REVIEW TASK**
-
-**Files:**
-- Modify: `apps/portal/app/api/twilio/voice/dial-result/route.ts`
-- Modify: `apps/portal/app/api/calls/[id]/emergency/route.ts`
-- Tests: extend `tests/app/twilio/dial-result.test.ts` (or the repo's actual dial-result test file) + `tests/app/calls/emergency.test.ts`
-
-- [ ] **Step 1: dial-result.** Widen the existing read to `"state, emergency_conference_name, hold_conference_name"` and replace the emergency-only branch with `conferenceRouteFor`:
-
-```typescript
-if (existing) {
-  const conf = conferenceRouteFor(existing);
-  if (conf) {
-    // Guest joins with endConferenceOnExit=false in BOTH cases (emergency
-    // TwiML is byte-identical to today via the default).
-    return twimlResponse(buildConferenceTwiml(conf));
-  }
-}
-```
-
-Tests: emergency-stamped → conference TwiML (existing test unchanged — assert the exact same XML as before); hold-stamped → `hold-<id>` conference TwiML; both → emergency wins; neither → today's terminal-state path (existing tests must pass UNCHANGED).
-
-- [ ] **Step 2: emergency route, hold-aware path.** In the 911 route, after the atomic emergency claim, branch when `callRow.hold_conference_name` is set: `dial-result` will never re-fire, so REST-redirect **guest first** (`client.calls(parentSid).update({ twiml: buildConferenceTwiml(confName) })` — the existing fallback primitive), **then** the agent leg (redirecting the agent first would end the hold conference — `endConferenceOnExit=true` — and hang the guest up). Also `update({ on_hold: false })` so the UI un-holds. The non-held path stays **byte-identical**.
-
-Tests: new spec "escalates a previously-held call: guest redirected before agent, both into emg-<id>, on_hold cleared"; plus assert-unchanged specs for the normal path (the existing 13 must pass without edits).
-
-- [ ] **Step 3: BYTE REVIEW (blocking).** Produce `git diff` of both routes; line-by-line review against: (a) every existing emergency test green unmodified; (b) the normal-call dial-result XML byte-identical (snapshot in test); (c) no reordering of the emergency choreography for non-held calls. Reviewer = a fresh subagent with the 6c spec (`docs/specs/2026-06-02-06c-emergency-call-design.md`) + this plan section; record verdict in the commit message.
-
-- [ ] **Step 4: Commit** (`feat(hold): dial-result hold routing + 911-after-hold guest-first redirect — 911 path byte-reviewed`).
-
-## Task 24: hold UI — overlay, tile, cards, second-ring hold-then-answer (D8)
-
-**Files:**
-- Modify: `softphone.tsx` (hold state + server-side control branching), `audio-call-overlay.tsx` (Hold/Resume button), `call-tile.tsx` (hold control + second-ring banner), `property-card.tsx` (held state renders), `call-surface-provider.tsx` (holdThenAnswer dispatch)
-- Tests: extend softphone + tile + property-card tests
-
-- [ ] **Step 1: Softphone hold state:** `holdActive` state + `holdCall()` / `resumeCall()` via `reliableFetch("/api/calls/<id>/hold", {action})` (optimistic with revert, the toggleMute pattern). **After any hold, the agent leg is conferenced** — like 911: `toggleMute` gains a `holdConferencedRef` branch → route mute through a conference participant… **v1 scope decision:** while held, Mute is disabled with tooltip "Guest is on hold" (mute-while-held is meaningless — guest can't hear you); after RESUME, SDK mute is dead (redirected leg) — disable Mute post-resume too ("Unavailable after hold — hang up ends the call normally") rather than building a hold-participant mute API nobody asked for. Hang-up while conferenced routes through `hold` route `action:"leave"` (then the normal `endCall` teardown). `publishActive` now carries `onHold: holdActive`.
-- [ ] **Step 2: Overlay button:** Hold/Resume `variant="neutral"` beside Mute (audio overlay only — video renders NO hold control, D9); 911 button `disabled={holdActive}` with "Resume the call first" tooltip (the route enforces it too).
-- [ ] **Step 3: Cards + tile:** `on-hold` live-state line ("On hold", muted foreground + `Badge variant="secondary"`; blaze stays incident-only); the card ALSO gets a Resume button when the held call is the actor's own (`active.onHold && active.propertyId === property.id`) — spec §3.6 "resume from any of them" means card + tile + overlay; tile face gets Hold/Resume + shows HOLD state prominently; second-ring banner in the tile (provider `rings` while `active` non-null): "Incoming · <property> — Answer & hold current" button = `holdThenAnswer(ring)` (provider dispatch: `await holdCall()` success → accept B; failure → banner error, current call untouched). Only offered when `active.channel === "AUDIO"` (D9: no video hold in P3).
-- [ ] **Step 4: Tests:** hold optimistic + revert on 502; mute disabled while held; hold-then-answer sequences (hold resolves → acceptVideo called; hold fails → no accept); card shows "On hold".
-- [ ] **Step 5: Full gate + commit** (`feat(hold): hold UI on overlay/tile/cards + second-ring hold-then-answer (audio only)`).
-
-## Task 25: Phase F prod smoke + Phase-3 close-out (HUMAN + docs)
-
-- [ ] **Prod smoke (Kumar + Claude):** apply 0021 to prod; real phone call → Hold (hold music audible on the phone) → Resume → talk → Hang up; hold → hang-up-while-held (guest call ends, row COMPLETED); hold → 911 with the test config if available — otherwise the 933 drill waits for a scheduled window (the 6c precedent) and the *code* gate is the Task-23 byte review + tests. Verify status webhook finalized every drill row (no leaked IN_PROGRESS).
-- [ ] **Retire the prototype:** delete `app/duty-tile-prototype/` + `components/duty-tile/duty-tile-prototype.tsx` + `tile-window.tsx` (keep `pip-document.ts`, `tick-stats.ts` only if still imported — `pip-document` is; `tick-stats` dies with the prototype unless the tile uses it — check imports) + prod route gone.
-- [ ] **Done-when checklist (migration plan Phase 3):** answer on expanded card (agent + covering admin) ✓ · one-click Connect from card AND from inside a live call ✓ · admin-connect to a non-covered property ✓ · hold/resume on audio ✓ · loud ring with browser minimized behind fullscreen RustDesk (push) + toast observed ✓ · tile opens on Answer and carries the call over RustDesk ✓.
-- [ ] **Docs sync:** stamp the migration plan Phase-3 STATUS + done-when; CLAUDE.md current-focus; `MEMORY.md` + `memory/project-status.md`; tag `plan-phase3-workspace-complete` after Kumar's final nod.
+- [ ] **Retire the prototype:** delete `app/duty-tile-prototype/` + `components/duty-tile/duty-tile-prototype.tsx` + `tile-window.tsx` + the Gate-3.0 test route surface (keep `pip-document.ts` — the call tile imports it; keep `tick-stats.ts` + its test only if something still imports it, else delete) + prod route gone. Full suite green after deletion.
+- [ ] **Done-when checklist (migration plan Phase 3, hold line removed):** answer on expanded card (agent + covering admin) ✓ · one-click Connect from card AND from inside a live call ✓ · admin-connect to a non-covered property ✓ · loud ring with browser minimized behind fullscreen RustDesk (push) + toast observed ✓ · tile opens on Answer and carries the call over RustDesk ✓.
+- [ ] **Docs sync:** stamp the migration plan Phase-3 STATUS + done-when (hold moved to the deferred list); CLAUDE.md current-focus; `MEMORY.md` + `memory/project-status.md`; tag `plan-phase3-workspace-complete` after Kumar's final nod.
 - [ ] **Whole-branch review:** opus-tier subagent over the full Phase-3 diff (house pattern) before the final PR.
 
 ---
@@ -2086,4 +1842,4 @@ Voice/video/push only fully work on deployed environments (Twilio/kiosk point at
 
 ## Execution
 
-Subagent-driven (house pattern): fresh subagent per task, per-task spec + quality review, the two BYTE-REVIEW steps (Tasks 4, 23) use dedicated reviewer subagents with the 911/voice context, opus whole-branch review at the end. Human gates: Task 3 (Gate 3.1 drill), Task 10, Phase-C smoke, Phase-D smoke, Task 20, Task 25.
+Subagent-driven (house pattern): fresh subagent per task, per-task spec + quality review, the BYTE-REVIEW step (Task 4) uses a dedicated reviewer subagent with the voice-path context, opus whole-branch review at the end. Human gates: Task 3 (Gate 3.1 drill), Task 10, Phase-C smoke, Phase-D smoke, Task 20, Task 21 (close-out).

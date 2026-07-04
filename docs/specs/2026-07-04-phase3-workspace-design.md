@@ -1,6 +1,6 @@
 # Phase 3 — agent + admin workspace: property cards, push-first alerting, call tile, Connect, hold (design spec)
 
-**Date:** 2026-07-04 · **Status:** APPROVED — brainstormed with Kumar 2026-07-03→04 (visual companion + Gate 3.0 evidence); passed his spec gate 2026-07-04 with one edit folded in (**D12** — Connect from the in-call surfaces) and the palette stance settled (blaze stays: sparing attention accent, the non-emergency replacement for red; red itself reserved for 911/emergency) · **Parents:** target architecture `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` §4/§5/§5b · migration plan `docs/plans/2026-07-01-stack-consolidation-migration.md` (Phase 3) · kickoff handoff `docs/handoffs/2026-07-03-phase3-kickoff-handoff.md`
+**Date:** 2026-07-04 · **Status:** APPROVED — brainstormed with Kumar 2026-07-03→04 (visual companion + Gate 3.0 evidence); passed his spec gate 2026-07-04 with one edit folded in (**D12** — Connect from the in-call surfaces) and the palette stance settled (blaze stays: sparing attention accent, the non-emergency replacement for red; red itself reserved for 911/emergency). **Second gate edit (Kumar, plan review 2026-07-04): HOLD IS DEFERRED out of Phase 3 entirely** — "simplify things here and push it to when we have more than one property"; D8/D9/§3.6 kept below as the recorded design for the multi-property moment (likely rides Phase 4/LiveKit so audio + video hold land together) · **Parents:** target architecture `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` §4/§5/§5b · migration plan `docs/plans/2026-07-01-stack-consolidation-migration.md` (Phase 3) · kickoff handoff `docs/handoffs/2026-07-03-phase3-kickoff-handoff.md`
 
 Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floating-window + throttling behavior is **evidence-backed by Gate 3.0** (both OSes, real machines, logs pasted in-session). Web Push delivery behavior is *prior knowledge — deliberately verified by Gate 3.1 before anything depends on it*.
 
@@ -29,8 +29,8 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 | D5 | **"Go on duty" is slim + local** | One deliberate click: primes ring audio (session-22 pattern) + requests push permission / refreshes the subscription. No routing/presence semantics |
 | D6 | **"End shift" button** (dashboard header area) | Immediate presence→OFFLINE via a service-role presence route (same family as the heartbeat) so the fleet view reads true without waiting for staleness. No shift schedule — Kumar: "who is busy not who hasnt showed up yet" (schedule = v2 seam) |
 | D7 | **Fleet "on duty" labels are derived** from existing presence | No schema, no routing change |
-| D8 | **Second ring while on a call: answering it holds the current call** | Sequencing: hold A (conference) → answer B. Rare until the Twilio concurrency raise; designed in now |
-| D9 | **Hold ships UI + AUDIO only in Phase 3** (Twilio Conference seam, the 6c precedent). **Video-hold wiring waits for LiveKit (Phase 4)** | Kumar correction — no Agora hold plumbing that Phase 4 would delete |
+| D8 | ~~Second ring while on a call: answering it holds the current call~~ **DEFERRED with hold (plan-gate edit)** | Multi-property scenario; with one property + Twilio concurrency 1 a second audio call can't arrive. Today's behavior stands: a kiosk ring during a phone call can be answered alongside or left to ring out |
+| D9 | ~~Hold ships UI + AUDIO only in Phase 3~~ **DEFERRED ENTIRELY (plan-gate edit): all of hold waits for the multi-property moment** | Kumar 2026-07-04: "simplify things here and push it to when we have more than one property." Cards/tile/provider keep a dormant `on-hold` state seam; §3.6 stays as the recorded design. Likely lands with Phase 4/LiveKit (audio + video hold together) |
 | D10 | **Connect is per-need** at multi-property scale (all-shift RustDesk is a single-property training artifact) | Pre-warm: credentials fetched at Answer so Connect fires instantly |
 | D11 | Admin fleet = pod-grouped under the existing command strip; **Answer gated by `covering`; Connect never gated** | Restates the target-spec §5b locks |
 | D12 | **Connect is available from inside a live call** — the in-call overlays (audio + video) and the call tile carry a Connect action alongside the call controls | Kumar's spec-gate edit (2026-07-04). Additive button only — no other overlay change (scoped exception to D2); wired to the same pre-warmed credential fetch (D10) so an in-call Connect fires instantly |
@@ -39,7 +39,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 
 ### 3.1 Property cards (shared component, two scopes)
 
-- **Anatomy:** property identity · live state line (quiet / **ringing** / on call / on hold, + open-incident chip in blaze per brand severity rules — palette stance settled at the spec gate: blaze stays as the sparing attention accent, red reserved for 911/emergency) · tonight-at-a-glance (calls tonight, last-call time) · actions: **Answer** (only while ringing; agents always, admins only where `covering` is on) and **Connect** (always, never gated).
+- **Anatomy:** property identity · live state line (quiet / **ringing** / on call — "on hold" stays a dormant state-name seam until hold ships, + open-incident chip in blaze per brand severity rules — palette stance settled at the spec gate: blaze stays as the sparing attention accent, red reserved for 911/emergency) · tonight-at-a-glance (calls tonight, last-call time) · actions: **Answer** (only while ringing; agents always, admins only where `covering` is on) and **Connect** (always, never gated).
 - **Ringing = the card expands in place** (grows, mint ring treatment — the same vocabulary as the softphone incoming state and the Gate-3.0 tile) with channel + elapsed. Answer claims the call through the **existing** answer/answer-video routes (first-wins claims unchanged), then opens the existing overlay (D2).
 - **Agent dashboard:** pod card grid replaces the current right-rail incoming placements; the rest of the agent bento (stats, chart, recent calls) stays.
 - **Admin dashboard:** command-center strip stays on top; below it, **pods grouped by agent** (agent header: name + derived presence + property count), each pod's cards beneath; unassigned properties in a trailing group.
@@ -60,7 +60,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 ### 3.3 The call tile (P2 — Document PiP, Chromium)
 
 - **Opens from the Answer click** — `requestWindow()` is called synchronously inside the click handler (gesture constraint, recorded from Gate 3.0), then the accept flow proceeds; if the tile fails to open, the call proceeds normally in the tab (tile is additive, never load-bearing).
-- **Faces:** VIDEO call → guest video fills the tile, compact bar beneath (timer · mute · hold · hang up · **911** · **Connect** (D12) · room#/quick-note ⏎ reusing the notes-durability path). AUDIO call → identity + hotel-local time + timer + the same controls. A **second-property ring** renders as a banner inside the tile (Answer there = D8 hold-then-answer).
+- **Faces:** VIDEO call → guest video fills the tile, compact bar beneath (timer · mute · hang up · **911** · **Connect** (D12) · room#/quick-note ⏎ reusing the notes-durability path; hold control returns with hold). AUDIO call → identity + hotel-local time + timer + the same controls. ~~A second-property ring renders as a banner inside the tile (Answer there = D8 hold-then-answer)~~ — deferred with D8/hold.
 - **Authority:** the in-tab overlay remains the authoritative call surface (D2); the tile mirrors state through the same client call-state (one source of truth, two portals — the Gate-3.0 createPortal pattern). Closing the tile mid-call changes nothing about the call; the overlay shows a "reopen tile" affordance (the Back-to-tab accidental-close lesson).
 - **Brand binding:** tile document inherits the portal stylesheet (Gate-3.0 mechanism) and uses only brand tokens — the in-call face gets a proper design pass at build (Kumar's flag).
 - **Degradation:** non-Chromium/no-DocPiP → no tile; overlay-only (today's behavior). Chrome/Edge SOP stands (runbook §11 seam).
@@ -79,15 +79,19 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 - **Admin CRUD UI:** property detail gains a Remote access card (peer id, set/rotate password, last-issued audit line).
 - **Enrollment seam (v2, carried per handoff):** the provisioning script stays schema-free; a future self-registration endpoint can populate `property_remote_access` without changing this API's shape.
 
-### 3.6 Hold (audio, Phase 3 scope)
+### 3.6 Hold — DEFERRED out of Phase 3 (recorded design for the multi-property moment)
 
-- Mechanism: the **6c conference precedent** — on Hold, the call's legs move into a Twilio Conference with the guest participant `hold=true` (Twilio hold music); Resume flips it back. Same server-side Participant-API control family as the emergency path; the exact TwiML/redirect choreography is a plan-level task with **911-grade byte review** (it touches the same seams).
-- Held state renders on the property card + tile + overlay; resume from any of them.
-- Video calls in Phase 3: **no hold control rendered** (D9) — the seam (state names, card/tile rendering) is built so LiveKit track-pause drops in at Phase 4.
+**Not built in Phase 3** (plan-gate edit, D9). Kept as the design of record so it isn't re-derived later; the 2026-07-04 plan (superseded Phase F) worked the choreography out in full:
+
+- Mechanism: the **6c conference precedent** — Hold stamps `hold_conference_name = hold-<callId>` and redirects the AGENT leg into that conference with `endConferenceOnExit="true"` (an agent crash/reload ends the guest's call cleanly instead of orphaning them in hold music); the guest's `<Dial>` action then fires and dial-result routes the guest in (`endConferenceOnExit="false"`); the route then flips the guest participant `hold=true` (Twilio hold music) via a bounded participant poll. Resume = participant `hold=false` (both stay conferenced — audio-identical to a bridge).
+- **911-on-a-previously-held call needs its own path:** dial-result never re-fires once conferenced, so the emergency route must REST-redirect the GUEST first, then the agent (agent-first would end the hold conference). This is why hold carries 911-grade byte review whenever it ships.
+- A redirected agent leg is SDK-uncontrollable (the 6c lesson) — in-call controls while/after hold go server-side (Participant API) or get disabled.
+- Held state renders on the property card + tile + overlay; resume from any of them. Migration when built: `calls.hold_conference_name` + `calls.on_hold`.
+- Video hold = LiveKit track-pause (Phase 4). Deferring audio hold too means both halves can land together as one feature.
 
 ### 3.7 Migrations
 
-- Renumbered to ship order at plan time (plan: `docs/plans/2026-07-04-phase3-workspace.md`): **0019 `push_subscriptions`:** `user_id` (FK) · `operator_id` · `endpoint` (unique) · `p256dh` · `auth` · `created_at` · `last_seen_at`; RLS: owner-only select/delete; inserts via the session-authed route (user-scoped). **0020 `property_remote_access`** (§3.5). **0021 `calls` hold columns** (`hold_conference_name`, `on_hold` — the plan-level hold choreography of §3.6 needs them). Types regenerated (`pnpm gen:types`) per the Phase-4 drift check.
+- Renumbered to ship order at plan time (plan: `docs/plans/2026-07-04-phase3-workspace.md`): **0019 `push_subscriptions`:** `user_id` (FK) · `operator_id` · `endpoint` (unique) · `p256dh` · `auth` · `created_at` · `last_seen_at`; RLS: owner-only select/delete; inserts via the session-authed route (user-scoped). **0020 `property_remote_access`** (§3.5). (A `calls` hold-columns migration rides with hold whenever it ships — deferred, §3.6.) Types regenerated (`pnpm gen:types`) per the Phase-4 drift check.
 
 ## 4. What does NOT change (load-bearing)
 
@@ -105,18 +109,18 @@ The entire dial/routing path (webhooks, HMAC, TwiML, parallel-dial, presence-gat
 2. **Property cards + ring-on-card** (agent pod grid + admin fleet; retire right-rail placements) — highest daily value, pure UI over existing state.
 3. **Push productionized** (SW, subscription lifecycle, send-side wiring, prune) + Go on duty / End shift.
 4. **Call tile** (answer-gesture open, faces, reopen affordance).
-5. **Remote access** (0019, admin CRUD, credential API, Connect on card + in-call overlays + tile (D12) + pre-warm; provisioning-script password moves from PM into the vault).
-6. **Hold (audio)** — last, alone, with the 911-grade review.
-- Prod smoke per step; the migration plan's Phase-3 **done-when is amended** (same commit as this spec) to the pivoted wording: answer on expanded card (agent + covering admin) · one-click Connect to the real hotel PC **from the card and from inside a live call (D12)** · admin-connect to a non-covered property · hold/resume on audio · **loud ring with the browser minimized behind fullscreen RustDesk (push path) + toast observed**.
+5. **Remote access** (0020, admin CRUD, credential API, Connect on card + in-call overlays + tile (D12) + pre-warm; provisioning-script password moves from PM into the vault).
+6. ~~Hold (audio)~~ **DEFERRED (plan-gate edit, D9)** — Phase 3 ends at step 5 + close-out.
+- Prod smoke per step; the migration plan's Phase-3 **done-when is amended** (plan-gate edit) to: answer on expanded card (agent + covering admin) · one-click Connect to the real hotel PC **from the card and from inside a live call (D12)** · admin-connect to a non-covered property · **loud ring with the browser minimized behind fullscreen RustDesk (push path) + toast observed** · tile opens on Answer and carries the call over RustDesk.
 
 ## 7. Non-goals / v2 seams
 
-Shift scheduling (D6) · per-property API scoping (existing v2 seam) · per-connect credential rotation (target spec §4 seam) · answer-from-toast as a requirement (D3) · video-hold wiring (Phase 4) · thin desktop shell (retired by Gate 3.0) · self-registering hotel-PC enrollment (seam only) · admin bulk-provisioning UI (script covers v1) · any kiosk change.
+Shift scheduling (D6) · per-property API scoping (existing v2 seam) · per-connect credential rotation (target spec §4 seam) · answer-from-toast as a requirement (D3) · **hold, entirely — audio AND video (D9 plan-gate edit; recorded design in §3.6, revisit at multi-property)** · thin desktop shell (retired by Gate 3.0) · self-registering hotel-PC enrollment (seam only) · admin bulk-provisioning UI (script covers v1) · any kiosk change.
 
 ## 8. Risks
 
 1. **Push delivery variance** (battery savers, corporate networks, browser closed) — Gate 3.1 measures it on the real machines; layers B + C remain regardless; SOP keeps Chrome running in background on Windows.
-2. **Hold touches the same seams as 911** — mitigated by sequencing it last, byte-level review, and the conference machinery being a proven pattern (6c).
+2. ~~Hold touches the same seams as 911~~ — risk RETIRED for Phase 3 (hold deferred, plan-gate edit): the only remaining voice-path change is the additive `propertyId` TwiML Parameter, byte-reviewed. The hold risk note moves with the §3.6 recorded design.
 3. **Retiring the right-rail placements regresses answering** — mitigated by moving mounts rather than rewriting accept logic, plus the existing test suite around accept/claim flows.
 4. **DocPiP gesture consumption** — `requestWindow()` must precede async accept work in the same click handler (recorded build constraint from Gate 3.0).
 5. **Migration-numbering/type drift** — 0019/0020 + `gen:types` in the same tasks (CI drift check enforces).
