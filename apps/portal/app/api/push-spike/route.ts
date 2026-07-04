@@ -19,6 +19,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!body.subscription?.endpoint) {
     return NextResponse.json({ error: "Missing subscription" }, { status: 400 });
   }
+  // Clamp deliberately exceeds this route's maxDuration=60: the 360s drill runs
+  // on box staging (long-lived container); on Vercel the 6m button times out by design.
   const delay = Math.min(Math.max(body.delaySeconds ?? 15, 0), 600);
   const scheduledFor = Date.now() + delay * 1000;
 

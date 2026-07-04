@@ -29,6 +29,8 @@ self.addEventListener("push", (event) => {
       }
       if (type === "call-cleared") {
         // Close the matching incoming toast; no new notification.
+        // Contract for the production sender (Task 12+): a call-cleared push MUST
+        // carry the same callId as its incoming push — an empty tag matches nothing.
         const existing = await self.registration.getNotifications({ tag: data.callId || "" });
         for (const n of existing) n.close();
         return;
@@ -49,6 +51,8 @@ self.addEventListener("notificationclick", (event) => {
     (async () => {
       const tabs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       if (tabs.length > 0) {
+        // tabs[0] is arbitrary when several portal tabs are open — fine for the spike;
+        // production may prefer the most-recently-focused client.
         await tabs[0].focus();
         // Ask the tab to navigate home so the ringing card is on screen.
         tabs[0].postMessage({ source: "lc-push", type: "focus-home" });

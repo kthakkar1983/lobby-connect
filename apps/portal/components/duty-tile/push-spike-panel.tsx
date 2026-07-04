@@ -23,6 +23,7 @@ export function PushSpikePanel() {
   const [ringing, setRinging] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ringtoneRef = useRef<Ringtone | null>(null);
+  const pendingPushRef = useRef<{ sentAtMs: number; delaySeconds: number } | null>(null);
 
   const addLog = useCallback((msg: string) => {
     setLog((l) => [{ at: Date.now(), msg }, ...l].slice(0, 100));
@@ -39,11 +40,21 @@ export function PushSpikePanel() {
         receivedAt?: number;
       };
       if (data?.source !== "lc-push") return;
-      const latencyMs =
-        data.receivedAt && data.scheduledFor ? Math.max(0, data.receivedAt - data.scheduledFor) : null;
+      const pending = pendingPushRef.current;
+      // Client-clock latency: everything measured on THIS machine's clock —
+      // (now - sentAt) minus the requested delay = delivery + request overhead.
+      const clientLatencyMs = pending
+        ? Math.max(0, Date.now() - (pending.sentAtMs + pending.delaySeconds * 1_000))
+        : null;
+      // Cross-clock number kept for reference only (server scheduledFor vs client
+      // receivedAt) — meaningless if the OS clocks disagree, so labelled as such.
+      const crossClockMs =
+        data.receivedAt && data.scheduledFor ? data.receivedAt - data.scheduledFor : null;
       addLog(
-        `PUSH received (tab ${document.visibilityState}) — delivery latency ${
-          latencyMs === null ? "unknown" : `${(latencyMs / 1000).toFixed(1)}s`
+        `PUSH received (tab ${document.visibilityState}) — latency ${
+          clientLatencyMs === null ? "unknown" : `${(clientLatencyMs / 1000).toFixed(1)}s`
+        } (client clock)${
+          crossClockMs === null ? "" : ` · cross-clock ${(crossClockMs / 1000).toFixed(1)}s (assumes clocks agree)`
         }`,
       );
       setRinging(true);
@@ -97,6 +108,7 @@ export function PushSpikePanel() {
   const schedule = useCallback(
     async (delaySeconds: number) => {
       if (!subscription) return;
+      pendingPushRef.current = { sentAtMs: Date.now(), delaySeconds };
       addLog(`Push scheduled in ${delaySeconds}s — minimize the browser NOW, put RustDesk fullscreen`);
       const res = await fetch("/api/push-spike", {
         method: "POST",
