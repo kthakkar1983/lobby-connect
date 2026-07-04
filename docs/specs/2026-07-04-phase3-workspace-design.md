@@ -73,7 +73,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 
 ### 3.5 Remote access + Connect
 
-- **Migration 0019 `property_remote_access`:** `property_id` (FK, unique) · `operator_id` · `peer_id` · `unattended_password` · timestamps. **RLS: no client read policy at all — service-role only**; admins CRUD through server actions (`requireRole(ADMIN)` + service client), agents never see the table.
+- **Migration 0020 `property_remote_access`** (renumbered at plan time — ship order puts push first)**:** `property_id` (FK, unique) · `operator_id` · `peer_id` · `unattended_password` · timestamps. **RLS: no client read policy at all — service-role only**; admins CRUD through server actions (`requireRole(ADMIN)` + service client), agents never see the table.
 - **Credential API:** `GET /api/remote-access/[propertyId]` via `requireApiActor({allow:[AGENT,ADMIN]})` (operator-scoped — per-property tightening rides the existing v2 scoping seam), returns `{peerId, password}` just-in-time; audited `remote_access.credentials_issued` (+ `remote_access.updated`/`rotated` on admin writes). Credentials never render in UI.
 - **Connect surfaces (D12):** the property card, **and inside a live call** — both in-call overlays (audio + video) and the call tile. All placements share one client helper: fetch (or use pre-warmed) credentials → programmatic navigation to `rustdesk://connection/new/<peerId>?password=<pw>` (format verified in the target spec §4). **Pre-warm at Answer:** the accept flow fetches credentials for the ringing property so an in-call Connect is instant.
 - **Admin CRUD UI:** property detail gains a Remote access card (peer id, set/rotate password, last-issued audit line).
@@ -87,7 +87,7 @@ Sourcing: brainstorm decisions are quoted/attributed (2026-07-04). Chromium floa
 
 ### 3.7 Migrations
 
-- **0019 `property_remote_access`** (§3.5). **0020 `push_subscriptions`:** `user_id` (FK) · `operator_id` · `endpoint` (unique) · `p256dh` · `auth` · `created_at` · `last_seen_at`. RLS: owner-only select/delete; inserts via the session-authed route (user-scoped). Types regenerated (`pnpm gen:types`) per the Phase-4 drift check.
+- Renumbered to ship order at plan time (plan: `docs/plans/2026-07-04-phase3-workspace.md`): **0019 `push_subscriptions`:** `user_id` (FK) · `operator_id` · `endpoint` (unique) · `p256dh` · `auth` · `created_at` · `last_seen_at`; RLS: owner-only select/delete; inserts via the session-authed route (user-scoped). **0020 `property_remote_access`** (§3.5). **0021 `calls` hold columns** (`hold_conference_name`, `on_hold` — the plan-level hold choreography of §3.6 needs them). Types regenerated (`pnpm gen:types`) per the Phase-4 drift check.
 
 ## 4. What does NOT change (load-bearing)
 
