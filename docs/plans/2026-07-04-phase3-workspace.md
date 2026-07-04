@@ -921,14 +921,20 @@ export function useCallSurfaceOptional(): CallSurfaceValue | null {
 - Delete (UI only, after extraction): `apps/portal/components/video-call/incoming-video-banner.tsx`
 - Tests: `apps/portal/tests/components/softphone.test.tsx` (extend), migrate `incoming-video-banner.test.tsx` → `tests/lib/hooks/use-incoming-video-calls.test.tsx`
 
-- [ ] **Step 1: Softphone publishes.** Inside `Softphone`, after the existing `report(phase)` effect, add (using `useCallSurfaceOptional` so softphone tests without the provider keep passing):
+- [ ] **Step 1: Softphone publishes.** Inside `Softphone`, after the existing `report(phase)` effect, add (using `useCallSurfaceOptional` so softphone tests without the provider keep passing).
+
+**⚠ DEP-HYGIENE RULE (Task-6 review finding — the original snippet here LOOPED):** registering a handler changes the context value, so a publisher effect must NEVER depend on the whole `surface` object — depend on the **stable dispatcher functions** (they are `useCallback([])`-stable) and on stable callbacks (no fresh inline closures in `register*`).
 
 ```tsx
 const surface = useCallSurfaceOptional();
+const publishRings = surface?.publishRings;
+const publishActive = surface?.publishActive;
+const registerAcceptAudio = surface?.registerAcceptAudio;
+
 // Publish the audio incoming ring (id comes from the new propertyId Parameter, Task 4).
 useEffect(() => {
-  if (!surface) return;
-  surface.publishRings(
+  if (!publishRings) return;
+  publishRings(
     "audio",
     phase === "incoming"
       ? [{
@@ -941,11 +947,12 @@ useEffect(() => {
         }]
       : [],
   );
-}, [surface, phase, incomingProperty]);
+}, [publishRings, phase, incomingProperty]);
+
 // Publish active-call info while in-call.
 useEffect(() => {
-  if (!surface) return;
-  surface.publishActive(
+  if (!publishActive) return;
+  publishActive(
     phase === "in-call" && callIdRef.current
       ? {
           callId: callIdRef.current,
@@ -958,13 +965,17 @@ useEffect(() => {
         }
       : null,
   );
-}, [surface, phase, incomingProperty, callTimeZone]);
-// Expose accept to the cards.
+}, [publishActive, phase, incomingProperty, callTimeZone]);
+
+// Expose accept to the cards — via a STABLE wrapper (acceptCall is already useCallback-stable).
+const acceptAudioForCards = useCallback(() => {
+  void acceptCall();
+}, [acceptCall]);
 useEffect(() => {
-  if (!surface) return;
-  surface.registerAcceptAudio(phase === "incoming" ? () => void acceptCall() : null);
-  return () => surface.registerAcceptAudio(null);
-}, [surface, phase, acceptCall]);
+  if (!registerAcceptAudio) return;
+  registerAcceptAudio(phase === "incoming" ? acceptAudioForCards : null);
+  return () => registerAcceptAudio(null);
+}, [registerAcceptAudio, phase, acceptAudioForCards]);
 ```
 
 Supporting edits in the same file: in the `Device.on("incoming")` handler capture `incomingPropertyIdRef.current = call.customParameters.get("propertyId") ?? null` and `incomingSinceRef.current = Date.now()`; in `acceptCall` set `answeredAtRef.current = Date.now()`. Add the three refs beside the existing `callIdRef`.
@@ -984,14 +995,18 @@ import { VideoCall } from "@/components/video-call/video-call";
 import { useState } from "react";
 import type { IncomingVideoCall } from "@/lib/hooks/use-incoming-video-calls";
 
-export function VideoCallHost({ operatorId }: { operatorId: string }): React.JSX.Element {
+export function VideoCallHost({ operatorId }: { operatorId: string }) {
   const [active, setActive] = useState<IncomingVideoCall | null>(null);
   const { calls } = useIncomingVideoCalls(operatorId);
   const surface = useCallSurfaceOptional();
+  const publishRings = surface?.publishRings;
+  const registerAcceptVideo = surface?.registerAcceptVideo;
 
+  // ⚠ DEP-HYGIENE (Task-6 review): depend on the stable dispatchers, never on
+  // `surface` — registering mutates the context value and would loop.
   useEffect(() => {
-    if (!surface) return;
-    surface.publishRings(
+    if (!publishRings) return;
+    publishRings(
       "video",
       active
         ? []
@@ -1004,16 +1019,22 @@ export function VideoCallHost({ operatorId }: { operatorId: string }): React.JSX
             since: Date.parse(c.ringStartedAt ?? "") || Date.now(),
           })),
     );
-  }, [surface, calls, active]);
+  }, [publishRings, calls, active]);
 
+  // Registered callback must be identity-stable: read `calls` through a ref.
+  const callsRef = useRef(calls);
   useEffect(() => {
-    if (!surface) return;
-    surface.registerAcceptVideo((callId: string) => {
-      const call = calls.find((c) => c.id === callId);
-      if (call) setActive(call);
-    });
-    return () => surface.registerAcceptVideo(null);
-  }, [surface, calls]);
+    callsRef.current = calls;
+  }, [calls]);
+  const acceptVideoForCards = useCallback((callId: string) => {
+    const call = callsRef.current.find((c) => c.id === callId);
+    if (call) setActive(call);
+  }, []);
+  useEffect(() => {
+    if (!registerAcceptVideo) return;
+    registerAcceptVideo(acceptVideoForCards);
+    return () => registerAcceptVideo(null);
+  }, [registerAcceptVideo, acceptVideoForCards]);
 
   return active ? (
     <VideoCall callId={active.id} propertyName={active.propertyName} onClose={() => setActive(null)} />
@@ -1025,7 +1046,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }): React.JSX
 
 (`IncomingVideoCall` gains `propertyId` + `ringStartedAt` — the API already returns both; widen the type where it's declared. `VideoCall` publishes its own `publishActive` in Task 17 — for now cards derive on-call from `rings` emptiness + own overlay; acceptable because the overlay covers the screen while in-call.)
 
-- [ ] **Step 5: Migrate tests.** The banner test's realtime/poll/resubscribe specs move to the hook test (render a probe component using the hook). Extend `softphone.test.tsx`: wrap renders in `CallSurfaceProvider` and assert a card-side consumer sees the audio ring appear when the mock Device fires `incoming` (add `propertyId` to the mocked `customParameters`).
+- [ ] **Step 5: Migrate tests.** The banner test's realtime/poll/resubscribe specs move to the hook test (render a probe component using the hook). Extend `softphone.test.tsx`: wrap renders in `CallSurfaceProvider` and assert a card-side consumer sees the audio ring appear when the mock Device fires `incoming` (add `propertyId` to the mocked `customParameters`). **MANDATORY loop-guard test (Task-6 review):** render Softphone AND VideoCallHost together inside `CallSurfaceProvider` and drive a phase change — assert no "Maximum update depth exceeded" error and that a register spy is NOT called more than a small bounded number of times (proves the publisher effects don't churn against the context).
 
 - [ ] **Step 6: Gate + commit** (`refactor(calls): softphone + video host publish into CallSurfaceProvider; incoming detection extracted to a hook`).
 
