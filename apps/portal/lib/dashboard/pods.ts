@@ -43,7 +43,12 @@ export function groupPodsByAgent(input: {
   const byName = (a: PodProperty, b: PodProperty) => a.name.localeCompare(b.name);
   const groups: PodGroup[] = [...byAgent.entries()]
     .map(([agentId, properties]) => ({
-      agent: agentById.get(agentId) ?? null,
+      // A ghost assignment (agent id with no profile in `agents`) must NOT
+      // read as "Unassigned" — synthesize a placeholder so agent:null stays
+      // exclusive to the trailing unassigned group.
+      agent:
+        agentById.get(agentId) ??
+        ({ id: agentId, full_name: "Unknown agent", status: "OFFLINE", last_seen_at: null } satisfies PodAgent),
       properties: properties.sort(byName),
     }))
     .sort((a, b) => (a.agent?.full_name ?? "").localeCompare(b.agent?.full_name ?? ""));

@@ -52,6 +52,26 @@ describe("groupPodsByAgent", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]!.agent?.full_name).toBe("Dilnoza K");
   });
+
+  it("gives a ghost-agent assignment a placeholder agent, never the unassigned group", () => {
+    const groups = groupPodsByAgent({
+      properties: props,
+      assignments: [
+        { property_id: "p1", primary_agent_id: "ghost-1" }, // no matching profile
+      ],
+      agents: [],
+    });
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.agent).toEqual({
+      id: "ghost-1",
+      full_name: "Unknown agent",
+      status: "OFFLINE",
+      last_seen_at: null,
+    });
+    expect(groups[0]!.properties.map((p) => p.id)).toEqual(["p1"]);
+    expect(groups[1]!.agent).toBeNull(); // p2 + p3 genuinely unassigned
+    expect(groups[1]!.properties.map((p) => p.id)).toEqual(["p2", "p3"]);
+  });
 });
 
 describe("cardLiveState", () => {
