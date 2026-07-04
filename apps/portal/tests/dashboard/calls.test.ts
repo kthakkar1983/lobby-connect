@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   countToday,
+  isTodayInZone,
   avgPickupSeconds,
   sumTodayDurationSeconds,
   avgCallLengthSeconds,
@@ -30,6 +31,14 @@ describe("countToday", () => {
   });
   it("is 0 for empty", () => {
     expect(countToday([], NOW)).toBe(0);
+  });
+});
+
+describe("isTodayInZone", () => {
+  it("matches calendar date in the given timezone, independent of UTC date", () => {
+    // Jun 7 8pm CT -> today (same as countToday's first case, isolated at the pure-helper level)
+    expect(isTodayInZone("2026-06-08T01:00:00Z", "America/Chicago", NOW)).toBe(true);
+    expect(isTodayInZone("2026-06-06T01:00:00Z", "America/Chicago", NOW)).toBe(false);
   });
 });
 
