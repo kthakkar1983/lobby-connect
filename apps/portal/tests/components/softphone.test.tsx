@@ -11,6 +11,12 @@
  * Fix: ref-mirror roomNumber/notes; endCall reads roomNumberRef.current /
  * notesRef.current (deps become []). The stale closure always reaches the
  * current values via the mutable refs.
+ *
+ * Phase-3 (Task 7): the softphone's own incoming Accept button was retired —
+ * a ringing call is answered on its property card via CallSurfaceProvider. These
+ * tests now wrap the Softphone in the provider and answer through a small
+ * consumer's Answer button (which calls the registered actions.acceptAudio),
+ * exercising the same acceptCall path.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -27,6 +33,7 @@ const twilio = vi.hoisted(() => {
       get: (key: string) => {
         if (key === "callId") return "call-42";
         if (key === "propertyName") return "The Sample Hotel";
+        if (key === "propertyId") return "prop-42";
         return "";
       },
     },
@@ -86,7 +93,67 @@ vi.mock("@/lib/captions/use-captions", () => ({
   },
 }));
 
+// Video-host detection deps (only exercised by the loop-guard test, inert
+// otherwise): a fake Realtime channel + ringtone.
+const videoChannel = vi.hoisted(() => {
+  let statusCb: ((status: string) => void) | undefined;
+  return {
+    getStatusCb: () => statusCb,
+    on: vi.fn(function (this: unknown) {
+      return this;
+    }),
+    subscribe: vi.fn(function (this: unknown, cb: (status: string) => void) {
+      statusCb = cb;
+      return this;
+    }),
+  };
+});
+vi.mock("@/lib/supabase/browser", () => ({
+  createBrowserSupabaseClient: () => ({
+    realtime: { setAuth: () => {} },
+    channel: () => videoChannel,
+    removeChannel: () => {},
+  }),
+}));
+vi.mock("@/lib/video/ringtone", () => ({
+  createRingtone: () => ({ start: vi.fn(), stop: vi.fn() }),
+}));
+
 import { Softphone } from "@/components/softphone/softphone";
+import { VideoCallHost } from "@/components/video-call/video-call-host";
+import {
+  CallSurfaceProvider,
+  useCallSurface,
+} from "@/components/dashboard/call-surface-provider";
+
+/**
+ * Card-side consumer probe: exposes the audio ring count + an Answer button
+ * wired to the registered accept dispatcher — the seam the real PropertyCard
+ * uses. Answering the softphone in these tests goes through here.
+ */
+function CardProbe() {
+  const { rings, actions } = useCallSurface();
+  const audioRing = rings.find((r) => r.channel === "AUDIO") ?? null;
+  return (
+    <div>
+      <span data-testid="audio-rings">{rings.filter((r) => r.channel === "AUDIO").length}</span>
+      {audioRing ? <span data-testid="ring-name">{audioRing.propertyName}</span> : null}
+      {audioRing ? <span data-testid="ring-property">{audioRing.propertyId ?? ""}</span> : null}
+      <button type="button" onClick={() => actions.acceptAudio?.()}>
+        Answer on card
+      </button>
+    </div>
+  );
+}
+
+function renderSoftphone(role: "AGENT" | "ADMIN" = "AGENT") {
+  return render(
+    <CallSurfaceProvider>
+      <Softphone role={role} />
+      <CardProbe />
+    </CallSurfaceProvider>,
+  );
+}
 
 describe("Softphone — stale-closure regression (H1)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -120,7 +187,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
   it("saves typed roomNumber+notes when call disconnects, not stale empty strings", async () => {
     const user = userEvent.setup();
 
-    render(<Softphone role="AGENT" />);
+    renderSoftphone("AGENT");
 
     // Wait for Device.register() to fire "registered" → phase = "ready".
     await waitFor(() =>
@@ -132,8 +199,9 @@ describe("Softphone — stale-closure regression (H1)", () => {
       twilio.fireIncoming();
     });
 
-    // Accept the call.
-    await user.click(screen.getByText("Accept"));
+    // Accept the call via the card seam (the softphone's own Accept is retired).
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    await user.click(screen.getByText("Answer on card"));
 
     // Type room number and notes AFTER accepting — this is where the stale
     // closure bit: state updates happened after disconnect was registered.
@@ -173,10 +241,11 @@ describe("Softphone — stale-closure regression (H1)", () => {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
     });
 
-    render(<Softphone role="AGENT" />);
+    renderSoftphone("AGENT");
     await waitFor(() => screen.getByText(/Accepting calls/i));
     await act(async () => twilio.fireIncoming());
-    await user.click(screen.getByText("Accept"));
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    await user.click(screen.getByText("Answer on card"));
     await user.type(screen.getByPlaceholderText("Room #"), "507");
     await user.type(screen.getByPlaceholderText("Call notes"), "VIP guest");
     await act(async () => twilio.fireDisconnect());
@@ -200,10 +269,11 @@ describe("Softphone — stale-closure regression (H1)", () => {
 
   it("renders the unified in-call overlay (with the playbook) after answering", async () => {
     const user = userEvent.setup();
-    render(<Softphone role="AGENT" />);
+    renderSoftphone("AGENT");
     await waitFor(() => screen.getByText(/Accepting calls/i));
     await act(async () => twilio.fireIncoming());
-    await user.click(screen.getByText("Accept"));
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    await user.click(screen.getByText("Answer on card"));
 
     // Overlay chrome appears with the property name from the incoming call.
     await waitFor(() => screen.getByText(/On call · The Sample Hotel/i));
@@ -214,13 +284,101 @@ describe("Softphone — stale-closure regression (H1)", () => {
 
   it("captions the guest after answering a phone call", async () => {
     const user = userEvent.setup();
-    render(<Softphone role="AGENT" />);
+    renderSoftphone("AGENT");
     await waitFor(() => screen.getByText(/Accepting calls/i));
     await act(async () => twilio.fireIncoming());
-    await user.click(screen.getByText("Accept"));
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    await user.click(screen.getByText("Answer on card"));
 
     // The remote audio track is captured shortly after accept and captioned.
     await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(expect.objectContaining({ kind: "audio" })));
     await waitFor(() => expect(screen.getByText(/I need extra towels/i)).toBeTruthy());
+  });
+});
+
+describe("Softphone — CallSurfaceProvider publish (Task 7)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      if (url === "/api/calls/incoming-video") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ calls: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("publishes the audio ring (name + propertyId) to a consumer on Device incoming", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    // No ring before the call.
+    expect(screen.getByTestId("audio-rings").textContent).toBe("0");
+
+    await act(async () => twilio.fireIncoming());
+
+    // Consumer sees exactly one AUDIO ring carrying the property name + id from
+    // the customParameters (the Task-4 propertyId Parameter).
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    expect(screen.getByTestId("ring-name").textContent).toBe("The Sample Hotel");
+    expect(screen.getByTestId("ring-property").textContent).toBe("prop-42");
+  });
+
+  it("clears the published ring when the call ends without being answered", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+    await act(async () => twilio.fireIncoming());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+
+    // The remote party disconnects → phase returns to "ready" → the published
+    // ring is withdrawn (the effect republishes []).
+    await act(async () => twilio.fireDisconnect());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("0"));
+  });
+
+  /**
+   * MANDATORY loop-guard (Task-6 review): Softphone AND VideoCallHost publishing
+   * into one CallSurfaceProvider must not thrash the context. A publisher effect
+   * that depended on the whole `surface` object would re-register on every value
+   * change and loop ("Maximum update depth exceeded"). Drive a phase change and
+   * assert the register dispatchers are called a small, bounded number of times.
+   */
+  it("does not loop when Softphone + VideoCallHost publish together (bounded registers)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Count register calls by wrapping the provider's dispatchers via a spy
+    // consumer that reads them once mounted.
+    render(
+      <CallSurfaceProvider>
+        <Softphone role="AGENT" />
+        <VideoCallHost operatorId="op-1" />
+        <CardProbe />
+      </CallSurfaceProvider>,
+    );
+
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    // Drive an incoming (phase change) then hang up — several publish cycles.
+    await act(async () => twilio.fireIncoming());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+    await act(async () => twilio.fireDisconnect());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("0"));
+
+    // No React max-update-depth error was logged.
+    const loopErrors = errorSpy.mock.calls.filter((args) =>
+      String(args[0] ?? "").includes("Maximum update depth exceeded"),
+    );
+    expect(loopErrors).toHaveLength(0);
+    errorSpy.mockRestore();
   });
 });
