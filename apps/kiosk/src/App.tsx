@@ -148,7 +148,13 @@ export function App() {
       }, RING_WINDOW_MS);
     } catch {
       if (aborted()) return; // teardown already ran (cancel); don't override with apology
+      // Close the row we already created (callIdRef is set once startCall resolved).
+      // Without this, a post-create setup failure (e.g. Agora token 500) leaves a
+      // live, answerable RINGING row under the apology screen; answering it sticks
+      // the call IN_PROGRESS and 0016-blocks the property for up to 30 min.
+      const id = callIdRef.current;
       await teardown();
+      if (id) void endCall(id, "failed");
       dispatch({ type: "ERROR" });
     }
   }, [teardown]);

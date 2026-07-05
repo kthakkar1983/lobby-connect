@@ -5,33 +5,27 @@ import type { ProfileStatus } from "@lc/shared";
 import { requireRole } from "@/lib/auth/require-role";
 import { createServerClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatTile } from "@/components/owner/stat-tile";
 import { DashTile } from "@/components/dashboard/dash-tile";
 import { HourlyLegend, HourlyVolumeChart } from "@/components/dashboard/channel-viz";
-import { AvailabilityToggle } from "./availability-cards";
+import { FleetBoard, type FleetPodGroup } from "@/components/dashboard/fleet-board";
+import type { PropertyCardData } from "@/components/dashboard/property-card";
 import {
   countByOutcome,
   avgPickupSeconds,
   avgCallLengthSeconds,
   sumTodayDurationSeconds,
   hourlyVolume,
+  isTodayInZone,
   countLiveCalls,
   countToday,
 } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
-import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/format";
+import { presenceDotClass, formatDuration } from "@/lib/owner/format";
 import { effectivePresence } from "@/lib/voice/presence";
+import { groupPodsByAgent } from "@/lib/dashboard/pods";
 import { cn } from "@/lib/utils";
 import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -50,6 +44,7 @@ export default async function AdminOverviewPage() {
     { data: properties },
     { data: agents },
     { count: openIncidents },
+    { data: openIncidentRows },
     { data: avail },
     { data: assigns },
     { data: rawCalls },
@@ -69,6 +64,14 @@ export default async function AdminOverviewPage() {
     supabase
       .from("incidents")
       .select("id", { count: "exact", head: true })
+      .eq("operator_id", actor.operator_id)
+      .eq("status", "OPEN"),
+    // Task 9: per-property open-incident count for the fleet cards' badge
+    // (PropertyCardData.openIncidents) — grouped client-side (house 2-query
+    // idiom), separate from the tile's operator-wide head-count above.
+    supabase
+      .from("incidents")
+      .select("property_id")
       .eq("operator_id", actor.operator_id)
       .eq("status", "OPEN"),
     supabase
@@ -115,10 +118,14 @@ export default async function AdminOverviewPage() {
     agentProfiles = (data ?? []) as typeof agentProfiles;
   }
   const profileById = new Map(agentProfiles.map((p) => [p.id, p]));
-  const agentByProperty = new Map(
-    (assigns ?? []).map((a) => [a.property_id, profileById.get(a.primary_agent_id) ?? null])
-  );
   const acceptingMap = new Map((avail ?? []).map((a) => [a.property_id, a.accepting_calls]));
+  const coveringByProperty = Object.fromEntries(props.map((p) => [p.id, acceptingMap.get(p.id) ?? false]));
+
+  // Per-property open-incident count (2-query idiom — grouped client-side).
+  const openIncidentCountByProperty = new Map<string, number>();
+  for (const row of openIncidentRows ?? []) {
+    openIncidentCountByProperty.set(row.property_id, (openIncidentCountByProperty.get(row.property_id) ?? 0) + 1);
+  }
 
   // Aggregates (operator-wide — ADMIN reads all operator calls under RLS).
   const live = countLiveCalls(calls);
@@ -169,8 +176,6 @@ export default async function AdminOverviewPage() {
     calls,
     now
   );
-  const attentionIds = new Set(health.needAttention.map((p) => p.id));
-
   const healthTile: { value: string; sub: string; tone: Tone } =
     health.total === 0
       ? { value: "—", sub: "no properties", tone: "default" }
@@ -182,16 +187,40 @@ export default async function AdminOverviewPage() {
           }
         : { value: `${health.ok}/${health.total}`, sub: "lines OK", tone: "live" };
 
-  const countByProp = (id: string) =>
-    countToday(
-      calls.filter((c) => c.property_id === id),
-      now
-    );
+  // Task 9: fleet cards, one per property, grouped by pod (assigned primary
+  // agent) via groupPodsByAgent — replaces the old properties ops <Table>.
+  // Tonight stats mirror the agent dashboard's per-property derivation
+  // (Task 8): each property's own calls, filtered to "today" in its own
+  // timezone via isTodayInZone.
+  const cardByProperty = new Map<string, PropertyCardData>(
+    props.map((p) => {
+      const propCalls = calls.filter((c) => c.property_id === p.id);
+      const today = propCalls.filter((c) => isTodayInZone(c.ring_started_at, p.timezone, now));
+      return [
+        p.id,
+        {
+          id: p.id,
+          name: p.name,
+          timezone: p.timezone,
+          callsTonight: today.length,
+          lastCallAt: propCalls[0]?.ring_started_at ?? null,
+          openIncidents: openIncidentCountByProperty.get(p.id) ?? 0,
+        },
+      ];
+    })
+  );
 
-  // Problem properties float to the top of the board.
-  const boardRows = props
-    .map((p) => ({ ...p, attention: attentionIds.has(p.id) }))
-    .sort((a, b) => Number(b.attention) - Number(a.attention) || a.name.localeCompare(b.name));
+  const groups: FleetPodGroup[] = groupPodsByAgent({
+    properties: props.map((p) => ({ id: p.id, name: p.name, timezone: p.timezone })),
+    assignments: (assigns ?? []).map((a) => ({
+      property_id: a.property_id,
+      primary_agent_id: a.primary_agent_id,
+    })),
+    agents: agentProfiles,
+  }).map((g) => ({
+    agent: g.agent,
+    properties: g.properties.map((p) => cardByProperty.get(p.id)).filter((c): c is PropertyCardData => !!c),
+  }));
 
   // Team on now — one row per assigned agent, with how many properties they cover.
   const teamMap = new Map<string, { agent: (typeof agentProfiles)[number]; propCount: number }>();
@@ -272,59 +301,20 @@ export default async function AdminOverviewPage() {
 
       <Card className="gap-3 p-5 shadow-md">
         <h2 className={LABEL}>Properties</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Property</TableHead>
-              <TableHead>Primary agent</TableHead>
-              <TableHead>Calls today</TableHead>
-              <TableHead>Covering</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {boardRows.map((p) => {
-              const agent = agentByProperty.get(p.id);
-              const effective: ProfileStatus | null = agent
-                ? effectivePresence(agent.status, agent.last_seen_at, now.getTime())
-                : null;
-              return (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium text-foreground">
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      {p.attention ? <Badge variant="attention">Needs attention</Badge> : null}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {agent && effective ? (
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-block h-2 w-2 rounded-full",
-                            presenceDotClass(effective)
-                          )}
-                          aria-hidden="true"
-                        />
-                        {agent.full_name}
-                        <span className="text-xs text-text-muted">{presenceLabel(effective)}</span>
-                      </span>
-                    ) : (
-                      <span className="text-text-muted">Unassigned</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-mono">{countByProp(p.id)}</TableCell>
-                  <TableCell>
-                    <AvailabilityToggle
-                      propertyId={p.id}
-                      propertyName={p.name}
-                      initial={acceptingMap.get(p.id) ?? false}
-                    />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        {groups.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="No properties yet"
+            description="Add a property to start staffing the line."
+            className="py-6"
+          />
+        ) : (
+          <FleetBoard
+            groups={groups}
+            canAnswerByProperty={coveringByProperty}
+            coveringByProperty={coveringByProperty}
+          />
+        )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

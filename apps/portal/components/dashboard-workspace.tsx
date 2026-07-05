@@ -4,7 +4,6 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { IncomingCallToast } from "@/components/dashboard/incoming-call-toast";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 
@@ -19,9 +18,13 @@ const HOME: Record<Role, Route> = { AGENT: "/agent", ADMIN: "/admin" };
  * The softphone stays MOUNTED on every route — its Twilio Device must never
  * deregister, so we only toggle the card's visibility, never its presence. On the
  * dashboard home the card shows in the right column; on other routes it is hidden
- * (display:none, still mounted) and `IncomingCallToast` nudges the user home to
- * answer. `VideoCallHost` is always mounted so an active video call can overlay
- * from any route.
+ * (display:none, still mounted). `VideoCallHost` is always mounted so an active
+ * video call can overlay from any route.
+ *
+ * Task 9 (Phase 3): the off-home `IncomingCallToast` nudge is retired — the OS
+ * push/ring layer + the ringing property cards (dashboard-first answering,
+ * spec §3.1/§3.4) now cover the "call is ringing while I'm elsewhere" case, so
+ * no route-agnostic in-app toast is needed anymore.
  */
 export function DashboardWorkspace({
   role,
@@ -59,8 +62,6 @@ export function DashboardWorkspace({
           <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>
-
-      <IncomingCallToast home={home} />
     </div>
   );
 }

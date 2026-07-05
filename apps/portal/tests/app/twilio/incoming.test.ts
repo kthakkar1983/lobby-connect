@@ -148,7 +148,8 @@ describe("POST /api/twilio/voice/incoming", () => {
     expect(xml).toContain(
       '<Client><Identity>lc_a1</Identity>' +
         '<Parameter name="callId" value="call-1"/>' +
-        '<Parameter name="propertyName" value="Hotel One"/></Client>',
+        '<Parameter name="propertyName" value="Hotel One"/>' +
+        '<Parameter name="propertyId" value="p1"/></Client>',
     );
     expect(xml).toContain('action="https://abc.trycloudflare.com/api/twilio/voice/dial-result"');
     expect(insertSpy).toHaveBeenCalledTimes(1);

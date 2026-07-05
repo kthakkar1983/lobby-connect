@@ -6,24 +6,21 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
 import { DashTile } from "@/components/dashboard/dash-tile";
-import {
-  ChannelBar,
-  ChannelLegend,
-  HourlyLegend,
-  HourlyVolumeChart,
-} from "@/components/dashboard/channel-viz";
+import { HourlyLegend, HourlyVolumeChart } from "@/components/dashboard/channel-viz";
 import {
   countByOutcome,
   avgPickupSeconds,
   avgCallLengthSeconds,
   sumTodayDurationSeconds,
   hourlyVolume,
-  splitTodayByChannel,
+  isTodayInZone,
   countToday,
 } from "@/lib/dashboard/calls";
 import { formatDuration } from "@/lib/owner/format";
 import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-call-row";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { PodCardGrid } from "@/components/dashboard/pod-card-grid";
+import type { PropertyCardData } from "@/components/dashboard/property-card";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
@@ -72,18 +69,37 @@ export default async function AgentDashboardPage() {
     timeZone: c.timeZone,
   }));
 
-  const pod = covered.map((p) => {
-    const split = splitTodayByChannel(
-      calls.filter((c) => c.property_id === p.id),
-      now,
-    );
-    return { ...p, audio: split.audio, video: split.video, total: split.audio + split.video };
+  const cards: PropertyCardData[] = covered.map((p) => {
+    const propCalls = calls.filter((c) => c.property_id === p.id);
+    const today = propCalls.filter((c) => isTodayInZone(c.ring_started_at, p.timeZone, now));
+    return {
+      id: p.id,
+      name: p.name,
+      timezone: p.timeZone,
+      callsTonight: today.length,
+      lastCallAt: propCalls[0]?.ring_started_at ?? null,
+      openIncidents: 0, // agent RLS has no incident read; admin scope fills this (Task 9)
+    };
   });
 
   return (
     <div className="flex flex-col gap-4">
       <AutoRefresh />
       <h1 className="sr-only">Agent dashboard</h1>
+
+      <Card className="gap-3 p-5 shadow-md">
+        <h2 className={LABEL}>Your pod</h2>
+        {cards.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title={copy.empty.agentProperties.title}
+            description={copy.empty.agentProperties.description}
+            className="py-6"
+          />
+        ) : (
+          <PodCardGrid properties={cards} />
+        )}
+      </Card>
 
       <div className="flex gap-3">
         <DashTile value={outcomes.answered} label="Answered" />
@@ -125,33 +141,6 @@ export default async function AgentDashboardPage() {
           <ul className="flex flex-col">
             {recentRows.map((c) => (
               <RecentCallRow key={c.id} call={c} />
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card className="gap-3 p-5 shadow-md">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className={LABEL}>Your pod · tonight</h2>
-          <ChannelLegend />
-        </div>
-        {pod.length === 0 ? (
-          <EmptyState
-            icon={Building2}
-            title={copy.empty.agentProperties.title}
-            description={copy.empty.agentProperties.description}
-            className="py-6"
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {pod.map((p) => (
-              <li key={p.id} className="flex flex-col gap-1.5">
-                <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="truncate font-medium text-foreground">{p.name}</span>
-                  <span className="font-mono text-xs text-text-muted">{p.total}</span>
-                </div>
-                <ChannelBar audio={p.audio} video={p.video} />
-              </li>
             ))}
           </ul>
         )}

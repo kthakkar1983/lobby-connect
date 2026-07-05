@@ -1,13 +1,16 @@
 "use client";
+// Incoming-video detection, extracted verbatim from IncomingVideoBanner (Phase 3,
+// Task 7). Owns the realtime subscribe (private operator channel), the tick()
+// refetch of /api/calls/incoming-video, the 60s safety-net poll, focus refetch,
+// the ringtone (rings while any call is waiting), and the ringing tab-title flash.
+// Returns the raw incoming-call list; the UI now lives on the property cards and
+// the video host, not in a banner.
 
 import { useEffect, useRef, useState } from "react";
-import { Video } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
-import { unlockAudioPlayback } from "@/lib/video/audio-unlock";
-import { cn } from "@/lib/utils";
 import { INCOMING_VIDEO_FALLBACK_POLL_MS } from "@lc/shared";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { operatorCallsChannelTopic, CALLS_CHANGED_EVENT } from "@/lib/realtime/calls-channel";
@@ -16,15 +19,16 @@ export interface IncomingVideoCall {
   id: string;
   channelName: string;
   propertyName: string;
+  // The API already returns these; the cards need the id to place the ring and
+  // ringStartedAt to seed the on-card elapsed timer.
+  propertyId: string | null;
+  ringStartedAt: string | null;
 }
 
-export function IncomingVideoBanner({
-  operatorId,
-  onAccept,
-}: {
-  operatorId: string;
-  onAccept: (call: IncomingVideoCall) => void;
-}) {
+export function useIncomingVideoCalls(
+  operatorId: string,
+  silencedKeys?: ReadonlySet<string>,
+): { calls: IncomingVideoCall[] } {
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
   const ringtoneRef = useRef<Ringtone | null>(null);
 
@@ -118,102 +122,26 @@ export function IncomingVideoBanner({
     };
   }, []);
 
-  // Ring while a call is waiting; silence it once answered, declined, or gone.
-  // (Accepting unmounts this banner, whose cleanup also stops the ring.)
-  const isRinging = calls.length > 0;
+  // Split "has an incoming call" (visual — tab-title flash) from "should play
+  // audio" (honors local silence). Ring while a call is waiting AND not silenced;
+  // silence it once answered, declined, or gone. (Answering clears the ring via
+  // the card flow, which empties this list — the host publishes [] and the
+  // overlay takes over.) Silence is local audio only — the tab-title cue stays.
+  const hasIncoming = calls.length > 0;
+  const shouldRing = calls.some((c) => !(silencedKeys?.has(`video:${c.id}`) ?? false));
   useEffect(() => {
-    if (isRinging) ringtoneRef.current?.start();
+    if (shouldRing) ringtoneRef.current?.start();
     else ringtoneRef.current?.stop();
-  }, [isRinging]);
+  }, [shouldRing]);
 
   // Flash the tab title while ringing so a backgrounded tab is identifiable
-  // (the s1-test "whose browser is ringing?" gap).
+  // (the s1-test "whose browser is ringing?" gap). Uses hasIncoming, NOT
+  // shouldRing — silencing must never stop the visual flash.
   const ringingProperty = calls[0]?.propertyName ?? "";
   useRingingTabTitle(
-    isRinging,
+    hasIncoming,
     ringingProperty ? `Incoming video call · ${ringingProperty}` : "Incoming video call",
   );
 
-  // A persistent card in the right column, directly under the softphone (its
-  // sibling) — so video has its own home in that dead space instead of floating
-  // over the screen. Shows an idle "ready" state until a call rings, then the
-  // mint-accented Accept state.
-  const call = calls[0];
-  const ringing = Boolean(call);
-
-  return (
-    <div
-      className={cn(
-        "rounded-card border bg-card p-4 text-sm shadow-md",
-        ringing ? "border-live/40 ring-1 ring-live/20" : "border-border",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-          Video
-        </span>
-        {/* Always green when mounted: video has no persistent "line", but the
-            host is polling and ready to receive a call — so the status colour
-            matches the softphone's idle "Line ready" instead of a misleading
-            grey. Only the label changes when a call comes in. */}
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-0.5 text-xs font-medium text-live-foreground">
-          <span
-            aria-hidden="true"
-            className="inline-block h-1.5 w-1.5 rounded-full bg-live"
-          />
-          {ringing ? "Incoming" : "Ready"}
-        </span>
-      </div>
-
-      {ringing ? (
-        <div className="mt-3" role="alert" aria-live="assertive">
-          <div className="flex flex-col items-center text-center">
-            <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-live/15 text-primary">
-              <span
-                aria-hidden="true"
-                className="absolute inset-0 animate-ping rounded-full bg-live/20 motion-reduce:animate-none"
-              />
-              <Video size={18} className="relative" />
-            </span>
-            {/* Hotel name is the agent's first must-know — mirror the audio
-                softphone incoming UI: quiet eyebrow + large bold hotel name. */}
-            <p className="mt-2 font-label text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Incoming video call
-            </p>
-            <p className="mt-1 font-display text-2xl font-bold leading-tight text-foreground">
-              {call!.propertyName}
-            </p>
-          </div>
-          <button
-            type="button"
-            // Unlock audio output on this gesture so the guest's audio plays
-            // even after the cold join chain (no "tap to hear" prompt needed).
-            onClick={() => {
-              unlockAudioPlayback();
-              onAccept(call!);
-            }}
-            className="mt-3 w-full rounded-button bg-live px-3 py-2 font-medium text-primary"
-          >
-            Accept video call
-          </button>
-        </div>
-      ) : (
-        <div className="mt-2 flex flex-col items-center">
-          <div className="relative mx-auto mt-1 h-16 w-16">
-            <span
-              aria-hidden="true"
-              className="lc-seam-drift absolute -inset-1 rounded-full opacity-40 blur-md"
-            />
-            <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-border bg-card">
-              <Video size={20} className="text-primary" />
-            </span>
-          </div>
-          <p className="mt-3 text-center text-text-muted">Video calls ring here.</p>
-          <p className="mt-1 text-center text-xs text-text-muted">
-            Guests calling from a lobby kiosk.
-          </p>
-        </div>
-      )}
-    </div>
-  );
+  return { calls };
 }

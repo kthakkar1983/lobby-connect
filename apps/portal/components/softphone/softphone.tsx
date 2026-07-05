@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Phone, PhoneOff } from "lucide-react";
+import { Phone } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
+import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
+import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
@@ -64,6 +66,12 @@ export function Softphone({ role }: SoftphoneProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callRef = useRef<any>(null);
   const callIdRef = useRef<string>("");
+  // Phase-3 publish seam (Task 7): the ringing property's id (from the new
+  // propertyId Parameter), the client ms the ring surfaced, and the client ms
+  // the agent answered — mirrored into the CallSurfaceProvider for the cards.
+  const incomingPropertyIdRef = useRef<string | null>(null);
+  const incomingSinceRef = useRef<number>(0);
+  const answeredAtRef = useRef<number>(0);
   // Mirror phase + guard reconnects so the focus/visibility self-heal can read
   // the latest phase and never run two registrations at once.
   const phaseRef = useRef(phase);
@@ -136,12 +144,123 @@ export function Softphone({ role }: SoftphoneProps) {
   const { report } = useLineStatus();
   useEffect(() => { report(phase); }, [phase, report]);
 
+  // Phase-3 (Task 7): PUBLISH the audio incoming ring + active-call info into the
+  // CallSurfaceProvider so the property cards can show + answer them. This mirrors
+  // existing state; the Twilio Device machinery is untouched. The `Optional`
+  // variant keeps softphone tests without a provider passing (returns null).
+  //
+  // ⚠ DEP-HYGIENE (Task-6 review): the register/publish dispatchers are
+  // useCallback([])-stable, so publisher effects depend on the STABLE dispatcher
+  // functions — NEVER on the whole `surface` object (registering a handler
+  // mutates the context value and would loop).
+  const surface = useCallSurfaceOptional();
+  const publishRings = surface?.publishRings;
+  const publishActive = surface?.publishActive;
+  const registerAcceptAudio = surface?.registerAcceptAudio;
+  // Read the silenced-key set (plain state value — never depend on `surface`).
+  // When a card silences this ring, the set's identity changes → the ring effect
+  // below re-runs and stops our own ringtone element. With no provider it's
+  // undefined, so nothing is ever silenced (the ring always plays).
+  const silencedKeys = surface?.silencedKeys;
+  const ringtoneRef = useRef<Ringtone | null>(null);
+
+  // Publish the audio incoming ring (id comes from the new propertyId Parameter).
+  useEffect(() => {
+    if (!publishRings) return;
+    publishRings(
+      "audio",
+      phase === "incoming"
+        ? [
+            {
+              key: `audio:${callIdRef.current || "incoming"}`,
+              channel: "AUDIO",
+              callId: callIdRef.current || null,
+              propertyId: incomingPropertyIdRef.current,
+              propertyName: incomingProperty || "Unknown property",
+              since: incomingSinceRef.current,
+            },
+          ]
+        : [],
+    );
+  }, [publishRings, phase, incomingProperty]);
+
+  // Publish active-call info while in-call.
+  useEffect(() => {
+    if (!publishActive) return;
+    publishActive(
+      phase === "in-call" && callIdRef.current
+        ? {
+            callId: callIdRef.current,
+            channel: "AUDIO",
+            propertyId: incomingPropertyIdRef.current,
+            propertyName: incomingProperty || "Unknown property",
+            onHold: false, // dormant seam — hold is deferred out of Phase 3 (spec §3.6)
+            answeredAt: answeredAtRef.current,
+            timeZone: callTimeZone, // captured from the answered route today
+          }
+        : null,
+    );
+  }, [publishActive, phase, incomingProperty, callTimeZone]);
+
   // Flash the tab title while a call is ringing so a backgrounded tab is
   // identifiable (the s1-test "whose browser is ringing?" gap).
   useRingingTabTitle(
     phase === "incoming",
     incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call",
   );
+
+  // Own the audio ring element (client-only), mirroring use-incoming-video-calls.
+  // Twilio's built-in incoming sound CANNOT be stopped mid-ring (the SDK reads
+  // device.audio.incoming() once when the call arrives, then only stops on
+  // accept/reject/cancel/disconnect). To make a live ring silenceable we play
+  // our OWN element and disable the built-in ring in the `registered` handler
+  // below, so there is exactly one ring source and we control it.
+  useEffect(() => {
+    const audio = new Audio("/sounds/ring.mp3");
+    audio.loop = true;
+    audio.preload = "auto";
+    const ringtone = createRingtone(audio);
+    ringtoneRef.current = ringtone;
+
+    // Unlock autoplay: browsers block audio.play() until the page has seen a
+    // user gesture, so an idle agent's first incoming-call ring is silently
+    // dropped. Prime the element on the first interaction (skipped if a ring is
+    // already playing, so we never cut off an active ring).
+    const unlock = () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      if (!audio.paused) return;
+      void Promise.resolve(audio.play())
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+
+    return () => {
+      ringtone.stop();
+      ringtoneRef.current = null;
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  // Ring while an incoming call is waiting, UNLESS the card silenced this ring
+  // key. Silencing changes `silencedKeys` identity → this effect re-runs →
+  // rt.stop(). A NEW incoming has a new callId/phase/incomingProperty → new key
+  // (not silenced) → rt.start(). Answering (phase → "in-call") → rt.stop().
+  // Reading callIdRef.current inside mirrors the audio-publish effect's deps.
+  useEffect(() => {
+    const rt = ringtoneRef.current;
+    if (!rt) return;
+    const key = `audio:${callIdRef.current || "incoming"}`;
+    const silenced = silencedKeys?.has(key) ?? false;
+    if (phase === "incoming" && !silenced) rt.start();
+    else rt.stop();
+  }, [phase, silencedKeys, incomingProperty]);
 
   // Connect (or reconnect) the Twilio Device: tear down any prior instance,
   // mint a token, register, and wire the call handlers. Reused by the initial
@@ -176,6 +295,16 @@ export function Softphone({ role }: SoftphoneProps) {
       });
 
       device.on("registered", () => {
+        // Disable Twilio's built-in incoming ring so our own /sounds/ring.mp3
+        // element is the ONLY ring — that ring is silenceable mid-call; the
+        // built-in one is not. `registered` runs after the AudioHelper is set up
+        // and before any incoming call, and re-applies on every reconnect (this
+        // handler is re-wired each time connect() builds a fresh Device).
+        try {
+          device.audio?.incoming(false);
+        } catch {
+          // older/edge SDK without the AudioHelper — ignore
+        }
         if (mountedRef.current) setPhase("ready");
       });
       device.on("error", () => {
@@ -185,6 +314,10 @@ export function Softphone({ role }: SoftphoneProps) {
       device.on("incoming", (call: any) => {
         callRef.current = call;
         callIdRef.current = call.customParameters?.get("callId") ?? "";
+        // Capture the ringing property's id (Task 4's additive Parameter) + the
+        // moment it surfaced, for the CallSurfaceProvider publish below.
+        incomingPropertyIdRef.current = call.customParameters?.get("propertyId") ?? null;
+        incomingSinceRef.current = Date.now();
         if (mountedRef.current) {
           setIncomingProperty(call.customParameters?.get("propertyName") ?? "");
           setPhase("incoming");
@@ -262,6 +395,7 @@ export function Softphone({ role }: SoftphoneProps) {
     const call = callRef.current;
     if (!call) return;
     call.accept();
+    answeredAtRef.current = Date.now();
     setMuted(false);
     setPhase("in-call");
     // The remote MediaStream isn't ready synchronously after accept(); poll
@@ -292,11 +426,17 @@ export function Softphone({ role }: SoftphoneProps) {
     }
   }, []);
 
-  const declineCall = useCallback(() => {
-    callRef.current?.reject();
-    callRef.current = null;
-    setPhase("ready");
-  }, []);
+  // Expose accept to the property cards — via a STABLE wrapper (acceptCall is
+  // already useCallback-stable), registered/unregistered on the ring edge. Kept
+  // beside acceptCall so its [acceptCall] dep is defined (no temporal-dead-zone).
+  const acceptAudioForCards = useCallback(() => {
+    void acceptCall();
+  }, [acceptCall]);
+  useEffect(() => {
+    if (!registerAcceptAudio) return;
+    registerAcceptAudio(phase === "incoming" ? acceptAudioForCards : null);
+    return () => registerAcceptAudio(null);
+  }, [registerAcceptAudio, phase, acceptAudioForCards]);
 
   const endCall = useCallback(async () => {
     const id = callIdRef.current;
@@ -442,9 +582,11 @@ export function Softphone({ role }: SoftphoneProps) {
         </div>
       )}
 
-      {phase !== "in-call" && phase !== "incoming" && phase !== "error" && (
+      {phase !== "in-call" && phase !== "error" && (
         <div className="mt-2 flex flex-col items-center">
-          {/* Seam-ring idle brand moment — decorative anchor, not a status light. */}
+          {/* Seam-ring idle brand moment — decorative anchor, not a status light.
+              Renders through the "incoming" phase too now that the incoming block
+              is retired, so the Accepting toggle stays put while a call rings. */}
           <div className="relative mx-auto mt-1 h-16 w-16">
             <span
               aria-hidden="true"
@@ -477,43 +619,11 @@ export function Softphone({ role }: SoftphoneProps) {
         </div>
       )}
 
-      {phase === "incoming" && (
-        <div className="mt-3 space-y-3">
-          {/* Property name is the agent's first must-know on an incoming call (esp.
-              admins covering several hotels) — make it unmistakable: big display
-              line under a quiet eyebrow, not a muted inline aside (punch-list B7). */}
-          <div className="text-center">
-            <p className="font-label text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Incoming call
-            </p>
-            {incomingProperty ? (
-              <p className="mt-1 font-display text-2xl font-bold leading-tight text-foreground">
-                {incomingProperty}
-              </p>
-            ) : (
-              <p className="mt-1 font-display text-xl font-semibold text-text-muted">
-                Unknown property
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void acceptCall()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button bg-live px-3 py-2 font-medium text-primary"
-            >
-              <Phone size={16} /> Accept
-            </button>
-            <button
-              type="button"
-              onClick={declineCall}
-              className="flex flex-1 items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-foreground"
-            >
-              <PhoneOff size={16} /> Decline
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Phase-3 (Task 7): the incoming-block UI is retired — a ringing call now
+          surfaces + is answered on its property card via the CallSurfaceProvider.
+          The ringtone, tab-title flash, and accept logic stay; the card owns the
+          visual + the Answer button. The idle ready/Accepting block above keeps
+          rendering through the "incoming" phase. */}
 
       {phase === "in-call" && (
         <AudioCallOverlay

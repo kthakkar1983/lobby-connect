@@ -111,6 +111,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         apologyMessage: APOLOGY_MESSAGE,
         callId,
         propertyName: property.name,
+        propertyId: property.id,
       }),
     );
   } catch (err) {

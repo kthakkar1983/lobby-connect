@@ -9,8 +9,13 @@ function localDateKey(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
-function isToday(iso: string, timeZone: string, now: Date): boolean {
+/** True when `iso`'s calendar date, in `timeZone`, matches `now`'s calendar date in that same zone. */
+export function isTodayInZone(iso: string, timeZone: string, now: Date): boolean {
   return localDateKey(iso, timeZone) === localDateKey(now.toISOString(), timeZone);
+}
+
+function isToday(iso: string, timeZone: string, now: Date): boolean {
+  return isTodayInZone(iso, timeZone, now);
 }
 
 function localHour(iso: string, timeZone: string): number {

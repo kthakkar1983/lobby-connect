@@ -43,5 +43,19 @@ export default tseslint.config(
     },
     settings: { react: { version: "detect" } },
   },
+  {
+    // Service worker globals — `globals` isn't a declared dependency here, so
+    // name the handful this file actually touches rather than pulling in the
+    // whole `globals.serviceworker` set from a transitive package.
+    files: ["apps/portal/public/**/*.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        clients: "readonly",
+        caches: "readonly",
+        registration: "readonly",
+      },
+    },
+  },
   prettier
 );
