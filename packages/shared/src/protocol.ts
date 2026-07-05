@@ -6,6 +6,9 @@
 export const RING_WINDOW_SECONDS = 120;
 export const RING_WINDOW_MS = RING_WINDOW_SECONDS * 1000;
 
+/** Web Push TTL: a push older than the ring window is a stale ring — drop it. */
+export const PUSH_TTL_SECONDS = RING_WINDOW_SECONDS;
+
 /** A browser heartbeat older than this is stale: swept OFFLINE by cron, OFFLINE at read. */
 export const PRESENCE_STALE_AFTER_MS = 90_000;
 
