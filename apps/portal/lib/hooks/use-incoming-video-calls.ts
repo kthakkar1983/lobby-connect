@@ -6,7 +6,7 @@
 // Returns the raw incoming-call list; the UI now lives on the property cards and
 // the video host, not in a banner.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
@@ -33,21 +33,34 @@ export function useIncomingVideoCalls(
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
   const ringtoneRef = useRef<Ringtone | null>(null);
 
+  // Track live-ness so a refetch that resolves after unmount can't setState.
+  // Was a per-effect `active` closure flag; lifted to a ref so the now-stable
+  // `tick` (shared by the realtime AND SW-message effects) can honor it.
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Stable across renders (deps: operatorId only — setCalls is a stable setter).
+  // BOTH the realtime-subscription effect and the SW-message effect reference
+  // this SAME identity, so the SW effect's [tick] dep can't churn and loop.
+  const tick = useCallback(async () => {
+    try {
+      const res = await fetch("/api/calls/incoming-video");
+      if (!res.ok) return;
+      const body = (await res.json()) as { calls: IncomingVideoCall[] };
+      if (mountedRef.current) setCalls(body.calls);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
     let channel: RealtimeChannel | null = null;
     let resubscribeTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const tick = async () => {
-      try {
-        const res = await fetch("/api/calls/incoming-video");
-        if (!res.ok) return;
-        const body = (await res.json()) as { calls: IncomingVideoCall[] };
-        if (active) setCalls(body.calls);
-      } catch {
-        /* ignore */
-      }
-    };
 
     const supabase = createBrowserSupabaseClient();
     // Attach the agent JWT so the private-channel RLS authorizes the subscribe.
@@ -81,13 +94,28 @@ export function useIncomingVideoCalls(
     window.addEventListener("focus", onFocus);
 
     return () => {
-      active = false;
       clearInterval(pollId);
       if (resubscribeTimer) clearTimeout(resubscribeTimer);
       window.removeEventListener("focus", onFocus);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [operatorId]);
+  }, [operatorId, tick]);
+
+  // Web Push wake-up (Phase 3, Task 12): the service worker posts every push to
+  // open tabs. An incoming-call or call-cleared message just nudges the SAME
+  // tick() — ring start AND stop derive from /api/calls/incoming-video truth, so
+  // push, realtime, and poll can never disagree. (focus-home is a route action,
+  // handled in dashboard-workspace; the hook doesn't know routes and ignores it.)
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { source?: string; type?: string };
+      if (data?.source !== "lc-push") return;
+      if (data.type === "incoming-call" || data.type === "call-cleared") void tick();
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [tick]);
 
   // Build the ringtone once, on the client only (new Audio needs the browser).
   useEffect(() => {

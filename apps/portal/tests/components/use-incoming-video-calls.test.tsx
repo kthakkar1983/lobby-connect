@@ -67,10 +67,18 @@ function Probe({
 }
 
 const fetchMock = vi.fn();
+// A minimal navigator.serviceWorker: just an EventTarget so the hook's SW-message
+// effect can add/remove a listener and tests can dispatch a MessageEvent onto it.
+let swTarget: EventTarget;
 beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ calls: [] }) });
   vi.stubGlobal("fetch", fetchMock);
+  swTarget = new EventTarget();
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: swTarget,
+  });
   channel.on.mockClear();
   channel.subscribe.mockClear();
   removeChannel.mockClear();
@@ -80,6 +88,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  // Remove the serviceWorker stub so it can't leak between suites.
+  Reflect.deleteProperty(navigator, "serviceWorker");
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -212,6 +222,34 @@ describe("useIncomingVideoCalls", () => {
     await act(async () => {});
     expect(ringtone.start).not.toHaveBeenCalled();
     expect(screen.getByTestId("count").textContent).toBe("0");
+  });
+
+  it("refetches on an lc-push service-worker message", async () => {
+    render(<Probe operatorId="op-1" />);
+    // The mount tick() + SUBSCRIBED catch-up fire on render; wait past them, then
+    // measure the delta from a push message alone.
+    await waitFor(() => expect(channel.subscribe).toHaveBeenCalled());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    fetchMock.mockClear();
+    await act(async () => {
+      swTarget.dispatchEvent(
+        new MessageEvent("message", { data: { source: "lc-push", type: "incoming-call" } }),
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/calls/incoming-video");
+  });
+
+  it("ignores a service-worker message not from lc-push", async () => {
+    render(<Probe operatorId="op-1" />);
+    await waitFor(() => expect(channel.subscribe).toHaveBeenCalled());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    fetchMock.mockClear();
+    await act(async () => {
+      swTarget.dispatchEvent(
+        new MessageEvent("message", { data: { source: "some-other-tool", type: "incoming-call" } }),
+      );
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("refetches once on SUBSCRIBED (reconnect catch-up)", async () => {
