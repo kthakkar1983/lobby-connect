@@ -1,16 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-const { requireApiActor, upsertSpy, upsertResult, deleteEqSpy } = vi.hoisted(() => ({
-  requireApiActor: vi.fn(),
-  upsertSpy: vi.fn(),
-  upsertResult: { error: null as { message: string } | null },
-  deleteEqSpy: vi.fn(),
-}));
+const { requireApiActor, upsertSpy, upsertResult, deleteEqSpy, deleteResult, captureException } =
+  vi.hoisted(() => ({
+    requireApiActor: vi.fn(),
+    upsertSpy: vi.fn(),
+    upsertResult: { error: null as { message: string } | null },
+    deleteEqSpy: vi.fn(),
+    deleteResult: { error: null as { message: string } | null },
+    captureException: vi.fn(),
+  }));
 
 vi.mock("@/lib/auth/api-actor", () => ({
   requireApiActor: (...args: unknown[]) => requireApiActor(...args),
 }));
+
+vi.mock("@sentry/nextjs", () => ({ captureException }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -26,7 +31,7 @@ vi.mock("@/lib/supabase/admin", () => ({
           eq: (col1: string, val1: string) => ({
             eq: (col2: string, val2: string) => {
               deleteEqSpy([col1, val1], [col2, val2]);
-              return Promise.resolve({ error: null });
+              return Promise.resolve(deleteResult);
             },
           }),
         }),
@@ -51,7 +56,9 @@ beforeEach(() => {
   requireApiActor.mockReset();
   upsertSpy.mockReset();
   deleteEqSpy.mockReset();
+  captureException.mockReset();
   upsertResult.error = null;
+  deleteResult.error = null;
   requireApiActor.mockResolvedValue(ACTOR);
 });
 
@@ -125,5 +132,13 @@ describe("DELETE /api/push/subscription", () => {
     const [first, second] = deleteEqSpy.mock.calls[0]!;
     expect(first).toEqual(["endpoint", "https://push/1"]);
     expect(second).toEqual(["user_id", "u-1"]);
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("still returns 204 on a delete error but reports it to Sentry (best-effort)", async () => {
+    deleteResult.error = { message: "db down" };
+    const res = await DELETE(delReq({ endpoint: "https://push/1" }));
+    expect(res.status).toBe(204);
+    expect(captureException).toHaveBeenCalledTimes(1);
   });
 });

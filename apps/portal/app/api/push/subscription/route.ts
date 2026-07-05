@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,10 +39,13 @@ export async function DELETE(request: Request): Promise<NextResponse> {
   const body = (await request.json().catch(() => ({}))) as { endpoint?: string };
   if (!body.endpoint) return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   const admin = createAdminClient();
-  await admin
+  // Unsubscribe is best-effort: a failed delete still returns 204 (the client
+  // has already dropped its local subscription), but surface it for observability.
+  const { error } = await admin
     .from("push_subscriptions")
     .delete()
     .eq("endpoint", body.endpoint)
     .eq("user_id", actor.userId);
+  if (error) Sentry.captureException(error);
   return new NextResponse(null, { status: 204 });
 }

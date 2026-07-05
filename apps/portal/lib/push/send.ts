@@ -44,6 +44,9 @@ export async function sendCallPush(admin: Admin, payload: CallPushPayload): Prom
         } catch (err) {
           const status = (err as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410) {
+            // Intentionally endpoint-only (endpoint is globally unique) and NOT
+            // operator-scoped: this is a trusted service-role prune of a dead
+            // subscription. Do not "harden" this into an operator/user-scoped delete.
             await admin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
           } else {
             Sentry.captureMessage(`sendCallPush failed: ${status ?? "unknown"}`, {
