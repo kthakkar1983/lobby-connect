@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
+import { primeRingtone } from "@/lib/video/prime";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { preparePipDocument } from "@/lib/duty-tile/pip-document";
 import {
@@ -189,15 +190,7 @@ export function DutyTilePrototype({ agentName }: { agentName: string }) {
       audioRef.current = audio;
       ringtoneRef.current = createRingtone(audio);
     }
-    const audio = audioRef.current;
-    if (audio.paused) {
-      void Promise.resolve(audio.play())
-        .then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        })
-        .catch(() => {});
-    }
+    primeRingtone(audioRef.current);
 
     try {
       const pip = await docPip.requestWindow({ width: TILE_WIDTH, height: TILE_HEIGHT });

@@ -5,12 +5,14 @@ import { Phone } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
+import { DutyControls } from "@/components/dashboard/duty-controls";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
+import { primeRingtone } from "@/lib/video/prime";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
@@ -163,6 +165,9 @@ export function Softphone({ role }: SoftphoneProps) {
   // undefined, so nothing is ever silenced (the ring always plays).
   const silencedKeys = surface?.silencedKeys;
   const ringtoneRef = useRef<Ringtone | null>(null);
+  // The raw ring audio element, so "Go on duty" can prime the REAL element the
+  // ring plays (not a throwaway) inside its own user gesture.
+  const ringAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Publish the audio incoming ring (id comes from the new propertyId Parameter).
   useEffect(() => {
@@ -219,6 +224,7 @@ export function Softphone({ role }: SoftphoneProps) {
     const audio = new Audio("/sounds/ring.mp3");
     audio.loop = true;
     audio.preload = "auto";
+    ringAudioRef.current = audio;
     const ringtone = createRingtone(audio);
     ringtoneRef.current = ringtone;
 
@@ -229,13 +235,7 @@ export function Softphone({ role }: SoftphoneProps) {
     const unlock = () => {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
-      if (!audio.paused) return;
-      void Promise.resolve(audio.play())
-        .then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        })
-        .catch(() => {});
+      primeRingtone(audio);
     };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
@@ -243,10 +243,15 @@ export function Softphone({ role }: SoftphoneProps) {
     return () => {
       ringtone.stop();
       ringtoneRef.current = null;
+      ringAudioRef.current = null;
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  // Stable prime callback for the "Go on duty" control: primes the REAL ring
+  // element (autoplay unlock) inside the click's user gesture.
+  const primeRing = useCallback(() => primeRingtone(ringAudioRef.current), []);
 
   // Ring while an incoming call is waiting, UNLESS the card silenced this ring
   // key. Silencing changes `silencedKeys` identity → this effect re-runs →
@@ -584,6 +589,12 @@ export function Softphone({ role }: SoftphoneProps) {
 
       {phase !== "in-call" && phase !== "error" && (
         <div className="mt-2 flex flex-col items-center">
+          {/* D5 "Go on duty": one click primes the ring audio (real element) +
+              arms Web Push. Presentational, props-driven — all duty/call state
+              stays in this softphone (no state lift into CallSurfaceProvider). */}
+          <div className="w-full">
+            <DutyControls role={role} onPrime={primeRing} />
+          </div>
           {/* Seam-ring idle brand moment — decorative anchor, not a status light.
               Renders through the "incoming" phase too now that the incoming block
               is retired, so the Accepting toggle stays put while a call rings. */}
