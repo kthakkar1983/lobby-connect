@@ -1229,9 +1229,18 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 
 - [ ] **Step 5: Gate (`typecheck`, `test`, `lint`, `check:routes`, `build`) + commit** (`feat(admin): pod-grouped fleet cards replace ops table; retire video card + off-home toast`).
 
-## Task 10: Phase B staging + prod smoke (HUMAN)
+## Task 10: Phase B staging + prod smoke (HUMAN) — ✅ PASSED (2026-07-05)
 
-- [ ] Push to `staging`, then: kiosk video call → agent card expands + rings + Answer opens today's overlay; audio call → same on the audio card; admin with covering ON sees Answer, OFF sees ring-only; other placements gone; second browser answering first → loser card stops ringing (claim 409 path). Then PR → `main`, repeat the two-call smoke on prod. Record results in this file.
+- [x] Prod two-call smoke run after the A+B slice + fix loop merged (PR #27) and the video-ring fix merged (PR #28). Phase B is COMPLETE.
+
+**PHASE B PROD SMOKE — PASSED (2026-07-05, Kumar on prod):**
+- **AUDIO — full pass:** no double-ring on incoming (Twilio built-in ring correctly disabled, only the softphone's own `/sounds/ring.mp3` element plays); rang on a backgrounded/unfocused tab; **Silence** muted the local ring while staying answerable; **answered a silenced call** successfully.
+- **VIDEO — pass:** the property card rang; **Answer connected to the kiosk** (guest video up); **Silence** worked on the video ring; and after the PR-#28 fix, **the ring stops the instant the call is answered** (was blaring ~30s over the connected call — see below).
+- **Two findings during the smoke, both fixed on `main`:**
+  1. *Transient "Something went wrong" on the first video answer* → a post-deploy **ChunkLoadError** (the open tab held a stale chunk map; the video overlay is lazy-loaded). **Self-healed** with no code change once the tab/CDN caught up. Root-caused, not a code bug. **Carry-forward:** add a durable ChunkLoadError→reload guard so a mid-shift deploy can't break an agent's next lazy-load (small, non-blocking).
+  2. *Video ringtone kept playing ~30s AFTER answering* → a pre-existing Phase-B bug (video gated its ring on the server incoming list, which cleared only via a realtime broadcast a just-focused tab missed → 60s poll, avg ~30s). **Fixed (PR #28, `f4af480`):** the video ring now stops on the LOCAL answer (mirrors audio) via `useIncomingVideoCalls(operatorId, silencedKeys, activeCallId)` — the answered id is excluded from the ring/tab-title/returned list; `waiting` is `useMemo`'d for identity-stability (the first cut caused a render-loop OOM the suite caught). TDD + adversarial review (zero must-fix).
+- **Not separately re-exercised this pass (lower-risk, unit-tested):** admin covering ON/OFF Answer gating (s1-test scoping + unit tests), the two-browser race / 409 claim path (`claimCall` unit-tested). Re-confirm opportunistically; not blocking Phase B closure (Kumar's call, 2026-07-05).
+- **Expected/by-design (NOT bugs):** video only rings once the tab is focused (backgrounded-realtime limit — **Phase C push closes it**); off-home a ring is audible but the Answer/Silence controls live on the home cards (Task-9 toast retirement — **Phase C push-navigates-home closes it**; accepted by Kumar).
 
 **Staging scope note (2026-07-04):** staging receives NO Twilio webhooks (the number points at prod until Phase 5, and the staging front door has no `/api/twilio/*` basic-auth carve-out) → the **audio-card ring and the Decline-gone feel are PROD smoke items** after the merge. Staging covers: the video ring-on-card path, covering gates, toggle round-trip, and the two-browser race. Staging prep required first: the staging DB has only Staging Admin + Staging Test Hotel — provision a staging AGENT (`/admin/users`) and assign it as the hotel's primary agent (`/admin/properties` → detail) or no card will ring.
 
