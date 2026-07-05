@@ -37,6 +37,17 @@ describe("DutyControls", () => {
     expect(screen.queryByText(/on duty · push armed/i)).toBeNull();
   });
 
+  it("starts in the quiet armed state when already armed at mount (e.g. after a reload)", async () => {
+    // The mount effect runs setArmed(pushArmed()); a granted permission means the
+    // agent is already on duty — the quiet state shows with no button, no click.
+    push.pushArmed.mockReturnValue(true);
+    render(<DutyControls role="AGENT" onPrime={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByText(/on duty · push armed/i)).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: /go on duty/i })).toBeNull();
+  });
+
   it("primes + arms on click, then shows the quiet armed state and hides the button", async () => {
     const user = userEvent.setup();
     const onPrime = vi.fn();
