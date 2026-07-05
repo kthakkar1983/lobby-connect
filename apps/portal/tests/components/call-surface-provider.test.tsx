@@ -20,6 +20,15 @@ const videoRing: IncomingRing = {
   since: 1_000,
 };
 
+const silenceableRing: IncomingRing = {
+  key: "video:call-1",
+  channel: "VIDEO",
+  callId: "call-1",
+  propertyId: "prop-1",
+  propertyName: "The Grand Hotel",
+  since: 1_000,
+};
+
 const activeCall: ActiveCallInfo = {
   callId: "call-1",
   channel: "VIDEO",
@@ -165,6 +174,61 @@ describe("CallSurfaceProvider", () => {
     expect(result.current.error?.message).toBe(
       "useCallSurface must be used inside CallSurfaceProvider",
     );
+  });
+
+  it("silenceRing adds a key, is idempotent, and prunes a key once its ring stops (auto-reset)", async () => {
+    acceptVideoSpy = () => {};
+
+    /** Silence harness: publishes the silenceable ring, silences it, clears it,
+     *  and surfaces the silenced-key state. */
+    function SilenceHarness() {
+      const { silencedKeys, silenceRing, publishRings } = useCallSurface();
+      return (
+        <div>
+          <div data-testid="silenced-count">{silencedKeys.size}</div>
+          <div data-testid="has-key">{silencedKeys.has("video:call-1") ? "yes" : "no"}</div>
+          <button onClick={() => publishRings("video", [silenceableRing])}>publish silenceable ring</button>
+          <button onClick={() => publishRings("video", [])}>clear silenceable ring</button>
+          <button onClick={() => silenceRing("video:call-1")}>silence</button>
+        </div>
+      );
+    }
+
+    render(
+      <CallSurfaceProvider>
+        <SilenceHarness />
+      </CallSurfaceProvider>,
+    );
+
+    // Publish the ring, then silence it → the key is present.
+    await act(async () => {
+      screen.getByText("publish silenceable ring").click();
+    });
+    await act(async () => {
+      screen.getByText("silence").click();
+    });
+    expect(screen.getByTestId("silenced-count").textContent).toBe("1");
+    expect(screen.getByTestId("has-key").textContent).toBe("yes");
+
+    // Silencing again is idempotent — still exactly one key.
+    await act(async () => {
+      screen.getByText("silence").click();
+    });
+    expect(screen.getByTestId("silenced-count").textContent).toBe("1");
+
+    // The ring goes away → the prune effect drops the now-stale silenced key.
+    await act(async () => {
+      screen.getByText("clear silenceable ring").click();
+    });
+    expect(screen.getByTestId("silenced-count").textContent).toBe("0");
+    expect(screen.getByTestId("has-key").textContent).toBe("no");
+  });
+
+  it("exposes an empty silencedKeys set by default", () => {
+    const inside = renderHook(() => useCallSurfaceOptional(), {
+      wrapper: CallSurfaceProvider,
+    });
+    expect(inside.result.current?.silencedKeys.size).toBe(0);
   });
 
   it("useCallSurfaceOptional returns null outside the provider and the value inside", () => {

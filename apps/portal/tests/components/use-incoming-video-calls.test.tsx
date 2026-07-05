@@ -44,8 +44,14 @@ import {
 } from "@/lib/hooks/use-incoming-video-calls";
 
 // Minimal consumer so the hook has a host component; renders the detected calls.
-function Probe({ operatorId }: { operatorId: string }) {
-  const { calls } = useIncomingVideoCalls(operatorId);
+function Probe({
+  operatorId,
+  silencedKeys,
+}: {
+  operatorId: string;
+  silencedKeys?: ReadonlySet<string>;
+}) {
+  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys);
   return (
     <div>
       <span data-testid="count">{calls.length}</span>
@@ -111,6 +117,31 @@ describe("useIncomingVideoCalls", () => {
     expect(await screen.findByText("The Hotel")).toBeTruthy();
     // Rings while a call is waiting.
     await waitFor(() => expect(ringtone.start).toHaveBeenCalled());
+  });
+
+  it("does NOT ring when the incoming call's key is silenced, but still flashes the tab title", async () => {
+    const originalTitle = document.title;
+    render(<Probe operatorId="op-1" silencedKeys={new Set(["video:c1"])} />);
+    await waitFor(() => expect(channel.on).toHaveBeenCalled());
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        calls: [
+          { id: "c1", channelName: "ch", propertyName: "The Hotel", propertyId: "p1", ringStartedAt: null },
+        ],
+      }),
+    });
+    await act(async () => {
+      channel.handlers["calls-changed"]?.({});
+    });
+    // The call is present...
+    expect(await screen.findByText("The Hotel")).toBeTruthy();
+    // ...but its audio is silenced: the ringtone never starts (only stop is called).
+    expect(ringtone.start).not.toHaveBeenCalled();
+    // The visual tab-title flash is unaffected by silence.
+    expect(document.title).toBe("Incoming video call · The Hotel");
+    cleanup();
+    document.title = originalTitle;
   });
 
   it("stops ringing once the waiting call clears", async () => {

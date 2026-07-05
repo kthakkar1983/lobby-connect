@@ -159,6 +159,66 @@ describe("PropertyCard", () => {
     expect(audioCalls).toBe(1);
   });
 
+  it("shows a Silence toggle on a ringing card; clicking it silences the ring key and disables the button, Answer stays", async () => {
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    // Ringing → both Answer and Silence are present.
+    expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
+    const silence = screen.getByRole("button", { name: "Silence" });
+    expect(silence).not.toBeNull();
+    expect(silence.hasAttribute("disabled")).toBe(false);
+
+    await act(async () => {
+      silence.click();
+    });
+
+    // Once the key is silenced the button reads "Silenced" and is disabled.
+    const silenced = screen.getByRole("button", { name: "Silenced" });
+    expect(silenced).not.toBeNull();
+    expect(silenced.hasAttribute("disabled")).toBe(true);
+    expect(silenced.getAttribute("aria-pressed")).toBe("true");
+
+    // Silence is audio-only: the ring stays and Answer remains available.
+    expect(screen.getByText(/Ringing/)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
+  });
+
+  it("shows the Silence toggle even when canAnswer is false (admin covering OFF)", async () => {
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} canAnswer={false} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    // No Answer (gated), but Silence is still available so the local ring can be muted.
+    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Silence" })).not.toBeNull();
+  });
+
+  it("shows no Silence toggle on a quiet card", () => {
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Silence" })).toBeNull();
+  });
+
   it("hides the Answer button when canAnswer is false, but keeps the ringing treatment", async () => {
     render(
       <CallSurfaceProvider>

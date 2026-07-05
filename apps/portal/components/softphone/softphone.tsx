@@ -10,6 +10,7 @@ import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/devic
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
+import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
@@ -156,6 +157,12 @@ export function Softphone({ role }: SoftphoneProps) {
   const publishRings = surface?.publishRings;
   const publishActive = surface?.publishActive;
   const registerAcceptAudio = surface?.registerAcceptAudio;
+  // Read the silenced-key set (plain state value — never depend on `surface`).
+  // When a card silences this ring, the set's identity changes → the ring effect
+  // below re-runs and stops our own ringtone element. With no provider it's
+  // undefined, so nothing is ever silenced (the ring always plays).
+  const silencedKeys = surface?.silencedKeys;
+  const ringtoneRef = useRef<Ringtone | null>(null);
 
   // Publish the audio incoming ring (id comes from the new propertyId Parameter).
   useEffect(() => {
@@ -202,6 +209,59 @@ export function Softphone({ role }: SoftphoneProps) {
     incomingProperty ? `Incoming call · ${incomingProperty}` : "Incoming call",
   );
 
+  // Own the audio ring element (client-only), mirroring use-incoming-video-calls.
+  // Twilio's built-in incoming sound CANNOT be stopped mid-ring (the SDK reads
+  // device.audio.incoming() once when the call arrives, then only stops on
+  // accept/reject/cancel/disconnect). To make a live ring silenceable we play
+  // our OWN element and disable the built-in ring in the `registered` handler
+  // below, so there is exactly one ring source and we control it.
+  useEffect(() => {
+    const audio = new Audio("/sounds/ring.mp3");
+    audio.loop = true;
+    audio.preload = "auto";
+    const ringtone = createRingtone(audio);
+    ringtoneRef.current = ringtone;
+
+    // Unlock autoplay: browsers block audio.play() until the page has seen a
+    // user gesture, so an idle agent's first incoming-call ring is silently
+    // dropped. Prime the element on the first interaction (skipped if a ring is
+    // already playing, so we never cut off an active ring).
+    const unlock = () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      if (!audio.paused) return;
+      void Promise.resolve(audio.play())
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+
+    return () => {
+      ringtone.stop();
+      ringtoneRef.current = null;
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  // Ring while an incoming call is waiting, UNLESS the card silenced this ring
+  // key. Silencing changes `silencedKeys` identity → this effect re-runs →
+  // rt.stop(). A NEW incoming has a new callId/phase/incomingProperty → new key
+  // (not silenced) → rt.start(). Answering (phase → "in-call") → rt.stop().
+  // Reading callIdRef.current inside mirrors the audio-publish effect's deps.
+  useEffect(() => {
+    const rt = ringtoneRef.current;
+    if (!rt) return;
+    const key = `audio:${callIdRef.current || "incoming"}`;
+    const silenced = silencedKeys?.has(key) ?? false;
+    if (phase === "incoming" && !silenced) rt.start();
+    else rt.stop();
+  }, [phase, silencedKeys, incomingProperty]);
+
   // Connect (or reconnect) the Twilio Device: tear down any prior instance,
   // mint a token, register, and wire the call handlers. Reused by the initial
   // mount and the focus/visibility self-heal below.
@@ -235,6 +295,16 @@ export function Softphone({ role }: SoftphoneProps) {
       });
 
       device.on("registered", () => {
+        // Disable Twilio's built-in incoming ring so our own /sounds/ring.mp3
+        // element is the ONLY ring — that ring is silenceable mid-call; the
+        // built-in one is not. `registered` runs after the AudioHelper is set up
+        // and before any incoming call, and re-applies on every reconnect (this
+        // handler is re-wired each time connect() builds a fresh Device).
+        try {
+          device.audio?.incoming(false);
+        } catch {
+          // older/edge SDK without the AudioHelper — ignore
+        }
         if (mountedRef.current) setPhase("ready");
       });
       device.on("error", () => {

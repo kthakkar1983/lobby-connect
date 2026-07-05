@@ -4,6 +4,7 @@
 // via CallSurfaceProvider (D1/D2). Connect lands in Phase E (Task 19).
 
 import { useEffect, useState } from "react";
+import { BellOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCallSurface } from "@/components/dashboard/call-surface-provider";
@@ -40,8 +41,9 @@ export function PropertyCard({
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerSlot?: React.ReactNode;
 }): React.JSX.Element {
-  const { rings, active, actions } = useCallSurface();
+  const { rings, active, actions, silencedKeys, silenceRing } = useCallSurface();
   const ring = rings.find((r) => r.propertyId === property.id) ?? null;
+  const silenced = ring ? silencedKeys.has(ring.key) : false;
   const onCallHere = active?.propertyId === property.id;
   const state = cardLiveState({
     ringing: !!ring,
@@ -98,6 +100,17 @@ export function PropertyCard({
         {ringing && canAnswer && (
           <Button onClick={answer} className="animate-pulse">
             Answer
+          </Button>
+        )}
+        {ringing && ring && (
+          <Button
+            variant="neutral"
+            onClick={() => silenceRing(ring.key)}
+            disabled={silenced}
+            aria-pressed={silenced}
+          >
+            <BellOff aria-hidden="true" />
+            {silenced ? "Silenced" : "Silence"}
           </Button>
         )}
         {connectSlot}

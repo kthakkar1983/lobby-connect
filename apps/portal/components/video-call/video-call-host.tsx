@@ -24,8 +24,12 @@ const VideoCall = dynamic(() => import("./video-call").then((m) => m.VideoCall),
  */
 export function VideoCallHost({ operatorId }: { operatorId: string }) {
   const [active, setActive] = useState<IncomingVideoCall | null>(null);
-  const { calls } = useIncomingVideoCalls(operatorId);
   const surface = useCallSurfaceOptional();
+  // Read the silenced set as a plain value (never depend on `surface` itself)
+  // and pass it into the hook so a silenced video ring mutes the audio ringer
+  // while the tab-title flash + card ring stay visible.
+  const silencedKeys = surface?.silencedKeys;
+  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys);
   const publishRings = surface?.publishRings;
   const registerAcceptVideo = surface?.registerAcceptVideo;
 

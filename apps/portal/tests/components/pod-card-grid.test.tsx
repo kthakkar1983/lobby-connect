@@ -129,6 +129,37 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
     expect(calls).toEqual(["call-outside-pod"]);
   });
 
+  it("renders a Silence toggle on the unmatched fallback card; clicking it disables the button, Answer stays", async () => {
+    acceptAudioSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PodCardGrid properties={[p1]} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptAudio").click();
+    });
+    await act(async () => {
+      screen.getByText("publish audio ring with null propertyId").click();
+    });
+
+    // Fallback card has both Answer and Silence.
+    expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
+    const silence = screen.getByRole("button", { name: "Silence" });
+    expect(silence.hasAttribute("disabled")).toBe(false);
+
+    await act(async () => {
+      silence.click();
+    });
+
+    const silenced = screen.getByRole("button", { name: "Silenced" });
+    expect(silenced.hasAttribute("disabled")).toBe(true);
+    // Ring stays answerable after silencing.
+    expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
+  });
+
   it("suppresses the unmatched-ring fallback when showUnmatchedRings={false} (Task 9: the fleet board hoists it instead)", async () => {
     render(
       <CallSurfaceProvider>

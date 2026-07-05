@@ -5,7 +5,7 @@
 // stays inside its existing owners — this is state mirroring + dispatch,
 // never a second call engine.
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export interface IncomingRing {
   key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
@@ -45,6 +45,16 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   publishActive: (active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
+  /**
+   * Ring keys the LOCAL user has silenced (audio only). The publishers
+   * (softphone audio ring / video-host ring) read this and mute their own
+   * ringtone element for a silenced key; the card keeps ringing visually and
+   * stays answerable. Silence is purely local — it never touches the server
+   * call row or other users' rings.
+   */
+  silencedKeys: ReadonlySet<string>;
+  /** Silence the local audio ringer for one ring key (idempotent). */
+  silenceRing: (key: string) => void;
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -60,6 +70,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // needing a synthetic version-counter dependency to force a recompute.
   const [acceptAudioFn, setAcceptAudioFn] = useState<(() => void) | null>(null);
   const [acceptVideoFn, setAcceptVideoFn] = useState<((callId: string) => void) | null>(null);
+  // Ring keys the local user has silenced (audio only). Immutable updates keep
+  // the Set's identity stable when nothing actually changes, so publisher
+  // effects that read it don't churn.
+  const [silencedKeys, setSilencedKeys] = useState<ReadonlySet<string>>(() => new Set());
 
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
@@ -74,6 +88,32 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     setAcceptVideoFn(() => fn);
   }, []);
 
+  // Identity-stable dispatcher: silence one ring key. Returns the same Set when
+  // the key is already present so a double-silence doesn't churn identity.
+  const silenceRing = useCallback((key: string) => {
+    setSilencedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  }, []);
+
+  // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
+  // changes, drop any silenced key that is no longer ringing. A brand-new call
+  // gets a new key that isn't silenced, so it rings again. ringKeys is memoized
+  // so it doesn't get a fresh identity every render (which would loop the effect).
+  const ringKeys = useMemo(
+    () => new Set([...audioRings, ...videoRings].map((r) => r.key)),
+    [audioRings, videoRings],
+  );
+  useEffect(() => {
+    setSilencedKeys((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const k of prev) {
+        if (ringKeys.has(k)) next.add(k);
+        else changed = true;
+      }
+      return changed ? next : prev; // keep identity stable when nothing pruned
+    });
+  }, [ringKeys]);
+
   const value = useMemo<CallSurfaceValue>(
     () => ({
       rings: [...audioRings, ...videoRings],
@@ -83,6 +123,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      silencedKeys,
+      silenceRing,
     }),
     [
       audioRings,
@@ -94,6 +136,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      silencedKeys,
+      silenceRing,
     ],
   );
 

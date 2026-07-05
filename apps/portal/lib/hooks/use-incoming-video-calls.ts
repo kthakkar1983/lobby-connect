@@ -25,7 +25,10 @@ export interface IncomingVideoCall {
   ringStartedAt: string | null;
 }
 
-export function useIncomingVideoCalls(operatorId: string): { calls: IncomingVideoCall[] } {
+export function useIncomingVideoCalls(
+  operatorId: string,
+  silencedKeys?: ReadonlySet<string>,
+): { calls: IncomingVideoCall[] } {
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
   const ringtoneRef = useRef<Ringtone | null>(null);
 
@@ -119,20 +122,24 @@ export function useIncomingVideoCalls(operatorId: string): { calls: IncomingVide
     };
   }, []);
 
-  // Ring while a call is waiting; silence it once answered, declined, or gone.
-  // (Answering clears the ring via the card flow, which empties this list — the
-  // host publishes [] and the overlay takes over.)
-  const isRinging = calls.length > 0;
+  // Split "has an incoming call" (visual — tab-title flash) from "should play
+  // audio" (honors local silence). Ring while a call is waiting AND not silenced;
+  // silence it once answered, declined, or gone. (Answering clears the ring via
+  // the card flow, which empties this list — the host publishes [] and the
+  // overlay takes over.) Silence is local audio only — the tab-title cue stays.
+  const hasIncoming = calls.length > 0;
+  const shouldRing = calls.some((c) => !(silencedKeys?.has(`video:${c.id}`) ?? false));
   useEffect(() => {
-    if (isRinging) ringtoneRef.current?.start();
+    if (shouldRing) ringtoneRef.current?.start();
     else ringtoneRef.current?.stop();
-  }, [isRinging]);
+  }, [shouldRing]);
 
   // Flash the tab title while ringing so a backgrounded tab is identifiable
-  // (the s1-test "whose browser is ringing?" gap).
+  // (the s1-test "whose browser is ringing?" gap). Uses hasIncoming, NOT
+  // shouldRing — silencing must never stop the visual flash.
   const ringingProperty = calls[0]?.propertyName ?? "";
   useRingingTabTitle(
-    isRinging,
+    hasIncoming,
     ringingProperty ? `Incoming video call · ${ringingProperty}` : "Incoming video call",
   );
 

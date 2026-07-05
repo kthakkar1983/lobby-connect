@@ -2,6 +2,8 @@
 // Phase-3 pod grid (spec §3.1, Task 8 step 2): thin responsive layout wrapper
 // around PropertyCard. Shared by the agent (Task 8) and admin (Task 9) scopes.
 
+import { BellOff } from "lucide-react";
+
 import { useCallSurface, type IncomingRing } from "@/components/dashboard/call-surface-provider";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { Button } from "@/components/ui/button";
@@ -24,33 +26,45 @@ export function UnmatchedRingCards({
 }: {
   unmatched: IncomingRing[];
 }): React.JSX.Element | null {
-  const { actions } = useCallSurface();
+  const { actions, silencedKeys, silenceRing } = useCallSurface();
   if (unmatched.length === 0) return null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {unmatched.map((ring) => (
-        <div
-          key={ring.key}
-          data-live-state="ringing"
-          className="scale-[1.02] rounded-[var(--radius-card)] border border-live bg-card p-4 shadow-lg ring-2 ring-live transition-all duration-[var(--duration-standard)]"
-        >
-          <h3 className="font-semibold text-foreground">{ring.propertyName}</h3>
-          <p className="text-sm font-medium text-live-foreground">
-            Incoming {ring.channel === "AUDIO" ? "phone" : "video"} call
-          </p>
-          <div className="mt-3">
-            <Button
-              onClick={() =>
-                ring.channel === "AUDIO" ? actions.acceptAudio?.() : ring.callId && actions.acceptVideo?.(ring.callId)
-              }
-              className="animate-pulse"
-            >
-              Answer
-            </Button>
+      {unmatched.map((ring) => {
+        const silenced = silencedKeys.has(ring.key);
+        return (
+          <div
+            key={ring.key}
+            data-live-state="ringing"
+            className="scale-[1.02] rounded-[var(--radius-card)] border border-live bg-card p-4 shadow-lg ring-2 ring-live transition-all duration-[var(--duration-standard)]"
+          >
+            <h3 className="font-semibold text-foreground">{ring.propertyName}</h3>
+            <p className="text-sm font-medium text-live-foreground">
+              Incoming {ring.channel === "AUDIO" ? "phone" : "video"} call
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                onClick={() =>
+                  ring.channel === "AUDIO" ? actions.acceptAudio?.() : ring.callId && actions.acceptVideo?.(ring.callId)
+                }
+                className="animate-pulse"
+              >
+                Answer
+              </Button>
+              <Button
+                variant="neutral"
+                onClick={() => silenceRing(ring.key)}
+                disabled={silenced}
+                aria-pressed={silenced}
+              >
+                <BellOff aria-hidden="true" />
+                {silenced ? "Silenced" : "Silence"}
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
