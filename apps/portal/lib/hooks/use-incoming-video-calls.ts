@@ -44,9 +44,12 @@ export function useIncomingVideoCalls(
     };
   }, []);
 
-  // Stable across renders (deps: operatorId only — setCalls is a stable setter).
-  // BOTH the realtime-subscription effect and the SW-message effect reference
-  // this SAME identity, so the SW effect's [tick] dep can't churn and loop.
+  // Stable across renders — the empty dep array is correct: tick closes over only
+  // the literal /api/calls/incoming-video URL, the stable mountedRef, and the
+  // stable setCalls setter (no render-scoped values). If a future edit references
+  // operatorId/silencedKeys/activeCallId inside tick, that value MUST be added here.
+  // BOTH the realtime-subscription effect and the SW-message effect reference this
+  // SAME identity, so the SW effect's [tick] dep can't churn and loop.
   const tick = useCallback(async () => {
     try {
       const res = await fetch("/api/calls/incoming-video");
