@@ -47,11 +47,13 @@ import {
 function Probe({
   operatorId,
   silencedKeys,
+  activeCallId,
 }: {
   operatorId: string;
   silencedKeys?: ReadonlySet<string>;
+  activeCallId?: string | null;
 }) {
-  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys);
+  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys, activeCallId);
   return (
     <div>
       <span data-testid="count">{calls.length}</span>
@@ -162,6 +164,54 @@ describe("useIncomingVideoCalls", () => {
     await act(async () => channel.handlers["calls-changed"]?.({}));
     await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("0"));
     await waitFor(() => expect(ringtone.stop).toHaveBeenCalled());
+  });
+
+  it("stops ringing the instant a call is answered locally, before any refetch", async () => {
+    const { rerender } = render(<Probe operatorId="op-1" />);
+    await waitFor(() => expect(channel.on).toHaveBeenCalled());
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        calls: [
+          { id: "c1", channelName: "ch", propertyName: "The Hotel", propertyId: "p1", ringStartedAt: null },
+        ],
+      }),
+    });
+    await act(async () => channel.handlers["calls-changed"]?.({}));
+    await waitFor(() => expect(ringtone.start).toHaveBeenCalled());
+    ringtone.stop.mockClear();
+
+    // The agent answers locally (activeCallId set). The server list has NOT been
+    // refetched (the just-focused tab missed the answer-video broadcast), yet the
+    // ring must stop immediately and the answered call must drop from the list.
+    rerender(<Probe operatorId="op-1" activeCallId="c1" />);
+    await waitFor(() => expect(ringtone.stop).toHaveBeenCalled());
+    expect(screen.getByTestId("count").textContent).toBe("0");
+  });
+
+  it("does not re-ring an answered call after it ends while it lingers in the server list", async () => {
+    const { rerender } = render(<Probe operatorId="op-1" />);
+    await waitFor(() => expect(channel.on).toHaveBeenCalled());
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        calls: [
+          { id: "c1", channelName: "ch", propertyName: "The Hotel", propertyId: "p1", ringStartedAt: null },
+        ],
+      }),
+    });
+    await act(async () => channel.handlers["calls-changed"]?.({}));
+    await waitFor(() => expect(ringtone.start).toHaveBeenCalled());
+
+    // Answer, then end (activeCallId back to null) while c1 still lingers in the
+    // unrefetched server list — the ring must NOT resume for the finished call.
+    rerender(<Probe operatorId="op-1" activeCallId="c1" />);
+    await act(async () => {});
+    ringtone.start.mockClear();
+    rerender(<Probe operatorId="op-1" activeCallId={null} />);
+    await act(async () => {});
+    expect(ringtone.start).not.toHaveBeenCalled();
+    expect(screen.getByTestId("count").textContent).toBe("0");
   });
 
   it("refetches once on SUBSCRIBED (reconnect catch-up)", async () => {

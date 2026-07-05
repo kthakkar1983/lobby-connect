@@ -29,7 +29,11 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
   // and pass it into the hook so a silenced video ring mutes the audio ringer
   // while the tab-title flash + card ring stay visible.
   const silencedKeys = surface?.silencedKeys;
-  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys);
+  // Pass the answered call's id so the ring stops the instant it's answered
+  // (locally), not when the server refetch eventually drops it — otherwise a
+  // just-focused tab that missed the answer-video broadcast rings ~30s over the
+  // connected call (the audio path stops on the local phase change; mirror it).
+  const { calls } = useIncomingVideoCalls(operatorId, silencedKeys, active?.id ?? null);
   const publishRings = surface?.publishRings;
   const registerAcceptVideo = surface?.registerAcceptVideo;
 
