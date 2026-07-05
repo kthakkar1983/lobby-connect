@@ -9,6 +9,11 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+const sendCallPush = vi.fn();
+vi.mock("@/lib/push/send", () => ({
+  sendCallPush: (...a: unknown[]) => sendCallPush(...a),
+}));
+
 // The broadcast must be scheduled via next/server `after()` (guaranteed
 // post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
 // run before the serverless function freezes. The spy runs its callback so the
@@ -65,6 +70,7 @@ function req(body: unknown, token?: string) {
 beforeEach(() => {
   updateSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  sendCallPush.mockClear();
   after.mockClear();
   lastFilters = {};
   callRow = { id: "call-1", property_id: "prop-1", state: "IN_PROGRESS", answered_at: "2026-06-01T00:00:00.000Z", operator_id: "op-1" };
@@ -132,5 +138,22 @@ describe("POST /api/kiosk/call-ended", () => {
     // Regression: scheduled via after(), not bare void, so it actually runs
     // before the serverless function freezes (the prod 60s-late-clear bug).
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a call-cleared VIDEO push for the ended callId on success", async () => {
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req({ callId: "call-1", reason: "completed" }, token));
+    expect(res.status).toBe(204);
+    expect(sendCallPush).toHaveBeenCalledTimes(1);
+    expect(sendCallPush).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        type: "call-cleared",
+        callId: "call-1",
+        channel: "VIDEO",
+        propertyId: "prop-1",
+        propertyName: "",
+      },
+    );
   });
 });

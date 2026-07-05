@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
+import { sendCallPush } from "@/lib/push/send";
 import type { CallStartResult } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const admin = createAdminClient();
   const { data: property } = await admin
     .from("properties")
-    .select("id, operator_id, active")
+    .select("id, operator_id, active, name")
     .eq("id", verified.propertyId)
     .maybeSingle();
 
@@ -79,7 +80,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Nudge agent tabs to refetch — the ring starts via Realtime push, not the poll.
   // after() (waitUntil-backed) guarantees the broadcast fires before the function
   // freezes; a bare `void` detached fetch is not guaranteed to run. Non-blocking.
-  after(() => broadcastCallsChanged(property.operator_id));
+  after(() => {
+    void broadcastCallsChanged(property.operator_id);
+    void sendCallPush(admin, {
+      type: "incoming-call",
+      callId: inserted.id,
+      channel: "VIDEO",
+      propertyId: property.id,
+      propertyName: property.name,
+    });
+  });
 
   const payload: CallStartResult = { callId: inserted.id, channelName };
   return NextResponse.json(payload);

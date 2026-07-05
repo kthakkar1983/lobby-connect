@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { finalizeCallPayload } from "@/lib/voice/call-state";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
+import { sendCallPush } from "@/lib/push/send";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -30,7 +31,8 @@ export async function POST(
     state: CallState;
     operator_id: string;
     answered_at: string | null;
-  }>(actor, id, "id, state, answered_at");
+    property_id: string;
+  }>(actor, id, "id, state, answered_at, property_id");
   if (call instanceof NextResponse) return call;
 
   if (call.state === "IN_PROGRESS") {
@@ -46,7 +48,16 @@ export async function POST(
 
     // Clear the banner on any other tab still showing this call. after()
     // (waitUntil-backed) guarantees the broadcast fires before the function freezes.
-    after(() => broadcastCallsChanged(actor.operatorId));
+    after(() => {
+      void broadcastCallsChanged(actor.operatorId);
+      void sendCallPush(admin, {
+        type: "call-cleared",
+        callId: id,
+        channel: "VIDEO",
+        propertyId: call.property_id,
+        propertyName: "",
+      });
+    });
   }
 
   return NextResponse.json({ ok: true });

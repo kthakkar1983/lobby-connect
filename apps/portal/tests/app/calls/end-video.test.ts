@@ -10,6 +10,11 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+const sendCallPush = vi.fn();
+vi.mock("@/lib/push/send", () => ({
+  sendCallPush: (...a: unknown[]) => sendCallPush(...a),
+}));
+
 // The broadcast must be scheduled via next/server `after()` (guaranteed
 // post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
 // run before the serverless function freezes. The spy runs its callback so the
@@ -60,6 +65,7 @@ beforeEach(() => {
   getUser.mockReset();
   callUpdateSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  sendCallPush.mockClear();
   after.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   callRow = {
@@ -67,6 +73,7 @@ beforeEach(() => {
     state: "IN_PROGRESS",
     operator_id: "op-1",
     answered_at: "2026-06-06T06:00:00.000Z",
+    property_id: "prop-1",
   };
 });
 
@@ -102,6 +109,8 @@ describe("POST /api/calls/[id]/end-video", () => {
     expect(callUpdateSpy).not.toHaveBeenCalled();
     // Broadcast must fire only inside the IN_PROGRESS guard, not on the no-op path.
     expect(broadcastCallsChanged).not.toHaveBeenCalled();
+    // Push fires from the same guarded after() — must not fire on the no-op path.
+    expect(sendCallPush).not.toHaveBeenCalled();
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
@@ -115,5 +124,21 @@ describe("POST /api/calls/[id]/end-video", () => {
     expect(res.status).toBe(200);
     expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a call-cleared VIDEO push for the finalized callId on success", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(sendCallPush).toHaveBeenCalledTimes(1);
+    expect(sendCallPush).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        type: "call-cleared",
+        callId: "call-1",
+        channel: "VIDEO",
+        propertyId: "prop-1",
+        propertyName: "",
+      },
+    );
   });
 });

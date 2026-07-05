@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
 import { finalizeCallPayload, ACTIVE_CALL_STATES, resolveFinalState } from "@/lib/voice/call-state";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
+import { sendCallPush } from "@/lib/push/send";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   // detached fetch is not guaranteed to run before the serverless function
   // freezes — that dropped the call-ended push and left the agent banner ringing
   // until the 60s fallback poll. Non-blocking (does not delay the 204).
-  after(() => broadcastCallsChanged(call.operator_id));
+  after(() => {
+    void broadcastCallsChanged(call.operator_id);
+    void sendCallPush(admin, {
+      type: "call-cleared",
+      callId: call.id,
+      channel: "VIDEO",
+      propertyId: call.property_id,
+      propertyName: "",
+    });
+  });
 
   return new NextResponse(null, { status: 204 });
 }

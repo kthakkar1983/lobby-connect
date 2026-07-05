@@ -10,6 +10,11 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+const sendCallPush = vi.fn();
+vi.mock("@/lib/push/send", () => ({
+  sendCallPush: (...a: unknown[]) => sendCallPush(...a),
+}));
+
 // The broadcast must be scheduled via next/server `after()` (guaranteed
 // post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
 // run before the serverless function freezes. The spy runs its callback so the
@@ -65,9 +70,16 @@ beforeEach(() => {
   callUpdateSpy.mockClear();
   profileUpdateSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  sendCallPush.mockClear();
   after.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  callRow = { id: "call-1", state: "RINGING", operator_id: "op-1", agora_channel_name: "call_abc" };
+  callRow = {
+    id: "call-1",
+    state: "RINGING",
+    operator_id: "op-1",
+    agora_channel_name: "call_abc",
+    property_id: "prop-1",
+  };
   callUpdateResult = [{ id: "call-1" }];
 });
 
@@ -119,5 +131,21 @@ describe("POST /api/calls/[id]/answer-video", () => {
     expect(res.status).toBe(200);
     expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a call-cleared VIDEO push for the answered callId on success", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(sendCallPush).toHaveBeenCalledTimes(1);
+    expect(sendCallPush).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        type: "call-cleared",
+        callId: "call-1",
+        channel: "VIDEO",
+        propertyId: "prop-1",
+        propertyName: "",
+      },
+    );
   });
 });

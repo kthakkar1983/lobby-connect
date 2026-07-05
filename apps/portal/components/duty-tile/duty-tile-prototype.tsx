@@ -27,7 +27,6 @@ import {
   type TickStats,
 } from "@/lib/duty-tile/tick-stats";
 import { TileWindow } from "@/components/duty-tile/tile-window";
-import { PushSpikePanel } from "@/components/duty-tile/push-spike-panel";
 
 const TICK_INTERVAL_MS = 1_000;
 const RING_TIMEOUT_MS = 45_000;
@@ -303,8 +302,6 @@ export function DutyTilePrototype({ agentName }: { agentName: string }) {
           </li>
         </ol>
       </section>
-
-      <PushSpikePanel />
 
       <section className="flex flex-wrap items-center gap-2">
         {!onDuty ? (
