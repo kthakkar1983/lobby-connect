@@ -7,12 +7,18 @@ type Admin = Parameters<typeof resolveTargetUserIds>[0];
 /**
  * Build a minimal fake admin client whose `.from(table)` returns exactly the
  * method chain each query uses:
- *   property_assignments: .select().eq().is()  → { data }
- *   admin_call_availability: .select().eq().eq() → { data }
+ *   property_assignments:    .select().eq().is()  → { data }
+ *   admin_call_availability: .select().eq().eq()  → { data }
+ *   profiles:                .select().in()        → { data } (raw status rows)
+ *
+ * `statuses` maps a user id → its raw `profiles.status`. Any id not present
+ * defaults to "AVAILABLE" (present/on-shift), so callers only list the OFFLINE
+ * ones they care about. Only ids in the built target set are queried.
  */
 function fakeAdmin(opts: {
   assigned: Array<{ primary_agent_id: string }>;
   covering: Array<{ profile_id: string }>;
+  statuses?: Record<string, string>;
 }): Admin {
   return {
     from(table: string) {
@@ -25,12 +31,22 @@ function fakeAdmin(opts: {
           }),
         };
       }
-      // admin_call_availability
+      if (table === "admin_call_availability") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({ data: opts.covering }),
+            }),
+          }),
+        };
+      }
+      // profiles — raw status lookup for the OFFLINE (end-shift) exclusion.
       return {
         select: () => ({
-          eq: () => ({
-            eq: () => Promise.resolve({ data: opts.covering }),
-          }),
+          in: (_col: string, ids: string[]) =>
+            Promise.resolve({
+              data: ids.map((id) => ({ id, status: opts.statuses?.[id] ?? "AVAILABLE" })),
+            }),
         }),
       };
     },
@@ -61,6 +77,38 @@ describe("resolveTargetUserIds", () => {
     const admin = fakeAdmin({ assigned: [], covering: [] });
     const ids = await resolveTargetUserIds(admin, "prop-1");
     expect(ids).toEqual([]);
+  });
+
+  it("excludes a covering admin who has ended their shift (status OFFLINE)", async () => {
+    const admin = fakeAdmin({
+      assigned: [{ primary_agent_id: "agent-1" }],
+      covering: [{ profile_id: "admin-1" }],
+      statuses: { "agent-1": "AVAILABLE", "admin-1": "OFFLINE" },
+    });
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids).toEqual(["agent-1"]);
+  });
+
+  it("returns [] when the sole target has ended their shift (status OFFLINE)", async () => {
+    const admin = fakeAdmin({
+      assigned: [{ primary_agent_id: "agent-1" }],
+      covering: [],
+      statuses: { "agent-1": "OFFLINE" },
+    });
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids).toEqual([]);
+  });
+
+  it("keeps a stale-but-on-shift target (raw status AWAY/ON_CALL, not OFFLINE)", async () => {
+    // A minimized on-shift tab throttles its heartbeat: effectivePresence would read
+    // it stale, but the RAW status is still AWAY/ON_CALL — push must still wake it.
+    const admin = fakeAdmin({
+      assigned: [{ primary_agent_id: "agent-1" }],
+      covering: [{ profile_id: "admin-1" }],
+      statuses: { "agent-1": "AWAY", "admin-1": "ON_CALL" },
+    });
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids.sort()).toEqual(["admin-1", "agent-1"]);
   });
 
   it("tolerates null data from either query", async () => {

@@ -24,5 +24,22 @@ export async function resolveTargetUserIds(admin: Admin, propertyId: string): Pr
     .eq("accepting_calls", true);
   for (const r of (covering ?? []) as Array<{ profile_id: string }>) ids.add(r.profile_id);
 
-  return [...ids];
+  if (ids.size === 0) return [];
+
+  // Drop anyone who has explicitly ended their shift (raw status='OFFLINE', the
+  // End-shift write; the daily stale-sweep also sets it, which is fine). Gate on
+  // the RAW stored status, NOT effectivePresence/last_seen_at: a minimized on-shift
+  // tab (behind fullscreen RustDesk) throttles its heartbeat, so staleness would
+  // read it OFFLINE even though the agent is on duty — and waking that agent via
+  // push is the entire point. Do NOT "helpfully" switch this to effectivePresence.
+  const { data: presence } = await admin
+    .from("profiles")
+    .select("id, status")
+    .in("id", [...ids]);
+  const offline = new Set(
+    ((presence ?? []) as Array<{ id: string; status: string }>)
+      .filter((p) => p.status === "OFFLINE")
+      .map((p) => p.id),
+  );
+  return [...ids].filter((id) => !offline.has(id));
 }
