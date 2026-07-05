@@ -1265,9 +1265,11 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 
 ---
 
-# PHASE C — Push productionized + duty controls (D3, D5, D6, D7)
+# PHASE C — Push productionized + duty controls (D3, D5, D6, D7) — ✅ CODE-COMPLETE (2026-07-05)
 
-## Task 11: migration 0019 + push send module + subscription route
+**Phase C built subagent-driven (fresh implementer + two-stage review per task; final whole-branch integration review = SHIP). Commits `ccc8813`→`2fab4ec` on `phase3-workspace`. Full branch gate GREEN: typecheck · portal node+jsdom (660 tests) · lint (3 pkgs) · check:routes · gen:types:check ("DB types in sync") · kiosk 27 · portal build.** Migration 0019 applied to LOCAL + STAGING (via MCP); **PROD 0019 applied at merge (the 0018 lesson).** Architecture note: `DutyControls` is props-driven (rendered by the softphone), NOT the plan's `registerDutyHandlers`/`CallSurfaceProvider` mechanism — deliberately superseded to avoid the dep-hygiene render-loop trap (recorded in the Task-14/15 commits). Remaining: **Phase-C HUMAN smoke** (Task 15 checklist) + one design confirm (should End-shift also silence *video* push, or stay armed? — video targeting is assignment-based, not presence-gated by design).
+
+## Task 11: migration 0019 + push send module + subscription route — ✅ DONE (`ccc8813` migration+types, `e39cd38` code+tests, `83ab1a0` review fix)
 
 **Files:**
 - Create: `supabase/migrations/0019_push_subscriptions.sql`
@@ -1476,7 +1478,7 @@ Route test (house pattern): 401 unauthenticated, 400 missing fields, 204 upsert 
 
 - [ ] **Step 5: Gate + commit** (`feat(push): 0019 push_subscriptions + send module + subscription route (TDD)`).
 
-## Task 12: production SW behaviors + client subscription manager + tab ring wiring
+## Task 12: production SW behaviors + client subscription manager + tab ring wiring — ✅ DONE (`f002944` + `77bed76` comment fix)
 
 **Files:**
 - Modify: `apps/portal/public/push-sw.js` (already production-shaped; verify copy)
@@ -1544,7 +1546,7 @@ useEffect(() => {
 
 - [ ] **Step 4: Test:** in the hook test, dispatch a fake SW message event (mock `navigator.serviceWorker` with an EventTarget) → assert a refetch happened (fetch mock called again). Gate + commit (`feat(push): client subscription manager + SW-message ring wiring`).
 
-## Task 13: send-side wiring + spike removal
+## Task 13: send-side wiring + spike removal — ✅ DONE (`f79181e`)
 
 **Files:**
 - Modify: `apps/portal/app/api/kiosk/call-started/route.ts`, `app/api/calls/[id]/answer-video/route.ts`, `app/api/calls/[id]/end-video/route.ts`, `app/api/kiosk/call-ended/route.ts`
@@ -1574,7 +1576,7 @@ after(() => {
 
 - [ ] **Step 5: Gate + commit** (`feat(push): send on kiosk ring + clear on answer/end; remove Gate-3.1 spike surface`).
 
-## Task 14: Go on duty + duty controls card
+## Task 14: Go on duty + duty controls card — ✅ DONE (`4c28776` + `e6c04ac` test; DutyControls props-driven, no provider change)
 
 **Files:**
 - Create: `apps/portal/components/dashboard/duty-controls.tsx`
@@ -1606,7 +1608,7 @@ useEffect(() => setArmed(pushArmed()), []);
 
 - [ ] **Step 4: Gate + commit** (`feat(duty): Go on duty — audio prime + push arm; duty card replaces softphone chrome`).
 
-## Task 15: End shift (D6) + fleet duty labels (D7)
+## Task 15: End shift (D6) + fleet duty labels (D7) — ✅ DONE (`2fab4ec`; props-driven endShift/resumeDuty, no `registerDutyHandlers`)
 
 **Files:**
 - Create: `apps/portal/app/api/presence/end-shift/route.ts`
