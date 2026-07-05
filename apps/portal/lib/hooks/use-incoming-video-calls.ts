@@ -6,7 +6,7 @@
 // Returns the raw incoming-call list; the UI now lives on the property cards and
 // the video host, not in a banner.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
@@ -28,6 +28,7 @@ export interface IncomingVideoCall {
 export function useIncomingVideoCalls(
   operatorId: string,
   silencedKeys?: ReadonlySet<string>,
+  activeCallId?: string | null,
 ): { calls: IncomingVideoCall[] } {
   const [calls, setCalls] = useState<IncomingVideoCall[]>([]);
   const ringtoneRef = useRef<Ringtone | null>(null);
@@ -122,26 +123,47 @@ export function useIncomingVideoCalls(
     };
   }, []);
 
-  // Split "has an incoming call" (visual — tab-title flash) from "should play
-  // audio" (honors local silence). Ring while a call is waiting AND not silenced;
-  // silence it once answered, declined, or gone. (Answering clears the ring via
-  // the card flow, which empties this list — the host publishes [] and the
-  // overlay takes over.) Silence is local audio only — the tab-title cue stays.
-  const hasIncoming = calls.length > 0;
-  const shouldRing = calls.some((c) => !(silencedKeys?.has(`video:${c.id}`) ?? false));
+  // Once a call is answered locally it must stop ringing IMMEDIATELY and never
+  // re-ring — do NOT wait for the server refetch that drops it from `calls`. When
+  // the agent answers, `answer-video` broadcasts a refresh, but a just-focused
+  // tab's realtime socket may still be re-subscribing and miss it, so the answered
+  // call lingers until the 60s fallback poll and the ringtone blares ~30s OVER the
+  // connected call. (The audio path avoids this by stopping on the local phase
+  // change, not a refetch.) `activeCallId` is the call the agent just answered;
+  // the answered-id set keeps it excluded after it ends too (so it can't re-ring
+  // in the window before the end-video refetch clears it from `calls`).
+  const answeredIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (activeCallId) answeredIdsRef.current.add(activeCallId);
+  }, [activeCallId]);
+  // Memoized so the array IDENTITY is stable when its inputs are unchanged: the
+  // video host's publishRings effect depends on this list, so a fresh .filter()
+  // array every render would re-fire that effect → setState → re-render → an
+  // infinite loop (OOM). answeredIdsRef is a stable ref read inside; it's kept in
+  // sync with activeCallId (a dep), so the memo recomputes exactly when it must.
+  const waiting = useMemo(
+    () => calls.filter((c) => c.id !== activeCallId && !answeredIdsRef.current.has(c.id)),
+    [calls, activeCallId],
+  );
+
+  // Split "has a waiting call" (visual — tab-title flash) from "should play audio"
+  // (honors local silence). Ring while a call is waiting AND not silenced; silence
+  // is local audio only, so the tab-title cue stays through a silence.
+  const hasIncoming = waiting.length > 0;
+  const shouldRing = waiting.some((c) => !(silencedKeys?.has(`video:${c.id}`) ?? false));
   useEffect(() => {
     if (shouldRing) ringtoneRef.current?.start();
     else ringtoneRef.current?.stop();
   }, [shouldRing]);
 
-  // Flash the tab title while ringing so a backgrounded tab is identifiable
-  // (the s1-test "whose browser is ringing?" gap). Uses hasIncoming, NOT
-  // shouldRing — silencing must never stop the visual flash.
-  const ringingProperty = calls[0]?.propertyName ?? "";
+  // Flash the tab title while a call is waiting so a backgrounded tab is
+  // identifiable (the s1-test "whose browser is ringing?" gap). Uses hasIncoming,
+  // NOT shouldRing — silencing must never stop the visual flash.
+  const ringingProperty = waiting[0]?.propertyName ?? "";
   useRingingTabTitle(
     hasIncoming,
     ringingProperty ? `Incoming video call · ${ringingProperty}` : "Incoming video call",
   );
 
-  return { calls };
+  return { calls: waiting };
 }
