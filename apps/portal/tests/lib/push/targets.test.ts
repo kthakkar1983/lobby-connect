@@ -111,6 +111,35 @@ describe("resolveTargetUserIds", () => {
     expect(ids.sort()).toEqual(["admin-1", "agent-1"]);
   });
 
+  it("fails OPEN: a null status result (transient DB error) drops nobody", async () => {
+    // Real assigned + covering ids so the status query is actually reached, but it
+    // returns { data: null } (a DB blip). Every resolved id must still be returned —
+    // a status-read failure must never silently silence live agents. Regression
+    // guard: do NOT flip `presence ?? []` to fail-closed.
+    const admin = {
+      from(table: string) {
+        if (table === "property_assignments") {
+          return {
+            select: () => ({
+              eq: () => ({ is: () => Promise.resolve({ data: [{ primary_agent_id: "agent-1" }] }) }),
+            }),
+          };
+        }
+        if (table === "admin_call_availability") {
+          return {
+            select: () => ({
+              eq: () => ({ eq: () => Promise.resolve({ data: [{ profile_id: "admin-1" }] }) }),
+            }),
+          };
+        }
+        // profiles — the status lookup fails (null), simulating a transient error.
+        return { select: () => ({ in: () => Promise.resolve({ data: null }) }) };
+      },
+    } as unknown as Admin;
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids.sort()).toEqual(["admin-1", "agent-1"]);
+  });
+
   it("tolerates null data from either query", async () => {
     const admin = {
       from(table: string) {

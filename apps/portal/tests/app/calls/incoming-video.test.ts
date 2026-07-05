@@ -112,6 +112,17 @@ describe("GET /api/calls/incoming-video", () => {
     expect(inSpy).not.toHaveBeenCalled();
   });
 
+  it("fails OPEN: an absent actor status (transient read failure) still rings normally", async () => {
+    // The actor is on shift (assigned, active) but the status read comes back with no
+    // status field (a DB blip). Only status==="OFFLINE" silences — a failed read must
+    // NOT empty the response; the ringing-calls query must still run.
+    profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true };
+    const body = await (await GET(request)).json();
+    expect(body.calls).toHaveLength(1);
+    expect(body.calls[0]).toMatchObject({ id: "call-1" });
+    expect(callsQuerySpy).toHaveBeenCalled();
+  });
+
   it("time-bounds the RINGING query so a phantom ring from a dead kiosk is dropped", async () => {
     await GET(request);
     expect(gteSpy).toHaveBeenCalledWith("ring_started_at", expect.any(String));
