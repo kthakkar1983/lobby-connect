@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REAP_RINGING_AFTER_MS } from "@/lib/calls/reaper";
 import { requireApiActor, type ApiActor } from "@/lib/auth/api-actor";
+import { isVideoSilencedStatus } from "@/lib/push/targets";
 
 export const runtime = "nodejs";
 
@@ -56,17 +57,21 @@ export async function GET(_request: Request): Promise<NextResponse> {
 
   const admin = createAdminClient();
 
-  // End-shift silences video too: if the actor has explicitly ended their shift
-  // (raw status='OFFLINE'), their own open tab must stop ringing cards. Gate on the
-  // RAW stored status, NOT effectivePresence/staleness — a minimized on-shift tab
-  // throttles its heartbeat and must keep polling so it still rings (the point of
-  // Phase C). `requireApiActor` doesn't return status, so read it directly.
+  // Off-shift / not-accepting silences video too: if the actor has explicitly
+  // ended their shift (raw status='OFFLINE') OR toggled "not accepting calls"
+  // (status='AWAY' — parity with audio), their own open tab must stop ringing
+  // cards. Gate on the RAW stored status via the shared deny-list predicate, NOT
+  // effectivePresence/staleness — a minimized on-shift tab throttles its heartbeat
+  // and must keep polling so it still rings (the point of Phase C). A null/absent
+  // status FAILS OPEN (not silenced). `requireApiActor` doesn't return status, so
+  // read it directly.
   const { data: actorPresence } = await admin
     .from("profiles")
     .select("status")
     .eq("id", actor.userId)
     .maybeSingle();
-  if ((actorPresence as { status?: string } | null)?.status === "OFFLINE") {
+  const actorStatus = (actorPresence as { status?: string } | null)?.status;
+  if (actorStatus && isVideoSilencedStatus(actorStatus)) {
     return NextResponse.json({ calls: [] });
   }
 

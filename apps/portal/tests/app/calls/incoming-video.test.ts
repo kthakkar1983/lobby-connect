@@ -112,6 +112,16 @@ describe("GET /api/calls/incoming-video", () => {
     expect(inSpy).not.toHaveBeenCalled();
   });
 
+  it("returns [] and skips the calls query when the actor is not accepting calls (status AWAY)", async () => {
+    // "Not accepting calls" (AWAY) silences video too — parity with audio, whose
+    // reachable set excludes AWAY. The agent's own open tab must stop ringing.
+    profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true, status: "AWAY" };
+    const body = await (await GET(request)).json();
+    expect(body.calls).toEqual([]);
+    expect(callsQuerySpy).not.toHaveBeenCalled();
+    expect(inSpy).not.toHaveBeenCalled();
+  });
+
   it("fails OPEN: an absent actor status (transient read failure) still rings normally", async () => {
     // The actor is on shift (assigned, active) but the status read comes back with no
     // status field (a DB blip). Only status==="OFFLINE" silences — a failed read must

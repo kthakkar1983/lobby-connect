@@ -12,8 +12,8 @@ type Admin = Parameters<typeof resolveTargetUserIds>[0];
  *   profiles:                .select().in()        → { data } (raw status rows)
  *
  * `statuses` maps a user id → its raw `profiles.status`. Any id not present
- * defaults to "AVAILABLE" (present/on-shift), so callers only list the OFFLINE
- * ones they care about. Only ids in the built target set are queried.
+ * defaults to "AVAILABLE" (present/on-shift), so callers only list the silenced
+ * (OFFLINE/AWAY) ones they care about. Only ids in the built target set are queried.
  */
 function fakeAdmin(opts: {
   assigned: Array<{ primary_agent_id: string }>;
@@ -89,6 +89,28 @@ describe("resolveTargetUserIds", () => {
     expect(ids).toEqual(["agent-1"]);
   });
 
+  it("excludes a covering admin who is not accepting calls (status AWAY — audio parity)", async () => {
+    // The "not accepting calls" toggle sets AWAY; an agent on a bathroom break who
+    // isn't taking audio must not get video either. Audio already skips AWAY.
+    const admin = fakeAdmin({
+      assigned: [{ primary_agent_id: "agent-1" }],
+      covering: [{ profile_id: "admin-1" }],
+      statuses: { "agent-1": "AVAILABLE", "admin-1": "AWAY" },
+    });
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids).toEqual(["agent-1"]);
+  });
+
+  it("excludes both OFFLINE (off-shift) and AWAY (not accepting) targets together", async () => {
+    const admin = fakeAdmin({
+      assigned: [{ primary_agent_id: "agent-1" }],
+      covering: [{ profile_id: "admin-1" }, { profile_id: "admin-2" }],
+      statuses: { "agent-1": "AVAILABLE", "admin-1": "OFFLINE", "admin-2": "AWAY" },
+    });
+    const ids = await resolveTargetUserIds(admin, "prop-1");
+    expect(ids).toEqual(["agent-1"]);
+  });
+
   it("returns [] when the sole target has ended their shift (status OFFLINE)", async () => {
     const admin = fakeAdmin({
       assigned: [{ primary_agent_id: "agent-1" }],
@@ -99,13 +121,15 @@ describe("resolveTargetUserIds", () => {
     expect(ids).toEqual([]);
   });
 
-  it("keeps a stale-but-on-shift target (raw status AWAY/ON_CALL, not OFFLINE)", async () => {
+  it("keeps a stale-but-on-shift target (raw status AVAILABLE/ON_CALL, not OFFLINE/AWAY)", async () => {
     // A minimized on-shift tab throttles its heartbeat: effectivePresence would read
-    // it stale, but the RAW status is still AWAY/ON_CALL — push must still wake it.
+    // it stale, but the RAW status is still AVAILABLE/ON_CALL — push must still wake
+    // it. Only the explicit OFFLINE/AWAY signals silence; AVAILABLE and ON_CALL are
+    // the "kept" statuses (mirrors audio's reachable set).
     const admin = fakeAdmin({
       assigned: [{ primary_agent_id: "agent-1" }],
       covering: [{ profile_id: "admin-1" }],
-      statuses: { "agent-1": "AWAY", "admin-1": "ON_CALL" },
+      statuses: { "agent-1": "AVAILABLE", "admin-1": "ON_CALL" },
     });
     const ids = await resolveTargetUserIds(admin, "prop-1");
     expect(ids.sort()).toEqual(["admin-1", "agent-1"]);
