@@ -151,6 +151,19 @@ vi.mock("@/lib/video/ringtone", () => ({
   createRingtone: () => ringtone,
 }));
 
+// DutyControls (rendered by the softphone) calls pushArmed()/armPush() on mount
+// + click. Mock them so pushArmed()→true, which makes DutyControls render the
+// "End shift" button (the fully-active state needs armed && onDuty) — the seam
+// the heartbeat-disarm test drives. armPush→true so a resume click flips armed.
+const push = vi.hoisted(() => ({
+  pushArmed: vi.fn<() => boolean>(() => true),
+  armPush: vi.fn<() => Promise<boolean>>(() => Promise.resolve(true)),
+}));
+vi.mock("@/lib/push/client", () => ({
+  pushArmed: () => push.pushArmed(),
+  armPush: () => push.armPush(),
+}));
+
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 import {
@@ -495,5 +508,84 @@ describe("Softphone — ring-silence (own ring element)", () => {
     await act(async () => twilio.fireIncoming2());
     await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
     expect(ringtone.start).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 15 (spec D6): "End shift" flips presence OFFLINE immediately AND disarms
+ * the 20s heartbeat, so a beat can't flip the agent back to AVAILABLE right
+ * after ending. DutyControls is armed (pushArmed()→true, mocked above) so its
+ * "End shift" button renders inside the softphone card. Heartbeats POST
+ * /api/presence; the end-shift click POSTs /api/presence/end-shift — the test
+ * distinguishes them by URL.
+ */
+describe("Softphone — End shift disarms the heartbeat (D6)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    push.pushArmed.mockReturnValue(true);
+    push.armPush.mockResolvedValue(true);
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  const presenceCalls = () =>
+    fetchMock.mock.calls.filter((args) => (args[0] as string) === "/api/presence");
+  const endShiftCalls = () =>
+    fetchMock.mock.calls.filter((args) => (args[0] as string) === "/api/presence/end-shift");
+
+  it("stops heartbeat POSTs after End shift, then resumes an immediate beat on Go on duty", async () => {
+    // Real timers for the async connect()/dynamic-import + userEvent clicks;
+    // fake timers only to DRIVE the 20s heartbeat interval deterministically.
+    const user = userEvent.setup();
+    render(
+      <CallSurfaceProvider>
+        <Softphone role="AGENT" />
+        <CardProbe />
+      </CallSurfaceProvider>,
+    );
+
+    // Let connect() resolve (token fetch + register → phase "ready"). The mount
+    // path posts one AVAILABLE presence beat.
+    await waitFor(() => expect(screen.getByText(/Accepting calls/i)).toBeTruthy());
+
+    // Switch to fake timers now that the async boot is done, and drive one
+    // heartbeat window → a beat fires while on duty.
+    vi.useFakeTimers();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(presenceCalls().length).toBeGreaterThan(0);
+
+    // Back to real timers to click "End shift" (userEvent + the async fetch).
+    vi.useRealTimers();
+    await user.click(screen.getByRole("button", { name: /end shift/i }));
+    await waitFor(() => expect(endShiftCalls().length).toBe(1));
+    const atEnd = presenceCalls().length;
+
+    // With the heartbeat disarmed, advance well past two windows — NO further
+    // /api/presence beat fires.
+    vi.useFakeTimers();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(presenceCalls().length).toBe(atEnd);
+
+    // Resume: "Go on duty to resume" re-arms and beats immediately.
+    vi.useRealTimers();
+    await user.click(screen.getByRole("button", { name: /go on duty to resume/i }));
+    await waitFor(() => expect(presenceCalls().length).toBeGreaterThan(atEnd));
   });
 });

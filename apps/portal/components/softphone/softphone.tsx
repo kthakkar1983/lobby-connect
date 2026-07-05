@@ -89,6 +89,14 @@ export function Softphone({ role }: SoftphoneProps) {
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
+  // Duty state (spec D6): true = on shift. "End shift" flips it false, which
+  // both disarms the heartbeat (via onDutyRef, read inside the interval so the
+  // effect deps never change) and drops the fleet card out of "On duty". The ref
+  // mirror lets endShift stop the next beat BEFORE the re-render lands.
+  const [onDuty, setOnDuty] = useState(true);
+  const onDutyRef = useRef(true);
+  onDutyRef.current = onDuty;
+
   // Notes save is decoupled from call phase: a failure surfaces in a banner that
   // outlives the call so the typed text is never silently lost.
   const [notesSave, setNotesSave] = useState<"idle" | "saving" | "failed">("idle");
@@ -378,12 +386,18 @@ export function Softphone({ role }: SoftphoneProps) {
     };
   }, [connect]);
 
-  // Heartbeat: keep last_seen + status fresh while mounted.
+  // Heartbeat: keep last_seen + status fresh while mounted. Off-shift, a beat is
+  // suppressed so it can't flip the agent back to AVAILABLE right after "End
+  // shift". Read the REF (not `onDuty` state) so the effect deps stay
+  // [intendedStatus] and the interval isn't torn down/rebuilt on every toggle.
   useEffect(() => {
     const id = setInterval(() => {
+      if (!onDutyRef.current) return;
       void postPresence(intendedStatus());
     }, HEARTBEAT_MS);
-    const onFocus = () => void postPresence(intendedStatus());
+    const onFocus = () => {
+      if (onDutyRef.current) void postPresence(intendedStatus());
+    };
     window.addEventListener("focus", onFocus);
     return () => {
       clearInterval(id);
@@ -551,6 +565,27 @@ export function Softphone({ role }: SoftphoneProps) {
     void postPresence(next ? "AVAILABLE" : "AWAY");
   }, [ready]);
 
+  // "End shift" (spec D6): flip presence to OFFLINE immediately (so the admin
+  // fleet reads true without waiting for staleness) and disarm the heartbeat.
+  // The ref is set BEFORE the re-render so the very next beat is already
+  // suppressed. Best-effort POST; a network failure just means the fleet ages
+  // the row out via staleness instead of flipping instantly.
+  const endShift = useCallback(async () => {
+    onDutyRef.current = false; // stop the heartbeat immediately (before the re-render)
+    setOnDuty(false);
+    await fetch("/api/presence/end-shift", { method: "POST" }).catch(() => {});
+  }, []);
+  // "Go on duty" resume: re-arm the heartbeat and beat immediately so the fleet
+  // flips back to on-duty fast. Idempotent if already on duty.
+  const resumeDuty = useCallback(() => {
+    onDutyRef.current = true;
+    setOnDuty(true);
+    void postPresence(intendedStatus());
+  }, [intendedStatus]);
+
+  // End shift is disabled mid-call/mid-ring — you can't leave a live call.
+  const canEndShift = phase !== "in-call" && phase !== "incoming";
+
   return (
     <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
       <div className="flex items-center justify-between">
@@ -593,7 +628,14 @@ export function Softphone({ role }: SoftphoneProps) {
               arms Web Push. Presentational, props-driven — all duty/call state
               stays in this softphone (no state lift into CallSurfaceProvider). */}
           <div className="w-full">
-            <DutyControls role={role} onPrime={primeRing} />
+            <DutyControls
+              role={role}
+              onPrime={primeRing}
+              onDuty={onDuty}
+              canEndShift={canEndShift}
+              onEndShift={endShift}
+              onResumeDuty={resumeDuty}
+            />
           </div>
           {/* Seam-ring idle brand moment — decorative anchor, not a status light.
               Renders through the "incoming" phase too now that the incoming block
