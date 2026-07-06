@@ -1709,9 +1709,11 @@ describe("VideoCall — livekit provider branch", () => {
   - Cancel-during-ring, ring-timeout apology, End-shift silence: quick re-checks (Phase-C behaviors, now fully exercisable).
 - [ ] **Step 5:** any failure → systematic-debugging (the handoff's staging debug guide order: targeting → card ring → push → ONLY THEN video), fix loop on the branch, re-smoke. Record outcomes + commit doc updates.
 
-# PHASE F — merge, flip, soak, strip (gated)
+# PHASE F — merge, flip, soak, strip (gated) — **SUPERSEDED 2026-07-06 (Kumar): blue-green cutover instead**
 
-## Task 12: prod rollout — **[HUMAN-GATED checklist; execute per gate]**
+> **The three gates below never execute as written.** Kumar's decision (2026-07-06, after the staging smoke): prod NEVER flips on Vercel — the Vercel deployment freezes as a warm standby, PR #29 merges to `main` with deploys disabled, **Agora strips from `main` immediately** (Gate 3's file list below stays the authoritative deletion list), Phase 3 D/E build on the clean trunk, and LiveKit's real-nights proof + rollback story move into the Phase-5 blue-green cutover (migration plan Phase 5, amended same day). Kept below unedited for the strip file-list and the record.
+
+## Task 12: prod rollout — **[HUMAN-GATED checklist; execute per gate]** *(superseded — see above)*
 
 - [ ] **Gate 1 — merge (after Task 11 passes, Kumar's call):**
   - Claude: apply migration `0019_push_subscriptions` to PROD (ref `ztunzdpmazwwwkxcpyfp`) via MCP; verify in `schema_migrations`.
