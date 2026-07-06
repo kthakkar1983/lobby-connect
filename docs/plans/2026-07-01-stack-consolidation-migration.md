@@ -70,7 +70,7 @@ Feature work on the current hosting (Vercel) and current video (Agora) — decou
 
 **Model:** the box stack becomes prod; the current Vercel deployment stays FROZEN and WARM as the standby. The DB never forks (both stacks → prod Supabase; migrations stay ADDITIVE-ONLY — that is the rollback guarantee: old code ignores new tables). Going live and rolling back are the same three pointer sets, in opposite directions.
 
-1. **Freeze Vercel prod** (disable prod deploys — ignored-build-step or `git.deploymentEnabled`; decide at execution). From here, merges to `main` cannot touch the pilot.
+1. **Freeze Vercel prod** (disable prod deploys — ignored-build-step or `git.deploymentEnabled`; decide at execution). From here, merges to `main` cannot touch the pilot. — **DONE 2026-07-06 (Kumar-approved): executed as the strictest variant — GitHub repo DISCONNECTED from both Vercel projects (`vercel git disconnect`); no git event reaches Vercel at all. Standby of record: portal `dpl_7PQ1P7Ui41UD8wrpZrV3FZ2koj6y` + kiosk `dpl_FxZhsJQVLEUn5V2M81gBwvKch5Mu`, both built from `main@f4af480` (Merge PR #28), aliased to `lobby-connect-portal.vercel.app` / `lobby-connect-kiosk.vercel.app`. Reversal (if ever needed): `vercel git connect` per project. Serving deployments/domains/envs/crons untouched; both URLs 200-verified post-disconnect.**
 2. **Merge PR #29** ("Phase 3C + Phase 4") to `main` — deploys nothing anywhere.
 3. **Strip Agora on `main`** (the former Gate-3 file list in the Phase-4 plan Task 12 — SDKs, `/api/agora/token`, `lib/agora/`, kiosk agora modules, video-call agora branch, TEMP audio diagnostics, envs, tests). Clean single-provider trunk.
 4. **Build Phase 3 D (call tile) + E (remote access) on the clean trunk**, smoked on staging as they land.
