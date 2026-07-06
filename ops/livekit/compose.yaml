@@ -1,0 +1,31 @@
+# LiveKit OSS SFU — stack-consolidation Phase 4 (replaces Agora).
+# Runs OUTSIDE Coolify as plain docker compose at /opt/livekit/compose.yaml on lc-box-1;
+# this repo copy is the source of truth (deploy = copy + `docker compose up -d`).
+# Ops: docs/setup/2026-07-02-box-ops-runbook.md §13 · design: docs/specs/2026-07-05-phase4-livekit-swap-design.md
+#
+# Load-bearing choices (spec §2, decisions D2-D7):
+# - network_mode: host — LiveKit's documented Docker recommendation; ICE candidates
+#   advertise the real host IP (no NAT rewrite) and ufw stays authoritative.
+# - Signal port 7880 is NOT opened on the firewalls — only Coolify's Traefik reaches it
+#   (TLS termination for wss://livekit.lobby-connect.com via a dynamic config).
+# - Media goes direct: 7881/tcp (ICE fallback) + 7882-7885/udp (single-port mux,
+#   >= vCPU count per LiveKit's config-sample guidance). Media must NOT sit behind
+#   a proxy (WebRTC is already encrypted).
+# - No TURN (D4: public-IP SFU + ICE/TCP fallback; enable-later seam in spec §2.5).
+# - No Redis (D5: single node).
+# - ./livekit.yaml holds the API keypairs — back up to PM, NEVER commit (the committed
+#   file is livekit.yaml.example).
+services:
+  livekit:
+    container_name: livekit
+    image: livekit/livekit-server:v1.13.3
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    network_mode: host
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
