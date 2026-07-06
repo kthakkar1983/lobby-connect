@@ -1,7 +1,7 @@
 // Keep the remote call audio audible without ever showing a guest-facing
 // "tap to hear" prompt. (Mirrors apps/portal/lib/video/audio-unlock.ts.)
 //
-// The problem: on a cold first call after idle, the Agora join chain runs for
+// The problem: on a cold first call after idle, the video join chain runs for
 // seconds before the agent's audio `play()` is attempted. By then the tap
 // gesture's autoplay permission can have lapsed and an idle AudioContext may be
 // suspended, so playback is silently blocked. A warm second call always works.
@@ -9,7 +9,7 @@
 // Two-pronged, both invisible:
 //  1. unlockAudioPlayback() — called inside the "tap to connect" gesture to keep
 //     output permitted through the cold join.
-//  2. recoverAudioOnNextGesture() — if Agora still reports a block, re-play on
+//  2. recoverAudioOnNextGesture() — if the SDK still reports a block, re-play on
 //     the very next pointer/key interaction. No prompt, no UI.
 
 let ctx: AudioContext | null = null;
