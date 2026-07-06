@@ -16,7 +16,7 @@
 
 **Review discipline:** subagent-driven, fresh implementer + spec review + code-quality review per task. **Byte-preservation review requirements:** Task 5 (the Agora route's behavior must be byte-identical — its existing tests unchanged and green), Task 8 (kiosk `src/lib/agora.ts` untouched; SDK call sequence identical), Task 10 (the Agora branch inside `video-call.tsx` — only the token fetch/unwrap and the two audio-recovery-ref lines may differ; diff inspected line-by-line).
 
-**STATUS:** Tasks 1+2 DONE 2026-07-05 (as-built) · Tasks 3-10 in subagent-driven build (Task 3 committed `67623df`, reviews running).
+**STATUS:** Tasks 1+2 DONE 2026-07-05 (as-built) · **Tasks 3-10 CODE-COMPLETE + two-stage-reviewed per task + FINAL WHOLE-BRANCH REVIEW = SHIP (2026-07-06)** — commits `67623df`→`1423a7b` (+ review-nit commits); byte-gates verified on Tasks 5/8/10 (agora route decision-table · `src/lib/agora.ts` empty diff + callback bodies character-identical · video-call.tsx hunk classification); real-SDK export audit passed (12/12 members); full gate green (portal 600 node + 94 jsdom · kiosk 37 · lint · check:routes · gen:types:check · both builds). Review fix loop: +provider-branch routing tests (`14b1470`); doc-nit commits `1845a23`/`1509b81`/`0aa56f8`. Final review findings: 2 Minor, no-action (uid param ignored on livekit path by design; deliberate sibling duplication). **NEXT = Task 11 staging cutover + smoke.**
 
 **Task 1 record:** committed `52da87d` (ops/livekit compose+example, runbook §13, register rows).
 
