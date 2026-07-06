@@ -79,6 +79,7 @@ export function App() {
       // Cancelled during the (cold-slow) startCall? Close the row we just created.
       if (aborted()) { void endCall(callId, "cancelled"); return; }
       callIdRef.current = callId;
+      // Legacy wire param — the token route still validates uid; LiveKit ignores it.
       const uid = Math.floor(Math.random() * 1_000_000) + 1;
       const tok = await fetchVideoToken(channelName, uid);
       if (aborted()) { void endCall(callId, "cancelled"); return; }

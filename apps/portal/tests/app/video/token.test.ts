@@ -58,6 +58,12 @@ describe("GET /api/video/token", () => {
     expect(claims.exp - issued).toBe(3600); // 3600s join-token TTL (D10)
   });
 
+  it("kiosk path: 403 when the channel is not in its property", async () => {
+    callRow = { ...callRow!, property_id: "OTHER" };
+    const res = await GET(req({ channel: "call_abc", uid: "111" }, { "x-kiosk-token": signKioskToken("prop-1", SECRET) }));
+    expect(res.status).toBe(403);
+  });
+
   it("session path: identity agent-<userId>", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     const res = await GET(req({ channel: "call_abc", uid: "222" }));

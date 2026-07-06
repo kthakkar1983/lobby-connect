@@ -10,8 +10,8 @@ Auto-loaded by Claude Code at session start. Read this first, then check `MEMORY
 
 ## Stack
 
-- **Portal** (`apps/portal/`): Next.js App Router on Vercel — agent + admin + owner dashboards, Twilio webhook routes, API routes for video tokens (LiveKit)
-- **Kiosk** (`apps/kiosk/`): Vite SPA on Vercel — tablet-locked, LiveKit client, no auth
+- **Portal** (`apps/portal/`): Next.js App Router — agent + admin + owner dashboards, Twilio webhook routes, API routes for video tokens (LiveKit)
+- **Kiosk** (`apps/kiosk/`): Vite SPA — tablet-locked, LiveKit client, no auth
 - **Database/auth**: Supabase (Postgres + Auth + Storage)
 - **Voice**: Twilio
 - **Video**: LiveKit v1.13.3 self-hosted on the box (`livekit.lobby-connect.com`); Agora remains ONLY on the frozen Vercel standby until decommission

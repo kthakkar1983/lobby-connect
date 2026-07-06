@@ -63,6 +63,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         if (!ans.ok) return onClose();
         const { channelName } = (await ans.json()) as { channelName: string };
 
+        // Legacy wire param — the token route still validates uid; LiveKit ignores it.
         const uid = Math.floor(Math.random() * 1_000_000) + 1_000_001;
         const tokRes = await fetch(
           `/api/video/token?channel=${encodeURIComponent(channelName)}&uid=${uid}`
