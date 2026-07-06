@@ -16,9 +16,16 @@ export interface LiveKitCallSession {
   leave(): Promise<void>;
 }
 
+/**
+ * Deliberately NARROWER than the kiosk's JoinCallbacks: no connection-state
+ * callback. The portal has never had connection-state UI on EITHER provider —
+ * its teardown paths are guest-left, the agent's End button, and the
+ * multi-owner finalization backstops (kiosk + reaper). The kiosk is the side
+ * with the Reconnecting overlay, hence its extra vocabulary mapping.
+ */
 export interface LiveKitCallCallbacks {
   onRemoteVideo(handle: PortalVideoHandle): void;
-  /** Raw W3C track for the captions tap (same object family as Agora's getMediaStreamTrack()). */
+  /** Raw W3C REMOTE AUDIO track for the captions tap (same object family as Agora's getMediaStreamTrack()). */
   onRemoteAudioTrack(track: MediaStreamTrack): void;
   /** Fired when the browser blocks remote-audio autoplay; recover() = room.startAudio(). */
   onAudioBlocked(recover: () => void): void;
