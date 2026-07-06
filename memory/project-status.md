@@ -5,6 +5,9 @@ metadata:
   type: project
 ---
 
+> **STALE — this file stopped being maintained after plan 6a (2026-06-01).**
+> Canonical current status lives in **CLAUDE.md "Current focus"** (auto-loaded every session) + the newest **`docs/handoffs/`** file (the START-HERE). Kept only for plan-6a history.
+
 ## Last completed plan: 6a — Kiosk + Live Video
 
 **Tag:** `plan-06a-kiosk-video-complete`
