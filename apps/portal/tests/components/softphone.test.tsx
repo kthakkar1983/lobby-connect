@@ -512,6 +512,55 @@ describe("Softphone — ring-silence (own ring element)", () => {
 });
 
 /**
+ * Duty controls are Twilio-independent (Web Push subscription + presence write),
+ * so they must render even when the phone line can't register (phase "error") —
+ * e.g. on staging (no Twilio), or if the prod line briefly drops. The token
+ * fetch is forced to fail so connect() lands in phase "error"; pushArmed()→false
+ * so DutyControls shows the "Go on duty" button (not the armed "End shift" card).
+ * Both the "Go on duty" button AND the "Phone line disconnected" message show.
+ */
+describe("Softphone — duty controls render in the error phase", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // pushArmed()→false so DutyControls renders "Go on duty" (the armed+onDuty
+    // path would render the "End shift" card instead).
+    push.pushArmed.mockReturnValue(false);
+    push.armPush.mockResolvedValue(true);
+    // Token endpoint 500s → fetchVoiceToken() throws → connect() catch → phase "error".
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: false, status: 500 });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("shows 'Go on duty' AND the 'Phone line disconnected' message when the line can't register", async () => {
+    renderSoftphone("AGENT");
+
+    // The line drops to error (token fetch failed) → disconnected message shows.
+    await waitFor(() =>
+      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+    );
+
+    // DutyControls still rendered despite the dead line — "Go on duty" is present.
+    expect(screen.getByRole("button", { name: /^go on duty$/i })).toBeTruthy();
+
+    // The line-gated idle chrome (Accepting toggle) stays hidden in error.
+    expect(screen.queryByText(/Accepting calls/i)).toBeNull();
+    expect(screen.queryByText(/Incoming calls ring here/i)).toBeNull();
+  });
+});
+
+/**
  * Task 15 (spec D6): "End shift" flips presence OFFLINE immediately AND disarms
  * the 20s heartbeat, so a beat can't flip the agent back to AVAILABLE right
  * after ending. DutyControls is armed (pushArmed()→true, mocked above) so its

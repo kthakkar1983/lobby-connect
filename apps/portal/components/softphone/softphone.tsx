@@ -622,21 +622,27 @@ export function Softphone({ role }: SoftphoneProps) {
         </div>
       )}
 
+      {/* D5 "Go on duty" / "End shift": Twilio-independent — arming Web Push is a
+          browser subscription and going on/off duty is a presence write, neither
+          touches the phone line. So DutyControls renders whenever we're NOT in a
+          live call (incl. the "error" phase), staying usable on staging (no
+          Twilio) and if the prod line briefly drops. Presentational, props-driven
+          — all duty/call state stays in this softphone. */}
+      {phase !== "in-call" && (
+        <div className="mt-2 w-full">
+          <DutyControls
+            role={role}
+            onPrime={primeRing}
+            onDuty={onDuty}
+            canEndShift={canEndShift}
+            onEndShift={endShift}
+            onResumeDuty={resumeDuty}
+          />
+        </div>
+      )}
+
       {phase !== "in-call" && phase !== "error" && (
         <div className="mt-2 flex flex-col items-center">
-          {/* D5 "Go on duty": one click primes the ring audio (real element) +
-              arms Web Push. Presentational, props-driven — all duty/call state
-              stays in this softphone (no state lift into CallSurfaceProvider). */}
-          <div className="w-full">
-            <DutyControls
-              role={role}
-              onPrime={primeRing}
-              onDuty={onDuty}
-              canEndShift={canEndShift}
-              onEndShift={endShift}
-              onResumeDuty={resumeDuty}
-            />
-          </div>
           {/* Seam-ring idle brand moment — decorative anchor, not a status light.
               Renders through the "incoming" phase too now that the incoming block
               is retired, so the Accepting toggle stays put while a call rings. */}
