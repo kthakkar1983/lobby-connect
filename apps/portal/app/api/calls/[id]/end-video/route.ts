@@ -12,8 +12,8 @@ export const runtime = "nodejs";
 /**
  * Agent-side video-call finalizer. Finalization is normally kiosk-owned
  * (`/api/kiosk/call-ended`), but if the kiosk dies mid-call it never fires and
- * the row leaks. The agent's Agora client receives the guest's `user-left`
- * (kiosk gone) and calls this to close the row in real time. Idempotent: the
+ * the row leaks. The agent's LiveKit client sees the guest disconnect (kiosk
+ * gone) and calls this to close the row in real time. Idempotent: the
  * update is conditional on still-IN_PROGRESS, so whichever side finalizes first
  * wins and the other no-ops (no double-finalize, no clobbered duration).
  */

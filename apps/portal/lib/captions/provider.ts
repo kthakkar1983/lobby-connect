@@ -31,7 +31,7 @@ const SPEECHMATICS_RT_URL = "wss://us.rt.speechmatics.com/v2";
 
 // Capture at 16 kHz: speech STT gains nothing above it, and the browser-native
 // rate (commonly 48 kHz) tripled the raw-PCM uplink — ~768→256 kbps — which on
-// a weak connection competes with the live Agora/Twilio media (degraded video,
+// a weak connection competes with the live LiveKit/Twilio media (degraded video,
 // freezes). The browser resamples the source once into this context.
 const TARGET_SAMPLE_RATE = 16000;
 
@@ -103,7 +103,7 @@ export function createCaptionStream(token: string): CaptionStream {
       source = audioCtx.createMediaStreamSource(new MediaStream([track]));
       processor = audioCtx.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
       // Zero-gain sink: the processor must reach a destination to run, but the
-      // guest audio is already played by Agora/Twilio — gain 0 prevents echo.
+      // guest audio is already played by LiveKit/Twilio — gain 0 prevents echo.
       sink = audioCtx.createGain();
       sink.gain.value = 0;
 

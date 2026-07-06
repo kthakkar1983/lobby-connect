@@ -1,17 +1,11 @@
 import "server-only";
 
-export type VideoProvider = "agora" | "livekit";
-
 /**
- * The active video provider (Phase 4 swap seam, spec D8). Read at call time so
- * vi.stubEnv works in tests. Unset/unknown -> "agora": merging the swap is
- * prod-inert until the env is deliberately flipped. The comparison is exact —
- * a typo'd or whitespace-padded value falls back to agora by design (a broken
- * env can never dark-launch livekit).
+ * LiveKit server config. This module is the video-provider seam: today LiveKit
+ * is the only provider, so there is nothing to select. A future second provider
+ * would re-add its selection (a getVideoProvider()-style reader) and config
+ * here — a one-module swap, the same pattern as lib/captions/provider.ts.
  */
-export function getVideoProvider(): VideoProvider {
-  return process.env.VIDEO_PROVIDER === "livekit" ? "livekit" : "agora";
-}
 
 export interface LiveKitConfig {
   url: string;

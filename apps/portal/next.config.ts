@@ -27,7 +27,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/api/kiosk/:path*", headers: KIOSK_CORS },
-      { source: "/api/agora/:path*", headers: KIOSK_CORS },
       { source: "/api/video/:path*", headers: KIOSK_CORS },
     ];
   },

@@ -23,8 +23,6 @@
     "@twilio/voice-sdk": "^2.18.3",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "agora-rtc-sdk-ng": "^4.24.4",
-    "agora-token": "^2.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "livekit-client": "^2.20.0",

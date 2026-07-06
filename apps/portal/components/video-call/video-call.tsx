@@ -3,14 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
-import type {
-  IAgoraRTCClient,
-  IAgoraRTCRemoteUser,
-  ICameraVideoTrack,
-  IMicrophoneAudioTrack,
-  IRemoteAudioTrack,
-  IRemoteVideoTrack,
-} from "agora-rtc-sdk-ng";
 import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
 import { joinLiveKitCall, type LiveKitCallSession, type PortalVideoHandle } from "@/lib/video/livekit-session";
@@ -31,26 +23,19 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [guestAudioTrack, setGuestAudioTrack] = useState<MediaStreamTrack | null>(null);
-  // Set when Agora reports the cold first-call autoplay of the guest audio as
+  // Set when LiveKit reports the cold first-call autoplay of the guest audio as
   // blocked — surfaces a deterministic "Tap to hear guest" control rather than
   // relying on a stray pointer/keydown the listening agent may never make.
   const [audioBlocked, setAudioBlocked] = useState(false);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
-  const clientRef = useRef<IAgoraRTCClient | null>(null);
-  const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
-  const videoRef = useRef<ICameraVideoTrack | null>(null);
-  // The guest's remote audio track, kept so the silent autoplay-recovery can
-  // re-play it on the agent's next interaction if the browser blocked it.
-  const remoteAudioRef = useRef<IRemoteAudioTrack | null>(null);
   const lkSessionRef = useRef<LiveKitCallSession | null>(null);
   const lkLocalVideoRef = useRef<PortalVideoHandle | null>(null);
-  // One recovery fn for the audio-blocked banner, provider-set (agora: replay
-  // the remote track; livekit: room.startAudio()).
+  // The recovery fn for the audio-blocked banner (livekit: room.startAudio()).
   const audioRecoveryRef = useRef<(() => void) | null>(null);
   const finalizingRef = useRef(false);
-  // Ref-mirror roomNumber/notes so the Agora "user-left" event listener (which
-  // captures handleEnd at mount time) always reads the current values.
+  // Ref-mirror roomNumber/notes so the guest-left teardown (which captures
+  // handleEnd at mount time) always reads the current values.
   const roomNumberRef = useRef(roomNumber);
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
@@ -61,17 +46,14 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   // captions are off — stops the upstream audio + the per-minute billing.
   const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
 
-  // Accept the call, then join Agora.
-  // NOTE: the cleanup must tear down the client/tracks, and we must bail on
+  // Accept the call, then join LiveKit.
+  // NOTE: the cleanup must tear down the session, and we must bail on
   // `cancelled` after each await. React StrictMode (dev) mounts effects twice;
   // without this, the first run still joins + publishes and is then abandoned —
   // leaking a second publisher whose audio is never muted. Local (not ref) vars
   // are used in cleanup because a second mount overwrites the refs.
   useEffect(() => {
     let cancelled = false;
-    let client: IAgoraRTCClient | null = null;
-    let audio: IMicrophoneAudioTrack | null = null;
-    let video: ICameraVideoTrack | null = null;
     let capTimer: ReturnType<typeof setTimeout> | undefined;
     let lkSession: LiveKitCallSession | null = null;
     (async () => {
@@ -89,133 +71,52 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         if (!tokRes.ok) return onClose();
         const tok = (await tokRes.json()) as VideoTokenResult;
 
-        if (tok.provider === "livekit") {
-          const session = await joinLiveKitCall({
-            url: tok.url,
-            token: tok.token,
-            onRemoteVideo: (h) => {
-              if (!cancelled && remoteRef.current) h.attach(remoteRef.current);
-            },
-            onRemoteAudioTrack: (t) => {
-              if (!cancelled) setGuestAudioTrack(t);
-            },
-            onAudioBlocked: (recover) => {
-              audioRecoveryRef.current = () => {
-                recover();
-              };
-              Sentry.addBreadcrumb({
-                category: "livekit",
-                level: "warning",
-                message: "remote audio autoplay blocked; recovering on next interaction",
-              });
-              if (!cancelled) setAudioBlocked(true);
-              recoverAudioOnNextGesture(() => {
-                recover();
-                if (!cancelled) setAudioBlocked(false);
-              });
-            },
-            onGuestLeft: () => void handleEnd(),
-          });
-          if (cancelled) {
-            await session.leave();
-            return;
-          }
-          lkSessionRef.current = session;
-          lkLocalVideoRef.current = session.localVideo;
-          if (!session.localVideo) setCameraOff(true);
-          setMediaWarning(session.mediaWarning);
-          if (session.localVideo && localRef.current) session.localVideo.attach(localRef.current);
-          // Cost/hygiene backstop — same cap as the Agora branch (spec D10: the
-          // app-level cap is the authoritative duration bound on LiveKit too).
-          capTimer = setTimeout(() => {
-            Sentry.captureMessage("agent video call hit max-duration cap; ending", {
+        if (tok.provider !== "livekit") throw new Error("Unsupported video provider");
+        const session = await joinLiveKitCall({
+          url: tok.url,
+          token: tok.token,
+          onRemoteVideo: (h) => {
+            if (!cancelled && remoteRef.current) h.attach(remoteRef.current);
+          },
+          onRemoteAudioTrack: (t) => {
+            if (!cancelled) setGuestAudioTrack(t);
+          },
+          onAudioBlocked: (recover) => {
+            audioRecoveryRef.current = () => {
+              recover();
+            };
+            Sentry.addBreadcrumb({
+              category: "livekit",
               level: "warning",
+              message: "remote audio autoplay blocked; recovering on next interaction",
             });
-            void handleEnd();
-          }, MAX_CALL_DURATION_MS);
-          lkSession = session;
-          return; // agora code below does not run
-        }
-
-        const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
-        if (cancelled) return;
-        // If the browser blocks remote-audio autoplay (common on a cold first
-        // call after idle), recover silently on the agent's next interaction —
-        // no customer-facing prompt. A breadcrumb confirms cause/recovery in prod.
-        AgoraRTC.onAutoplayFailed = () => {
-          audioRecoveryRef.current = () => void remoteAudioRef.current?.play();
-          Sentry.addBreadcrumb({
-            category: "agora",
-            level: "warning",
-            message: "remote audio autoplay blocked; recovering on next interaction",
-          });
-          // Deterministic recovery: a visible control the agent can tap. Keep the
-          // stray-gesture backstop too — whichever fires first restores audio.
-          if (!cancelled) setAudioBlocked(true);
-          recoverAudioOnNextGesture(() => {
-            void remoteAudioRef.current?.play();
-            if (!cancelled) setAudioBlocked(false);
-          });
-        };
-        const c = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-        client = c;
-        clientRef.current = c;
-        c.on("user-published", async (user: IAgoraRTCRemoteUser, mediaType: "audio" | "video") => {
-          await c.subscribe(user, mediaType);
-          if (mediaType === "video" && remoteRef.current)
-            (user.videoTrack as IRemoteVideoTrack)?.play(remoteRef.current);
-          if (mediaType === "audio") {
-            remoteAudioRef.current = user.audioTrack ?? null;
-            user.audioTrack?.play();
-            setGuestAudioTrack(user.audioTrack?.getMediaStreamTrack() ?? null);
-          }
+            if (!cancelled) setAudioBlocked(true);
+            recoverAudioOnNextGesture(() => {
+              recover();
+              if (!cancelled) setAudioBlocked(false);
+            });
+          },
+          onGuestLeft: () => void handleEnd(),
         });
-        c.on("user-left", () => void handleEnd());
-
-        await c.join(tok.appId, tok.channelName, tok.token, tok.uid);
-        if (cancelled) return; // do NOT publish on an abandoned (e.g. StrictMode) mount
-
-        // Cost backstop: hard-cap a connected call's duration so an abandoned
-        // call (agent leaves the tab open) can't keep the Agora channel — and its
-        // per-participant billing — alive to the 1h token expiry. handleEnd is
-        // idempotent (finalizingRef), so this is safe alongside End / user-left.
+        if (cancelled) {
+          await session.leave();
+          return;
+        }
+        lkSessionRef.current = session;
+        lkLocalVideoRef.current = session.localVideo;
+        if (!session.localVideo) setCameraOff(true);
+        setMediaWarning(session.mediaWarning);
+        if (session.localVideo && localRef.current) session.localVideo.attach(localRef.current);
+        // Cost/hygiene backstop (spec D10: the app-level cap is the authoritative
+        // duration bound on LiveKit). handleEnd is idempotent (finalizingRef), so
+        // this is safe alongside End / guest-left.
         capTimer = setTimeout(() => {
           Sentry.captureMessage("agent video call hit max-duration cap; ending", {
             level: "warning",
           });
           void handleEnd();
         }, MAX_CALL_DURATION_MS);
-
-        // Acquire mic + camera INDEPENDENTLY and resiliently. A device that's
-        // busy (e.g. the webcam held by another app) or permission-denied must
-        // NOT abandon the call — otherwise the agent silently drops while the
-        // guest keeps ringing and the call lands as missed. Join with whatever
-        // media is available (audio-only is fine) so the guest always connects.
-        try {
-          audio = await AgoraRTC.createMicrophoneAudioTrack();
-        } catch {
-          audio = null;
-        }
-        try {
-          video = await AgoraRTC.createCameraVideoTrack();
-        } catch {
-          video = null;
-        }
-        if (cancelled) {
-          audio?.close();
-          video?.close();
-          return;
-        }
-        audioRef.current = audio;
-        videoRef.current = video;
-        if (!video) setCameraOff(true);
-        setMediaWarning(!audio && !video ? "both" : !audio ? "mic" : !video ? "camera" : null);
-        const tracks = [audio, video].filter(
-          (t): t is IMicrophoneAudioTrack | ICameraVideoTrack => t != null,
-        );
-        if (tracks.length > 0) await c.publish(tracks);
-        if (cancelled) return;
-        if (video && localRef.current) video.play(localRef.current);
+        lkSession = session;
       } catch {
         if (!cancelled) onClose();
       }
@@ -223,9 +124,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     return () => {
       cancelled = true;
       if (capTimer) clearTimeout(capTimer);
-      audio?.close();
-      video?.close();
-      if (client) client.leave().catch(() => {});
       if (lkSession) void lkSession.leave();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,7 +152,7 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   }
 
   async function handleEnd() {
-    // Idempotent: user-left (guest hung up / crashed) and the End button can both
+    // Idempotent: guest-left (guest hung up / crashed) and the End button can both
     // reach here. Tear down video + finalize the row exactly once; the call is over
     // regardless. Then persist notes — and if that fails, keep the overlay mounted
     // (in a "call ended — notes unsaved" state) so the typed text isn't lost.
@@ -265,9 +163,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         { method: "POST" },
         { label: "calls.end_video" },
       );
-      audioRef.current?.close();
-      videoRef.current?.close();
-      await clientRef.current?.leave().catch(() => {});
       await lkSessionRef.current?.leave();
       lkSessionRef.current = null;
       setGuestAudioTrack(null);
@@ -278,15 +173,12 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
 
   function toggleMute() {
     const n = !muted;
-    if (lkSessionRef.current) void lkSessionRef.current.setMicMuted(n);
-    else void audioRef.current?.setMuted(n);
+    void lkSessionRef.current?.setMicMuted(n);
     setMuted(n);
   }
   function toggleCamera() {
     const n = !cameraOff;
-    const t = lkSessionRef.current
-      ? lkLocalVideoRef.current?.mediaStreamTrack()
-      : videoRef.current?.getMediaStreamTrack();
+    const t = lkLocalVideoRef.current?.mediaStreamTrack();
     if (t) t.enabled = !n;
     setCameraOff(n);
   }

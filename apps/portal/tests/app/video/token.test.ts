@@ -3,8 +3,6 @@ import { signKioskToken } from "@/lib/kiosk/config-token";
 
 const SECRET = "unit-secret";
 vi.stubEnv("KIOSK_CONFIG_SECRET", SECRET);
-vi.stubEnv("AGORA_APP_ID", "a".repeat(32));
-vi.stubEnv("AGORA_APP_CERTIFICATE", "b".repeat(32));
 vi.stubEnv("LIVEKIT_URL", "wss://livekit.lobby-connect.com");
 vi.stubEnv("LIVEKIT_API_KEY", "lc_test");
 vi.stubEnv("LIVEKIT_API_SECRET", "s".repeat(64));
@@ -44,25 +42,9 @@ beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: null } });
   callRow = { id: "call-1", property_id: "prop-1", operator_id: "op-1", state: "RINGING", agora_channel_name: "call_abc" };
   profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true };
-  vi.stubEnv("VIDEO_PROVIDER", "");
 });
 
-describe("GET /api/video/token — agora branch (default)", () => {
-  it("kiosk path returns the exact agora payload with provider discriminator", async () => {
-    const res = await GET(req({ channel: "call_abc", uid: "111" }, { "x-kiosk-token": signKioskToken("prop-1", SECRET) }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.provider).toBe("agora");
-    expect(body.channelName).toBe("call_abc");
-    expect(body.uid).toBe(111);
-    expect(body.appId).toBe("a".repeat(32));
-    expect(body.token.startsWith("007")).toBe(true);
-  });
-});
-
-describe("GET /api/video/token — livekit branch", () => {
-  beforeEach(() => vi.stubEnv("VIDEO_PROVIDER", "livekit"));
-
+describe("GET /api/video/token", () => {
   it("kiosk path: identity 'kiosk', room-scoped grants, url from env", async () => {
     const res = await GET(req({ channel: "call_abc", uid: "111" }, { "x-kiosk-token": signKioskToken("prop-1", SECRET) }));
     expect(res.status).toBe(200);
@@ -73,7 +55,7 @@ describe("GET /api/video/token — livekit branch", () => {
     expect(claims.sub).toBe("kiosk");
     expect(claims.video).toMatchObject({ roomJoin: true, room: "call_abc", canPublish: true, canSubscribe: true });
     const issued = claims.iat ?? claims.nbf ?? 0;
-    expect(claims.exp - issued).toBe(3600); // TTL parity with agora (D10)
+    expect(claims.exp - issued).toBe(3600); // 3600s join-token TTL (D10)
   });
 
   it("session path: identity agent-<userId>", async () => {
