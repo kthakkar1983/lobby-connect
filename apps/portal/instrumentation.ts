@@ -20,12 +20,18 @@ export async function register() {
  */
 async function validateConfigAtBoot() {
   const { getTwilioConfig } = await import("./lib/twilio/config");
-  const { getAgoraCredentials } = await import("./lib/agora/config");
   const { getKioskConfigSecret } = await import("./lib/kiosk/config-secret");
+  const { getVideoProvider, getLiveKitConfig } = await import("./lib/video/provider");
+  const { getAgoraCredentials } = await import("./lib/agora/config");
+
+  // Validate only the ACTIVE video provider (spec D15): staging runs LiveKit with
+  // no Agora cert (deliberate) and must not boot-warn about the inactive provider.
+  const videoCheck: [string, () => unknown] =
+    getVideoProvider() === "livekit" ? ["LiveKit", getLiveKitConfig] : ["Agora", getAgoraCredentials];
 
   const checks: Array<[string, () => unknown]> = [
     ["Twilio", getTwilioConfig],
-    ["Agora", getAgoraCredentials],
+    videoCheck,
     ["Kiosk config", getKioskConfigSecret],
     [
       "CRON_SECRET",
