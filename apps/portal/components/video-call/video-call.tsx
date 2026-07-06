@@ -71,7 +71,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         if (!tokRes.ok) return onClose();
         const tok = (await tokRes.json()) as VideoTokenResult;
 
-        if (tok.provider !== "livekit") throw new Error("Unsupported video provider");
         const session = await joinLiveKitCall({
           url: tok.url,
           token: tok.token,

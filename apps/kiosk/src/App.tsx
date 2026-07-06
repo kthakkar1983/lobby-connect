@@ -125,7 +125,6 @@ export function App() {
           }
         },
       };
-      if (tok.provider !== "livekit") throw new Error("Unsupported video provider");
       const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
       // Cancelled while joining? Leave the channel we just joined and close the
       // call instead of committing to it behind the guest's back.

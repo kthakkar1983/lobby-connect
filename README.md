@@ -8,14 +8,14 @@ v1 in development. Pilot target: one hotel, end-to-end.
 
 ## Stack
 
-Next.js 15 + Vite 6 + Supabase + Twilio + Agora, deployed on Vercel.
+Next.js 15 + Vite 6 + Supabase + Twilio + LiveKit (self-hosted). The trunk deploys to the owned box (Coolify); the live pilot temporarily still runs from a frozen Vercel standby (still Agora) pending the Phase-5 cutover — see CLAUDE.md.
 
 ## Repo layout
 
 | Path | What lives here |
 |---|---|
-| `apps/portal/` | Next.js 15 app — agent + admin + owner dashboards, Twilio + Agora API routes |
-| `apps/kiosk/` | Vite 6 SPA — tablet-locked Agora video client |
+| `apps/portal/` | Next.js 15 app — agent + admin + owner dashboards, Twilio + LiveKit API routes |
+| `apps/kiosk/` | Vite 6 SPA — tablet-locked LiveKit video client |
 | `packages/shared/` | Cross-app types, constants, generated Supabase types |
 | `packages/ui/` | Shared UI primitives (currently empty; shadcn lives in portal) |
 | `supabase/` | Migrations, config, seed data for local Supabase |

@@ -4,11 +4,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { KioskConfig } from "@/types";
 import type { KioskVideoSession } from "@/lib/video/types";
 
-// The provider guard under test lives in onStartCall (apps/kiosk/src/App.tsx):
-//   if (tok.provider !== "livekit") throw new Error("Unsupported video provider");
+// Covers onStartCall (apps/kiosk/src/App.tsx) routing a video-token response
+// into the LiveKit join:
 //   const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
-// This covers the LiveKit join path plus the guard's fallback into the existing
-// setup-failure (apology) handling for any non-livekit token response.
+// VideoTokenResult's `provider` field is now a single-member "livekit" literal
+// (the wire discriminator, no longer a narrowing union) — there is no other
+// provider value to route to the setup-failure path.
 
 const config: KioskConfig = {
   propertyId: "p1",
@@ -80,7 +81,7 @@ function fakeSession(): KioskVideoSession {
   };
 }
 
-describe("App onStartCall — provider guard gates the LiveKit join", () => {
+describe("App onStartCall — routes the video token to the LiveKit join", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.fetchKioskConfig.mockResolvedValue(config);
@@ -110,26 +111,5 @@ describe("App onStartCall — provider guard gates the LiveKit join", () => {
       url: "wss://lk",
       token: "jwt-1",
     });
-  });
-
-  it("a non-livekit provider token ends in the setup-failure path (call ended + error)", async () => {
-    // Any provider value other than "livekit" must hit the guard's else-branch.
-    // api.fetchVideoToken is an untyped vi.fn() mock, so this needs no cast.
-    api.fetchVideoToken.mockResolvedValue({
-      provider: "unsupported",
-      channelName: "ch-1",
-      token: "tok-1",
-    });
-
-    render(<App />);
-
-    const tap = await screen.findByRole("button", { name: /tap to connect/i });
-    tap.click();
-
-    await waitFor(() => {
-      expect(api.endCall).toHaveBeenCalledWith("call-1", "failed");
-    });
-    expect(video.joinLiveKit).not.toHaveBeenCalled();
-    await screen.findByText("apology"); // rejects if the apology screen never renders
   });
 });
