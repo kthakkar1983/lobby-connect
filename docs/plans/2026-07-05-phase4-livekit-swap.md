@@ -16,7 +16,11 @@
 
 **Review discipline:** subagent-driven, fresh implementer + spec review + code-quality review per task. **Byte-preservation review requirements:** Task 5 (the Agora route's behavior must be byte-identical — its existing tests unchanged and green), Task 8 (kiosk `src/lib/agora.ts` untouched; SDK call sequence identical), Task 10 (the Agora branch inside `video-call.tsx` — only the token fetch/unwrap and the two audio-recovery-ref lines may differ; diff inspected line-by-line).
 
-**STATUS:** not started.
+**STATUS:** Tasks 1+2 DONE 2026-07-05 (as-built) · Tasks 3-10 in subagent-driven build (Task 3 committed `67623df`, reviews running).
+
+**Task 1 record:** committed `52da87d` (ops/livekit compose+example, runbook §13, register rows).
+
+**Task 2 record (all steps PASS, 2026-07-05):** snapshot `pre-phase4-livekit` completed 04:18 UTC · port-conflict check clean · secrets generated → `~/.ssh/lc_livekit_keys.txt` (Kumar PM-stores) · `/opt/livekit/` installed (config 600) · ufw 7881/tcp + 7882:7885/udp + **7880 from `10.0.1.0/24` (Coolify proxy net — NOT 172.16/12; a 172.16/12 rule silently dropped Traefik → fixed)** · DO fw 7881/tcp + 7882-7885/udp verified · container healthy (`OK` on 127.0.0.1:7880); **kernel `net.core.rmem_max=5000000` persisted** (`/etc/sysctl.d/99-livekit.conf`, clears LiveKit's production WARN) · DNS by Kumar · Traefik dynamic config dropped at `/data/coolify/proxy/dynamic/livekit.yaml` (mirrors coolify.yaml shape: entryPoints `https`, `certresolver: letsencrypt`) · **external `https://livekit.lobby-connect.com/` → `OK`** (LE cert issued) · 7881 OPEN + 7880 externally BLOCKED verified from outside.
 
 ---
 
@@ -118,7 +122,7 @@ git add ops/livekit docs/setup/2026-07-02-box-ops-runbook.md docs/setup/2026-07-
 git commit -m "ops(livekit): compose + config example + runbook s13 + register rows (Phase 4 Task 1)"
 ```
 
-## Task 2: box bring-up — **[HUMAN + CONTROLLER — not a subagent task]**
+## Task 2: box bring-up — **[HUMAN + CONTROLLER — not a subagent task]** — DONE 2026-07-05 (record in STATUS above)
 
 Requires Kumar's network (SSH is IP-restricted). Claude drives SSH if connected; otherwise Kumar pastes blocks. Check off in order; record outcomes inline.
 
