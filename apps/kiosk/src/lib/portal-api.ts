@@ -1,5 +1,5 @@
 import { getKioskToken, getPortalApiBase } from "./config";
-import type { KioskConfig, CallStartResult, AgoraTokenResult } from "../types";
+import type { KioskConfig, CallStartResult, VideoTokenResult } from "../types";
 
 function headers(): HeadersInit {
   const token = getKioskToken();
@@ -30,13 +30,13 @@ export async function endCall(callId: string, reason: "completed" | "no-answer" 
   }).catch(() => {});
 }
 
-export async function fetchAgoraToken(channel: string, uid: number): Promise<AgoraTokenResult> {
-  const url = new URL(`${getPortalApiBase()}/api/agora/token`);
+export async function fetchVideoToken(channel: string, uid: number): Promise<VideoTokenResult> {
+  const url = new URL(`${getPortalApiBase()}/api/video/token`);
   url.searchParams.set("channel", channel);
   url.searchParams.set("uid", String(uid));
   const res = await fetch(url.toString(), { headers: headers() });
-  if (!res.ok) throw new Error(`agora-token ${res.status}`);
-  return (await res.json()) as AgoraTokenResult;
+  if (!res.ok) throw new Error(`video-token ${res.status}`);
+  return (await res.json()) as VideoTokenResult;
 }
 
 export async function sendHeartbeat(): Promise<void> {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ICameraVideoTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
+import type { VideoTrackHandle } from "../lib/video/types";
 import { CallControls } from "./CallControls";
 
 function useElapsed(): string {
@@ -16,8 +16,8 @@ function useElapsed(): string {
 export function Connected({
   remoteVideo, localVideo, muted, cameraOff, onMute, onCamera, onEnd,
 }: {
-  remoteVideo: IRemoteVideoTrack | null;
-  localVideo: ICameraVideoTrack | null;
+  remoteVideo: VideoTrackHandle | null;
+  localVideo: VideoTrackHandle | null;
   muted: boolean;
   cameraOff: boolean;
   onMute: () => void;
@@ -27,8 +27,8 @@ export function Connected({
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const elapsed = useElapsed();
-  useEffect(() => { if (remoteVideo && remoteRef.current) remoteVideo.play(remoteRef.current); }, [remoteVideo]);
-  useEffect(() => { if (localVideo && localRef.current) localVideo.play(localRef.current); }, [localVideo]);
+  useEffect(() => { if (remoteVideo && remoteRef.current) remoteVideo.attach(remoteRef.current); }, [remoteVideo]);
+  useEffect(() => { if (localVideo && localRef.current) localVideo.attach(localRef.current); }, [localVideo]);
 
   return (
     <div className="relative h-full overflow-hidden bg-call">
