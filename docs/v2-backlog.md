@@ -201,3 +201,11 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Problem.** `app/(owner)/owner/page.tsx:193` fires 2 queries per property (count + last-call) via `props.map(async …)` → ~2N queries per load (40 at 20 properties). Agent + admin dashboards are NOT N+1 (Phase 3 optimized).
 
 **Fix sketch.** Mirror the agent/admin pattern — one batched `.in("property_id", propIds)` fetch of today's calls, then count + last-call per property in memory → 2N becomes 2. Small, low-risk, independent of the realtime work.
+
+### Mid-call resume across an agent reload (grace window)
+
+**Status:** open · **Raised:** 2026-07-06 (Phase-4 staging smoke, Kumar) · **Pilot workaround:** none needed — reload = hang-up is the v1 semantic on BOTH providers.
+
+**Observation.** Reloading the agent/admin tab during a live video call ends the call for both sides. Root cause is design, not a bug: page unload drops the participant → the kiosk's `onAgentLeft` fires → `endCall(callId, "completed")` finalizes the row instantly. Byte-identical behavior on Agora (pre-Phase-4 prod) and LiveKit. LiveKit's D9 duplicate-identity rule prevents ZOMBIE collisions on rejoin; it is not a resume feature — nothing re-mounts an in-progress call after reload, and the kiosk has already finalized. (Network blips WITHOUT a reload do survive via the SDK's same-session auto-reconnect.)
+
+**Fix sketch (v2).** Kiosk-side grace window on agent-left (e.g. 10-15s "reconnecting the agent" state before finalizing) + portal-side re-offer: after reload, detect an IN_PROGRESS call `handled_by` self and re-mount the overlay straight into a rejoin (D9 then kicks the stale participant if any). Intersects the ChunkLoadError/mid-shift-deploy reload-guard carry-forward — a deploy-driven reload mid-call is the same wound. Design both together.
