@@ -12,20 +12,27 @@ export async function register() {
 
 /**
  * Fail-loud config check at server boot. The call-time readers
- * (getTwilioConfig / getAgoraCredentials / getKioskConfigSecret) stay
- * untouched for testability — here we just invoke them once so a missing or
- * invalid var surfaces a clear console.error naming it, instead of only
+ * (getTwilioConfig / the ACTIVE video provider's reader — getLiveKitConfig or
+ * getAgoraCredentials per VIDEO_PROVIDER, spec D15 / getKioskConfigSecret)
+ * stay untouched for testability — here we just invoke them once so a missing
+ * or invalid var surfaces a clear console.error naming it, instead of only
  * blowing up on the first call (mid voice/video flow). Best-effort: a thrown
  * reader must not crash boot, so each check is isolated.
  */
 async function validateConfigAtBoot() {
   const { getTwilioConfig } = await import("./lib/twilio/config");
-  const { getAgoraCredentials } = await import("./lib/agora/config");
   const { getKioskConfigSecret } = await import("./lib/kiosk/config-secret");
+  const { getVideoProvider, getLiveKitConfig } = await import("./lib/video/provider");
+  const { getAgoraCredentials } = await import("./lib/agora/config");
+
+  // Validate only the ACTIVE video provider (spec D15): staging runs LiveKit with
+  // no Agora cert (deliberate) and must not boot-warn about the inactive provider.
+  const videoCheck: [string, () => unknown] =
+    getVideoProvider() === "livekit" ? ["LiveKit", getLiveKitConfig] : ["Agora", getAgoraCredentials];
 
   const checks: Array<[string, () => unknown]> = [
     ["Twilio", getTwilioConfig],
-    ["Agora", getAgoraCredentials],
+    videoCheck,
     ["Kiosk config", getKioskConfigSecret],
     [
       "CRON_SECRET",

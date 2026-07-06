@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import type { Route } from "next";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
+import { syncPushSubscription } from "@/lib/push/client";
 
 type Role = "ADMIN" | "AGENT";
 
@@ -42,8 +44,28 @@ export function DashboardWorkspace({
   readonly children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const home = HOME[role];
   const onHome = pathname === home;
+
+  // Silent push re-sync on load: no prompt, refreshes the subscription's
+  // last_seen_at so stale endpoints are pruned server-side (Phase 3, Task 12).
+  useEffect(() => {
+    void syncPushSubscription();
+  }, []);
+
+  // The SW focuses a tab and asks it to navigate home on notification click, so
+  // the ringing property card is on screen. The hook ignores focus-home (no route
+  // knowledge); the workspace owns it.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { source?: string; type?: string };
+      if (data?.source === "lc-push" && data.type === "focus-home") router.push(HOME[role]);
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [router, role]);
 
   return (
     <div className="flex flex-col gap-6 p-6">

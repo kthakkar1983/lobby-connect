@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import type { ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
 import { RING_WINDOW_MS, MAX_CALL_DURATION_MS } from "@lc/shared";
 
 import * as Sentry from "@sentry/react";
 import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
-import { fetchKioskConfig, startCall, endCall, fetchAgoraToken, sendHeartbeat } from "./lib/portal-api";
-import { joinChannel, type KioskAgoraSession } from "./lib/agora";
+import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat } from "./lib/portal-api";
+import { joinAgora } from "./lib/video/agora";
+import { joinLiveKit } from "./lib/video/livekit";
+import type { KioskVideoSession, VideoTrackHandle } from "./lib/video/types";
 import { unlockAudioPlayback } from "./lib/audio-unlock";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
@@ -21,14 +22,14 @@ const HEARTBEAT_MS = 30_000;
 export function App() {
   const [state, dispatch] = useReducer(reduce, undefined, initialState);
   const [config, setConfig] = useState<KioskConfig | null>(null);
-  const [remoteVideo, setRemoteVideo] = useState<IRemoteVideoTrack | null>(null);
-  const [localVideo, setLocalVideo] = useState<ICameraVideoTrack | null>(null);
+  const [remoteVideo, setRemoteVideo] = useState<VideoTrackHandle | null>(null);
+  const [localVideo, setLocalVideo] = useState<VideoTrackHandle | null>(null);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
 
-  const sessionRef = useRef<KioskAgoraSession | null>(null);
-  const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
+  const sessionRef = useRef<KioskVideoSession | null>(null);
+  const localAudioRef = useRef<MediaStreamTrack | null>(null);
   const callIdRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Cost backstop: caps a CONNECTED call's duration (armed on connect, cleared on
@@ -80,11 +81,10 @@ export function App() {
       if (aborted()) { void endCall(callId, "cancelled"); return; }
       callIdRef.current = callId;
       const uid = Math.floor(Math.random() * 1_000_000) + 1;
-      const tok = await fetchAgoraToken(channelName, uid);
+      const tok = await fetchVideoToken(channelName, uid);
       if (aborted()) { void endCall(callId, "cancelled"); return; }
-      const session = await joinChannel({
-        appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid,
-        onRemoteVideo: (t) => setRemoteVideo(t ?? null),
+      const callbacks = {
+        onRemoteVideo: (h: VideoTrackHandle | null) => setRemoteVideo(h),
         onAgentJoined: () => {
           // Call connected — cancel the no-answer ring timer so it can't fire
           // mid-call and tear down a live session.
@@ -109,7 +109,7 @@ export function App() {
           void endCall(callIdRef.current!, "completed");
           dispatch({ type: "END_CALL" });
         },
-        onConnectionStateChange: (cur, _prev, reason) => {
+        onConnectionStateChange: (cur: string, _prev: string, reason?: string) => {
           const outcome = interpretConnectionState(cur, reason);
           if (outcome === "lost") {
             // SDK is retrying — show the overlay, don't tear down yet.
@@ -125,7 +125,11 @@ export function App() {
             dispatch({ type: "ERROR" });
           }
         },
-      });
+      };
+      const session =
+        tok.provider === "livekit"
+          ? await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks })
+          : await joinAgora({ appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid, ...callbacks });
       // Cancelled while joining? Leave the channel we just joined and close the
       // call instead of committing to it behind the guest's back.
       if (aborted()) {
@@ -134,7 +138,7 @@ export function App() {
         return;
       }
       sessionRef.current = session;
-      localAudioRef.current = session.localAudio;
+      localAudioRef.current = session.localAudioTrack;
       setLocalVideo(session.localVideo);
       dispatch({ type: "CALL_STARTED", callId, channelName });
       timeoutRef.current = setTimeout(() => {
@@ -178,14 +182,14 @@ export function App() {
 
   const toggleMute = useCallback(() => {
     const next = !muted;
-    const t = localAudioRef.current?.getMediaStreamTrack();
+    const t = localAudioRef.current;
     if (t) t.enabled = !next;
     setMuted(next);
   }, [muted]);
 
   const toggleCamera = useCallback(() => {
     const next = !cameraOff;
-    const t = localVideo?.getMediaStreamTrack();
+    const t = localVideo?.mediaStreamTrack();
     if (t) t.enabled = !next;
     setCameraOff(next);
   }, [cameraOff, localVideo]);

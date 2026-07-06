@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { ICameraVideoTrack } from "agora-rtc-sdk-ng";
 import { Phone, ShieldCheck } from "lucide-react";
+import type { VideoTrackHandle } from "../lib/video/types";
 import { FloatingPaths } from "../components/floating-paths";
 import { CallControls } from "./CallControls";
 import { copy } from "../lib/copy";
@@ -8,7 +8,7 @@ import { copy } from "../lib/copy";
 export function Ringing({
   localVideo, muted, cameraOff, onMute, onCamera, onCancel,
 }: {
-  localVideo: ICameraVideoTrack | null;
+  localVideo: VideoTrackHandle | null;
   muted: boolean;
   cameraOff: boolean;
   onMute: () => void;
@@ -17,7 +17,7 @@ export function Ringing({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (localVideo && ref.current) localVideo.play(ref.current);
+    if (localVideo && ref.current) localVideo.attach(ref.current);
   }, [localVideo]);
 
   return (

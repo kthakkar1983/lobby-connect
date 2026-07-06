@@ -1,0 +1,12 @@
+# /opt/livekit/livekit.yaml — REAL file is box+PM only; this example is the committed shape.
+# Design: docs/specs/2026-07-05-phase4-livekit-swap-design.md §2.1 (D3, D4, D5, D6).
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882-7885      # single-port UDP mux; >= vCPU count (box has 4)
+  use_external_ip: false   # host networking on a droplet: public IP is bound directly
+keys:
+  lc_prod: REPLACE_WITH_GENERATED_SECRET
+  lc_staging: REPLACE_WITH_GENERATED_SECRET
+logging:
+  level: info

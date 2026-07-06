@@ -101,15 +101,16 @@ describe("VideoCall — stale-closure regression (H1)", () => {
           json: () => Promise.resolve({ channelName: "ch-test" }),
         });
       }
-      if (typeof url === "string" && url.includes("/api/agora/token")) {
+      if (typeof url === "string" && url.includes("/api/video/token")) {
         return Promise.resolve({
           ok: true,
           json: () =>
             Promise.resolve({
+              provider: "agora",
               appId: "app1",
               token: "tok",
               channelName: "ch-test",
-              uid: 1001,
+              uid: 42,
             }),
         });
       }

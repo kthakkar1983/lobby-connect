@@ -60,7 +60,10 @@ beforeEach(() => {
   inSpy.mockClear();
   callsQuerySpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT" };
+  // `status: "AVAILABLE"` = on shift. The `profiles` mock is shared by both reads:
+  // requireApiActor (id/operator_id/role/active) AND the actor end-shift gate
+  // (status). A non-OFFLINE status keeps the happy-path tests polling normally.
+  profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true, status: "AVAILABLE" };
   // u1 is the assigned primary agent for prop-1, so the default happy-path tests
   // have a property in scope and the calls query runs.
   assignmentRows = [{ property_id: "prop-1" }];
@@ -98,6 +101,36 @@ describe("GET /api/calls/incoming-video", () => {
   it("403 when the caller is an OWNER (read-only role)", async () => {
     profileRow = { id: "u1", operator_id: "op-1", role: "OWNER" };
     expect((await GET(request)).status).toBe(403);
+  });
+
+  it("returns [] and skips the calls query when the actor has ended their shift (status OFFLINE)", async () => {
+    // End shift silences video too: the agent's own open tab must stop ringing.
+    profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true, status: "OFFLINE" };
+    const body = await (await GET(request)).json();
+    expect(body.calls).toEqual([]);
+    expect(callsQuerySpy).not.toHaveBeenCalled();
+    expect(inSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns [] and skips the calls query when the actor is not accepting calls (status AWAY)", async () => {
+    // "Not accepting calls" (AWAY) silences video too — parity with audio, whose
+    // reachable set excludes AWAY. The agent's own open tab must stop ringing.
+    profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true, status: "AWAY" };
+    const body = await (await GET(request)).json();
+    expect(body.calls).toEqual([]);
+    expect(callsQuerySpy).not.toHaveBeenCalled();
+    expect(inSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails OPEN: an absent actor status (transient read failure) still rings normally", async () => {
+    // The actor is on shift (assigned, active) but the status read comes back with no
+    // status field (a DB blip). Only status==="OFFLINE" silences — a failed read must
+    // NOT empty the response; the ringing-calls query must still run.
+    profileRow = { id: "u1", operator_id: "op-1", role: "AGENT", active: true };
+    const body = await (await GET(request)).json();
+    expect(body.calls).toHaveLength(1);
+    expect(body.calls[0]).toMatchObject({ id: "call-1" });
+    expect(callsQuerySpy).toHaveBeenCalled();
   });
 
   it("time-bounds the RINGING query so a phantom ring from a dead kiosk is dropped", async () => {

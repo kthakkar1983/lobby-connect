@@ -1229,9 +1229,18 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 
 - [ ] **Step 5: Gate (`typecheck`, `test`, `lint`, `check:routes`, `build`) + commit** (`feat(admin): pod-grouped fleet cards replace ops table; retire video card + off-home toast`).
 
-## Task 10: Phase B staging + prod smoke (HUMAN)
+## Task 10: Phase B staging + prod smoke (HUMAN) — ✅ PASSED (2026-07-05)
 
-- [ ] Push to `staging`, then: kiosk video call → agent card expands + rings + Answer opens today's overlay; audio call → same on the audio card; admin with covering ON sees Answer, OFF sees ring-only; other placements gone; second browser answering first → loser card stops ringing (claim 409 path). Then PR → `main`, repeat the two-call smoke on prod. Record results in this file.
+- [x] Prod two-call smoke run after the A+B slice + fix loop merged (PR #27) and the video-ring fix merged (PR #28). Phase B is COMPLETE.
+
+**PHASE B PROD SMOKE — PASSED (2026-07-05, Kumar on prod):**
+- **AUDIO — full pass:** no double-ring on incoming (Twilio built-in ring correctly disabled, only the softphone's own `/sounds/ring.mp3` element plays); rang on a backgrounded/unfocused tab; **Silence** muted the local ring while staying answerable; **answered a silenced call** successfully.
+- **VIDEO — pass:** the property card rang; **Answer connected to the kiosk** (guest video up); **Silence** worked on the video ring; and after the PR-#28 fix, **the ring stops the instant the call is answered** (was blaring ~30s over the connected call — see below).
+- **Two findings during the smoke, both fixed on `main`:**
+  1. *Transient "Something went wrong" on the first video answer* → a post-deploy **ChunkLoadError** (the open tab held a stale chunk map; the video overlay is lazy-loaded). **Self-healed** with no code change once the tab/CDN caught up. Root-caused, not a code bug. **Carry-forward:** add a durable ChunkLoadError→reload guard so a mid-shift deploy can't break an agent's next lazy-load (small, non-blocking).
+  2. *Video ringtone kept playing ~30s AFTER answering* → a pre-existing Phase-B bug (video gated its ring on the server incoming list, which cleared only via a realtime broadcast a just-focused tab missed → 60s poll, avg ~30s). **Fixed (PR #28, `f4af480`):** the video ring now stops on the LOCAL answer (mirrors audio) via `useIncomingVideoCalls(operatorId, silencedKeys, activeCallId)` — the answered id is excluded from the ring/tab-title/returned list; `waiting` is `useMemo`'d for identity-stability (the first cut caused a render-loop OOM the suite caught). TDD + adversarial review (zero must-fix).
+- **Not separately re-exercised this pass (lower-risk, unit-tested):** admin covering ON/OFF Answer gating (s1-test scoping + unit tests), the two-browser race / 409 claim path (`claimCall` unit-tested). Re-confirm opportunistically; not blocking Phase B closure (Kumar's call, 2026-07-05).
+- **Expected/by-design (NOT bugs):** video only rings once the tab is focused (backgrounded-realtime limit — **Phase C push closes it**); off-home a ring is audible but the Answer/Silence controls live on the home cards (Task-9 toast retirement — **Phase C push-navigates-home closes it**; accepted by Kumar).
 
 **Staging scope note (2026-07-04):** staging receives NO Twilio webhooks (the number points at prod until Phase 5, and the staging front door has no `/api/twilio/*` basic-auth carve-out) → the **audio-card ring and the Decline-gone feel are PROD smoke items** after the merge. Staging covers: the video ring-on-card path, covering gates, toggle round-trip, and the two-browser race. Staging prep required first: the staging DB has only Staging Admin + Staging Test Hotel — provision a staging AGENT (`/admin/users`) and assign it as the hotel's primary agent (`/admin/properties` → detail) or no card will ring.
 
@@ -1256,9 +1265,11 @@ const groups = groupPodsByAgent({ properties, assignments, agents: assignedAgent
 
 ---
 
-# PHASE C — Push productionized + duty controls (D3, D5, D6, D7)
+# PHASE C — Push productionized + duty controls (D3, D5, D6, D7) — ✅ CODE-COMPLETE (2026-07-05)
 
-## Task 11: migration 0019 + push send module + subscription route
+**Phase C built subagent-driven (fresh implementer + two-stage review per task; final whole-branch integration review = SHIP). Commits `ccc8813`→`2fab4ec` on `phase3-workspace`. Full branch gate GREEN: typecheck · portal node+jsdom (660 tests) · lint (3 pkgs) · check:routes · gen:types:check ("DB types in sync") · kiosk 27 · portal build.** Migration 0019 applied to LOCAL + STAGING (via MCP); **PROD 0019 applied at merge (the 0018 lesson).** Architecture note: `DutyControls` is props-driven (rendered by the softphone), NOT the plan's `registerDutyHandlers`/`CallSurfaceProvider` mechanism — deliberately superseded to avoid the dep-hygiene render-loop trap (recorded in the Task-14/15 commits). Remaining: **Phase-C HUMAN smoke** (Task 15 checklist). Design confirm RESOLVED (Kumar 2026-07-05 — "end shift means end shift, audio and video"): **End shift now silences VIDEO too** (`8c2f6b4` + fail-open tests `eeac5d4`) — the incoming-video poll + push target list exclude a RAW `status='OFFLINE'` agent (NOT `effectivePresence`/staleness, so a minimized on-shift tab stays wakeable); audio/dial untouched. AWAY parity also DONE (`4b6bd91`): a shared `isVideoSilencedStatus = OFFLINE || AWAY` deny-list predicate makes the "not accepting calls" toggle silence video too (fail-open preserved; AVAILABLE + ON_CALL kept = audio's reachable set).
+
+## Task 11: migration 0019 + push send module + subscription route — ✅ DONE (`ccc8813` migration+types, `e39cd38` code+tests, `83ab1a0` review fix)
 
 **Files:**
 - Create: `supabase/migrations/0019_push_subscriptions.sql`
@@ -1467,7 +1478,7 @@ Route test (house pattern): 401 unauthenticated, 400 missing fields, 204 upsert 
 
 - [ ] **Step 5: Gate + commit** (`feat(push): 0019 push_subscriptions + send module + subscription route (TDD)`).
 
-## Task 12: production SW behaviors + client subscription manager + tab ring wiring
+## Task 12: production SW behaviors + client subscription manager + tab ring wiring — ✅ DONE (`f002944` + `77bed76` comment fix)
 
 **Files:**
 - Modify: `apps/portal/public/push-sw.js` (already production-shaped; verify copy)
@@ -1535,7 +1546,7 @@ useEffect(() => {
 
 - [ ] **Step 4: Test:** in the hook test, dispatch a fake SW message event (mock `navigator.serviceWorker` with an EventTarget) → assert a refetch happened (fetch mock called again). Gate + commit (`feat(push): client subscription manager + SW-message ring wiring`).
 
-## Task 13: send-side wiring + spike removal
+## Task 13: send-side wiring + spike removal — ✅ DONE (`f79181e`)
 
 **Files:**
 - Modify: `apps/portal/app/api/kiosk/call-started/route.ts`, `app/api/calls/[id]/answer-video/route.ts`, `app/api/calls/[id]/end-video/route.ts`, `app/api/kiosk/call-ended/route.ts`
@@ -1565,7 +1576,7 @@ after(() => {
 
 - [ ] **Step 5: Gate + commit** (`feat(push): send on kiosk ring + clear on answer/end; remove Gate-3.1 spike surface`).
 
-## Task 14: Go on duty + duty controls card
+## Task 14: Go on duty + duty controls card — ✅ DONE (`4c28776` + `e6c04ac` test; DutyControls props-driven, no provider change)
 
 **Files:**
 - Create: `apps/portal/components/dashboard/duty-controls.tsx`
@@ -1597,7 +1608,7 @@ useEffect(() => setArmed(pushArmed()), []);
 
 - [ ] **Step 4: Gate + commit** (`feat(duty): Go on duty — audio prime + push arm; duty card replaces softphone chrome`).
 
-## Task 15: End shift (D6) + fleet duty labels (D7)
+## Task 15: End shift (D6) + fleet duty labels (D7) — ✅ DONE (`2fab4ec`; props-driven endShift/resumeDuty, no `registerDutyHandlers`)
 
 **Files:**
 - Create: `apps/portal/app/api/presence/end-shift/route.ts`

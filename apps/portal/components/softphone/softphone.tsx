@@ -5,12 +5,14 @@ import { Phone } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
+import { DutyControls } from "@/components/dashboard/duty-controls";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
+import { primeRingtone } from "@/lib/video/prime";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
@@ -86,6 +88,14 @@ export function Softphone({ role }: SoftphoneProps) {
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
   notesRef.current = notes;
+
+  // Duty state (spec D6): true = on shift. "End shift" flips it false, which
+  // both disarms the heartbeat (via onDutyRef, read inside the interval so the
+  // effect deps never change) and drops the fleet card out of "On duty". The ref
+  // mirror lets endShift stop the next beat BEFORE the re-render lands.
+  const [onDuty, setOnDuty] = useState(true);
+  const onDutyRef = useRef(true);
+  onDutyRef.current = onDuty;
 
   // Notes save is decoupled from call phase: a failure surfaces in a banner that
   // outlives the call so the typed text is never silently lost.
@@ -163,6 +173,9 @@ export function Softphone({ role }: SoftphoneProps) {
   // undefined, so nothing is ever silenced (the ring always plays).
   const silencedKeys = surface?.silencedKeys;
   const ringtoneRef = useRef<Ringtone | null>(null);
+  // The raw ring audio element, so "Go on duty" can prime the REAL element the
+  // ring plays (not a throwaway) inside its own user gesture.
+  const ringAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Publish the audio incoming ring (id comes from the new propertyId Parameter).
   useEffect(() => {
@@ -219,6 +232,7 @@ export function Softphone({ role }: SoftphoneProps) {
     const audio = new Audio("/sounds/ring.mp3");
     audio.loop = true;
     audio.preload = "auto";
+    ringAudioRef.current = audio;
     const ringtone = createRingtone(audio);
     ringtoneRef.current = ringtone;
 
@@ -229,13 +243,7 @@ export function Softphone({ role }: SoftphoneProps) {
     const unlock = () => {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
-      if (!audio.paused) return;
-      void Promise.resolve(audio.play())
-        .then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        })
-        .catch(() => {});
+      primeRingtone(audio);
     };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
@@ -243,10 +251,15 @@ export function Softphone({ role }: SoftphoneProps) {
     return () => {
       ringtone.stop();
       ringtoneRef.current = null;
+      ringAudioRef.current = null;
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  // Stable prime callback for the "Go on duty" control: primes the REAL ring
+  // element (autoplay unlock) inside the click's user gesture.
+  const primeRing = useCallback(() => primeRingtone(ringAudioRef.current), []);
 
   // Ring while an incoming call is waiting, UNLESS the card silenced this ring
   // key. Silencing changes `silencedKeys` identity → this effect re-runs →
@@ -373,12 +386,18 @@ export function Softphone({ role }: SoftphoneProps) {
     };
   }, [connect]);
 
-  // Heartbeat: keep last_seen + status fresh while mounted.
+  // Heartbeat: keep last_seen + status fresh while mounted. Off-shift, a beat is
+  // suppressed so it can't flip the agent back to AVAILABLE right after "End
+  // shift". Read the REF (not `onDuty` state) so the effect deps stay
+  // [intendedStatus] and the interval isn't torn down/rebuilt on every toggle.
   useEffect(() => {
     const id = setInterval(() => {
+      if (!onDutyRef.current) return;
       void postPresence(intendedStatus());
     }, HEARTBEAT_MS);
-    const onFocus = () => void postPresence(intendedStatus());
+    const onFocus = () => {
+      if (onDutyRef.current) void postPresence(intendedStatus());
+    };
     window.addEventListener("focus", onFocus);
     return () => {
       clearInterval(id);
@@ -546,6 +565,27 @@ export function Softphone({ role }: SoftphoneProps) {
     void postPresence(next ? "AVAILABLE" : "AWAY");
   }, [ready]);
 
+  // "End shift" (spec D6): flip presence to OFFLINE immediately (so the admin
+  // fleet reads true without waiting for staleness) and disarm the heartbeat.
+  // The ref is set BEFORE the re-render so the very next beat is already
+  // suppressed. Best-effort POST; a network failure just means the fleet ages
+  // the row out via staleness instead of flipping instantly.
+  const endShift = useCallback(async () => {
+    onDutyRef.current = false; // stop the heartbeat immediately (before the re-render)
+    setOnDuty(false);
+    await fetch("/api/presence/end-shift", { method: "POST" }).catch(() => {});
+  }, []);
+  // "Go on duty" resume: re-arm the heartbeat and beat immediately so the fleet
+  // flips back to on-duty fast. Idempotent if already on duty.
+  const resumeDuty = useCallback(() => {
+    onDutyRef.current = true;
+    setOnDuty(true);
+    void postPresence(intendedStatus());
+  }, [intendedStatus]);
+
+  // End shift is disabled mid-call/mid-ring — you can't leave a live call.
+  const canEndShift = phase !== "in-call" && phase !== "incoming";
+
   return (
     <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
       <div className="flex items-center justify-between">
@@ -579,6 +619,25 @@ export function Softphone({ role }: SoftphoneProps) {
               Discard
             </button>
           </div>
+        </div>
+      )}
+
+      {/* D5 "Go on duty" / "End shift": Twilio-independent — arming Web Push is a
+          browser subscription and going on/off duty is a presence write, neither
+          touches the phone line. So DutyControls renders whenever we're NOT in a
+          live call (incl. the "error" phase), staying usable on staging (no
+          Twilio) and if the prod line briefly drops. Presentational, props-driven
+          — all duty/call state stays in this softphone. */}
+      {phase !== "in-call" && (
+        <div className="mt-2 w-full">
+          <DutyControls
+            role={role}
+            onPrime={primeRing}
+            onDuty={onDuty}
+            canEndShift={canEndShift}
+            onEndShift={endShift}
+            onResumeDuty={resumeDuty}
+          />
         </div>
       )}
 

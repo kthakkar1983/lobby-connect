@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canAnswer, claimCall } from "@/lib/voice/call-state";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
+import { sendCallPush } from "@/lib/push/send";
 import type { CallState } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -22,7 +23,8 @@ export async function POST(
     state: CallState;
     agora_channel_name: string | null;
     operator_id: string;
-  }>(actor, id, "id, state, agora_channel_name");
+    property_id: string;
+  }>(actor, id, "id, state, agora_channel_name, property_id");
   if (call instanceof NextResponse) return call;
 
   if (!canAnswer(call.state)) {
@@ -39,7 +41,16 @@ export async function POST(
 
   // The claim removes this call from every other agent's incoming list. after()
   // (waitUntil-backed) guarantees the broadcast fires before the function freezes.
-  after(() => broadcastCallsChanged(actor.operatorId));
+  after(() => {
+    void broadcastCallsChanged(actor.operatorId);
+    void sendCallPush(admin, {
+      type: "call-cleared",
+      callId: id,
+      channel: "VIDEO",
+      propertyId: call.property_id,
+      propertyName: "",
+    });
+  });
 
   return NextResponse.json({ channelName: call.agora_channel_name });
 }

@@ -58,22 +58,31 @@ Feature work on the current hosting (Vercel) and current video (Agora) — decou
 
 **Rollback:** normal git revert; no infra involved. **Done when (amended 2026-07-04 per the spec; hold line removed at the plan gate):** prod smoke — answer on the expanded card (agent + covering admin) · one-click Connect to the real hotel PC **from the card and from inside a live call (D12)** · admin-connect to a non-covered property · **loud ring lands with the browser minimized behind fullscreen RustDesk (push path), toast observed** · call tile opens on Answer and carries the call over RustDesk.
 
-## Phase 4 — Video swap: Agora → LiveKit
+## Phase 4 — Video swap: Agora → LiveKit — **BUILT + STAGING-SMOKED 2026-07-06; prod tail SUPERSEDED into Phase 5 (Kumar, same day)**
 
-- Deploy LiveKit + TURN on the box (staging first); resolve the 443 question (TURN on 5349 or second IP).
-- Portal token route + kiosk/portal client swap behind the existing call-state machinery; captions re-tap the LiveKit remote track; PiP window unchanged.
-- Staging smoke with real devices → prod cutover behind an env flag; **keep the Agora path + env until the LiveKit path survives ≥1 week of real nights**, then strip Agora SDKs/env/token route.
+- ~~Deploy LiveKit + TURN on the box~~ **DONE:** LiveKit v1.13.3 live at `/opt/livekit/` (host networking, **no TURN needed** — public-IP SFU + ICE/TCP fallback dissolved the 443 question; no Redis); `https://livekit.lobby-connect.com/` behind Coolify Traefik. Spec/plan/runbook §13: `docs/{specs,plans}/2026-07-05-phase4-livekit-swap*`.
+- ~~Portal token route + client swap~~ **DONE:** server-driven `VIDEO_PROVIDER` via `/api/video/token` (discriminated DTO); provider seams in both apps; captions re-tap confirmed; Agora paths byte-preserved (3 review gates). **Staging runs pure LiveKit and passed Kumar's full smoke 2026-07-06** (video+captions+push+busy-cam+duty) — also completed the parked Phase-C verification.
+- ~~Prod cutover behind an env flag; 1-week prod soak on Vercel; then strip~~ **SUPERSEDED 2026-07-06 (Kumar): prod NEVER flips on Vercel.** The Vercel deployment freezes as a warm standby (still Agora); **Agora is stripped from `main` BEFORE cutover**; LiveKit's real-nights proof happens inside Phase 5's blue-green window, where rollback = the whole-stack pointer swap back to the frozen Vercel standby.
 
-**Rollback:** flip the flag back to Agora (path retained until cleanup). **Done when:** a week of real video calls on LiveKit with quality ≥ Agora and $0 marginal video cost.
+**Rollback (as amended):** the Phase-5 standby swap. **Done when (as amended):** the staging smoke (achieved) + the Phase-5 cutover window confirms real-night video quality ≥ Agora at $0 marginal cost.
 
-## Phase 5 — Prod app cutover off Vercel + decommission
+## Phase 5 — Blue-green cutover to the box + decommission *(amended 2026-07-06: absorbs Phase 4's prod tail; Kumar's warm-standby model)*
 
-- Deploy prod portal + kiosk on Coolify (prod Supabase env); `app.<domain>` / `kiosk.<domain>`; move crons to the box (reaper to `*/15` in prod at last).
-- Cutover checklist: Twilio webhook URLs → new domain; Supabase Auth site/redirect URLs; regenerate kiosk `?t=` links; cross-app env URLs; Sentry origins. Keep Vercel warm during a multi-night soak; rollback = repoint Twilio + DNS back.
-- After soak: decommission Vercel projects + Agora account; remove `@vercel/analytics`; update `docs/security-posture.md`, `deploy-and-smoke-workflow` memory, CLAUDE.md deployed-URLs.
+**Model:** the box stack becomes prod; the current Vercel deployment stays FROZEN and WARM as the standby. The DB never forks (both stacks → prod Supabase; migrations stay ADDITIVE-ONLY — that is the rollback guarantee: old code ignores new tables). Going live and rolling back are the same three pointer sets, in opposite directions.
+
+1. **Freeze Vercel prod** (disable prod deploys — ignored-build-step or `git.deploymentEnabled`; decide at execution). From here, merges to `main` cannot touch the pilot. — **DONE 2026-07-06 (Kumar-approved): executed as the strictest variant — GitHub repo DISCONNECTED from both Vercel projects (`vercel git disconnect`); no git event reaches Vercel at all. Standby of record: portal `dpl_7PQ1P7Ui41UD8wrpZrV3FZ2koj6y` + kiosk `dpl_FxZhsJQVLEUn5V2M81gBwvKch5Mu`, both built from `main@f4af480` (Merge PR #28), aliased to `lobby-connect-portal.vercel.app` / `lobby-connect-kiosk.vercel.app`. Reversal (if ever needed): `vercel git connect` per project. Serving deployments/domains/envs/crons untouched; both URLs 200-verified post-disconnect.**
+2. **Merge PR #29** ("Phase 3C + Phase 4") to `main` — deploys nothing anywhere.
+3. **Strip Agora on `main`** (the former Gate-3 file list in the Phase-4 plan Task 12 — SDKs, `/api/agora/token`, `lib/agora/`, kiosk agora modules, video-call agora branch, TEMP audio diagnostics, envs, tests). Clean single-provider trunk.
+4. **Build Phase 3 D (call tile) + E (remote access) on the clean trunk**, smoked on staging as they land.
+5. **Stand up prod apps on the box:** `lc-portal-prod` + `lc-kiosk-prod` on Coolify (prod Supabase env; `lc_prod` LiveKit keypair; same `KIOSK_CONFIG_SECRET` as Vercel so signed links survive the swap); apply 0019/0020 to prod Supabase; box crons take over (reaper `*/15` in prod at last). Staging apps stay as-is (staging Supabase).
+6. **Custom domains first, pointed at Vercel:** `app.lobby-connect.com` / `kiosk.lobby-connect.com` → Vercel; repoint the pilot tablet + agent bookmarks ONCE while behavior is unchanged.
+7. **Cutover runsheet + rollback rehearsal:** the three pointer sets with both values — (a) Twilio webhook URLs, (b) the two DNS records, (c) Supabase Auth site/redirect URLs (allowlist both origins during the window) — plus Sentry origins; **rehearse the rollback direction once before go-live.**
+8. **GO LIVE** (pointers → box). **Night 1: Dilnoza makes deliberate India test video calls** — the India↔NYC3 SFU leg is the one thing staging smoke could not prove (Agora had edges near her; the box is one region). Kumar smokes voice + video + Connect.
+9. **Standby window ~2 weeks:** Vercel stays warm; any critical issue = swap the pointers back (minutes, returns to exactly-frozen prod behavior — pilot loses only the new features until fixed).
+10. **Decommission:** Vercel projects + Agora account closed; remove `@vercel/analytics`; update `docs/security-posture.md`, `deploy-and-smoke-workflow` memory, CLAUDE.md deployed-URLs; revoke the two `lc-claude` API tokens (register §4); DO auto-backups ON + **Supabase Pro** upgrade; tags `plan-phase4-livekit-complete` + `plan-phase5-cutover-complete`.
 - **Then the final DB call** (kept-managed is the standing lean; revisit with real ops experience — this is the last decision on purpose).
 
-**Done when:** a full week of nights served entirely off the owned box + Twilio + Supabase, Vercel and Agora accounts closed.
+**Rollback:** the pointer swap back to the frozen Vercel standby (rehearsed). **Done when:** a full week of nights served entirely off the owned box + Twilio + Supabase, Vercel and Agora accounts closed.
 
 ## Phase 6 — Post-migration (optional, unscheduled)
 
@@ -84,3 +93,4 @@ Realtime phases 2–4 re-evaluated as pure UX (cost pressure gone) · per-connec
 - **Relay before everything prod-facing** (Phase 2): zero code, high win, builds server confidence on a non-life-safety path.
 - **Workspace before video swap** (Phase 3 < 4): the agents get the workflow transformation early; the feature is orthogonal to hosting; and the tile/card UI then *wraps* the video internals, so the LiveKit swap lands inside an already-stable shell. One surgery at a time. Gate 3.0 sits at the very front so the riskiest UX assumption is judged in the flesh before any build effort.
 - **App cutover last** (Phase 5): it's the piece with the most external pointers (Twilio, auth, kiosk links) — do it once everything it hosts is already proven on the box.
+- **Blue-green amendment (2026-07-06, Kumar):** Phase 4's incremental prod tail (env-flag flip on Vercel + 1-week prod soak before the strip) traded away in favor of **total-instant-rollback via the warm Vercel standby** — one bigger cutover, but any failure reverts the WHOLE stack in minutes via three pointer swaps, and development proceeds on a clean Agora-free trunk immediately. Enabled by the shared prod DB + the additive-only-migrations law (old code ignores new tables). The known residual: after the strip, a video-quality issue has no partial fallback — rollback is the whole stack (acceptable at pilot scale); the India↔US SFU leg gets deliberate night-1 test calls for exactly this reason.

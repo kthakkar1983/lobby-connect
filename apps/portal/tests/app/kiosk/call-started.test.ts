@@ -9,6 +9,11 @@ vi.mock("@/lib/realtime/broadcast", () => ({
   broadcastCallsChanged: (...a: unknown[]) => broadcastCallsChanged(...a),
 }));
 
+const sendCallPush = vi.fn();
+vi.mock("@/lib/push/send", () => ({
+  sendCallPush: (...a: unknown[]) => sendCallPush(...a),
+}));
+
 // The broadcast must be scheduled via next/server `after()` (guaranteed
 // post-response work), NOT a bare `void` — a detached fetch is not guaranteed to
 // run before the serverless function freezes. The spy runs its callback so the
@@ -23,7 +28,8 @@ vi.mock("next/server", async (importOriginal) => {
   return { ...actual, after };
 });
 
-let propertyRow: { id: string; operator_id: string; active: boolean } | null = null;
+let propertyRow: { id: string; operator_id: string; active: boolean; name: string } | null =
+  null;
 let existingActiveRow: Record<string, unknown> | null = null;
 let insertResult: { data: { id: string } | null; error: { code: string } | null } = {
   data: { id: "call-1" },
@@ -78,8 +84,9 @@ function req(token?: string) {
 beforeEach(() => {
   insertSpy.mockClear();
   broadcastCallsChanged.mockClear();
+  sendCallPush.mockClear();
   after.mockClear();
-  propertyRow = { id: "prop-1", operator_id: "op-1", active: true };
+  propertyRow = { id: "prop-1", operator_id: "op-1", active: true, name: "Hotel One" };
   existingActiveRow = null;
   insertResult = { data: { id: "call-1" }, error: null };
 });
@@ -108,7 +115,7 @@ describe("POST /api/kiosk/call-started", () => {
   });
 
   it("404 when the property is inactive", async () => {
-    propertyRow = { id: "prop-1", operator_id: "op-1", active: false };
+    propertyRow = { id: "prop-1", operator_id: "op-1", active: false, name: "Hotel One" };
     const token = signKioskToken("prop-1", SECRET);
     expect((await POST(req(token))).status).toBe(404);
   });
@@ -138,5 +145,22 @@ describe("POST /api/kiosk/call-started", () => {
     expect(res.status).toBe(200);
     expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends an incoming-call VIDEO push with the inserted callId on success", async () => {
+    const token = signKioskToken("prop-1", SECRET);
+    const res = await POST(req(token));
+    expect(res.status).toBe(200);
+    expect(sendCallPush).toHaveBeenCalledTimes(1);
+    expect(sendCallPush).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        type: "incoming-call",
+        callId: "call-1",
+        channel: "VIDEO",
+        propertyId: "prop-1",
+        propertyName: "Hotel One",
+      },
+    );
   });
 });
