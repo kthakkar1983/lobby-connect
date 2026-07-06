@@ -15,7 +15,6 @@ import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
 import { joinLiveKitCall, type LiveKitCallSession, type PortalVideoHandle } from "@/lib/video/livekit-session";
 import { recoverAudioOnNextGesture } from "@/lib/video/audio-unlock";
-import { reportGuestAudioDiagnostics } from "@/lib/video/diag-audio";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
@@ -36,15 +35,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   // blocked — surfaces a deterministic "Tap to hear guest" control rather than
   // relying on a stray pointer/keydown the listening agent may never make.
   const [audioBlocked, setAudioBlocked] = useState(false);
-  const autoplayFailedRef = useRef(false);
-  // TEMP on-screen diagnostic (enable with ?diag=1 on the portal URL). Shows the
-  // live energy of the GUEST's received audio so we can tell — with no DevTools
-  // and no Sentry — whether the guest audio is reaching the agent at all. Its mere
-  // presence also confirms the fresh build is loaded (busts the cache doubt).
-  const [diagOn] = useState(
-    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("diag"),
-  );
-  const [diagEnergy, setDiagEnergy] = useState(-1);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
@@ -154,7 +144,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
         // no customer-facing prompt. A breadcrumb confirms cause/recovery in prod.
         AgoraRTC.onAutoplayFailed = () => {
           audioRecoveryRef.current = () => void remoteAudioRef.current?.play();
-          autoplayFailedRef.current = true;
           Sentry.addBreadcrumb({
             category: "agora",
             level: "warning",
@@ -178,13 +167,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           if (mediaType === "audio") {
             remoteAudioRef.current = user.audioTrack ?? null;
             user.audioTrack?.play();
-            // TEMPORARY DIAGNOSTIC — report whether the guest audio actually
-            // produces energy at the agent (output/device issue vs never-arrived).
-            reportGuestAudioDiagnostics(
-              user.audioTrack,
-              () => autoplayFailedRef.current,
-              () => cancelled,
-            );
             setGuestAudioTrack(user.audioTrack?.getMediaStreamTrack() ?? null);
           }
         });
@@ -248,16 +230,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
-
-  // TEMP: poll the guest audio energy for the on-screen ?diag meter.
-  useEffect(() => {
-    if (!diagOn) return;
-    const id = setInterval(() => {
-      const lvl = remoteAudioRef.current?.getVolumeLevel?.();
-      setDiagEnergy(typeof lvl === "number" ? lvl : -1);
-    }, 300);
-    return () => clearInterval(id);
-  }, [diagOn]);
 
   async function saveNotes(): Promise<boolean> {
     if (!roomNumberRef.current && !notesRef.current) return true; // nothing to save
@@ -328,15 +300,6 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           On video · {propertyName}
         </span>
       </div>
-
-      {diagOn && (
-        <div className="border-b border-attention/60 bg-attention/15 px-4 py-2 text-center font-mono text-sm font-semibold text-attention-text">
-          DIAG · guest audio level:{" "}
-          {diagEnergy < 0 ? "— (no guest track yet)" : diagEnergy.toFixed(3)}
-          {diagEnergy >= 0 ? (diagEnergy > 0 ? "  ✓ ARRIVING" : "  ✗ SILENT") : ""}
-          {audioBlocked ? "  · ⚠ AUTOPLAY BLOCKED" : ""}
-        </div>
-      )}
 
       {audioBlocked && (
         <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
