@@ -5,7 +5,9 @@ export type VideoProvider = "agora" | "livekit";
 /**
  * The active video provider (Phase 4 swap seam, spec D8). Read at call time so
  * vi.stubEnv works in tests. Unset/unknown -> "agora": merging the swap is
- * prod-inert until the env is deliberately flipped.
+ * prod-inert until the env is deliberately flipped. The comparison is exact —
+ * a typo'd or whitespace-padded value falls back to agora by design (a broken
+ * env can never dark-launch livekit).
  */
 export function getVideoProvider(): VideoProvider {
   return process.env.VIDEO_PROVIDER === "livekit" ? "livekit" : "agora";

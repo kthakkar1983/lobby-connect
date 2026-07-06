@@ -12,9 +12,10 @@ export async function register() {
 
 /**
  * Fail-loud config check at server boot. The call-time readers
- * (getTwilioConfig / getAgoraCredentials / getKioskConfigSecret) stay
- * untouched for testability — here we just invoke them once so a missing or
- * invalid var surfaces a clear console.error naming it, instead of only
+ * (getTwilioConfig / the ACTIVE video provider's reader — getLiveKitConfig or
+ * getAgoraCredentials per VIDEO_PROVIDER, spec D15 / getKioskConfigSecret)
+ * stay untouched for testability — here we just invoke them once so a missing
+ * or invalid var surfaces a clear console.error naming it, instead of only
  * blowing up on the first call (mid voice/video flow). Best-effort: a thrown
  * reader must not crash boot, so each check is isolated.
  */
