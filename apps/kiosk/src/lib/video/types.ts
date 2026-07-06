@@ -5,9 +5,14 @@
  * Agora `track.play(el)` vs LiveKit `track.attach()`.
  */
 export interface VideoTrackHandle {
-  /** Render this track inside the given container element. */
+  /**
+   * Render this track inside the given container element. MAY be called again
+   * on a new container (screens re-attach across remounts, e.g. Ringing ->
+   * Connected): each call appends a fresh element; prior elements leave the
+   * page with their unmounted containers.
+   */
   attach(container: HTMLElement): void;
-  /** Remove any elements this handle attached. */
+  /** Remove EVERY element this handle attached. Idempotent. */
   detach(): void;
   /** Raw W3C track (mute/camera toggles flip `.enabled`), null if unavailable. */
   mediaStreamTrack(): MediaStreamTrack | null;

@@ -3,6 +3,8 @@ import type { RemoteTrack } from "livekit-client";
 import { recoverAudioOnNextGesture } from "../audio-unlock";
 import type { JoinCallbacks, KioskVideoSession, VideoTrackHandle } from "./types";
 
+// Internal: the structural surface of LiveKit's Track that the handle needs
+// (matched by RemoteTrack + LocalTrack) — not a real livekit-client type.
 interface AttachableTrack {
   attach(): HTMLMediaElement;
   detach(): HTMLMediaElement[];
@@ -50,6 +52,8 @@ export async function joinLiveKit(
 
   const room = new Room();
   let agentJoinedFired = false;
+  // Agent-audio playback elements (never in the DOM — audio needs no layout);
+  // kept ONLY so leave() can stop playback + drop srcObject refs.
   const remoteAudioEls: HTMLMediaElement[] = [];
 
   room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
