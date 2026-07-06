@@ -4,10 +4,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { KioskConfig } from "@/types";
 import type { KioskVideoSession } from "@/lib/video/types";
 
-// The provider ternary under test lives in onStartCall (apps/kiosk/src/App.tsx):
-//   tok.provider === "livekit" ? joinLiveKit(...) : joinAgora(...)
-// This is the crux of the Phase-4 provider seam but had no direct test — nothing
-// proved an agora token routes to joinAgora (and NOT joinLiveKit) and vice versa.
+// Covers onStartCall (apps/kiosk/src/App.tsx) routing a video-token response
+// into the LiveKit join:
+//   const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
+// VideoTokenResult's `provider` field is now a single-member "livekit" literal
+// (the wire discriminator, no longer a narrowing union) — there is no other
+// provider value to route to the setup-failure path.
 
 const config: KioskConfig = {
   propertyId: "p1",
@@ -33,10 +35,9 @@ const api = vi.hoisted(() => ({
   endCall: vi.fn(),
   sendHeartbeat: vi.fn(),
 }));
-const video = vi.hoisted(() => ({ joinAgora: vi.fn(), joinLiveKit: vi.fn() }));
+const video = vi.hoisted(() => ({ joinLiveKit: vi.fn() }));
 
 vi.mock("@/lib/portal-api", () => api);
-vi.mock("@/lib/video/agora", () => ({ joinAgora: video.joinAgora }));
 vi.mock("@/lib/video/livekit", () => ({ joinLiveKit: video.joinLiveKit }));
 vi.mock("@/lib/audio-unlock", () => ({
   unlockAudioPlayback: vi.fn(),
@@ -64,8 +65,8 @@ vi.mock("@/screens/Apology", () => ({ Apology: () => <div>apology</div> }));
 import { App } from "@/App";
 
 // A session shape App can consume post-join (localVideo.attach/detach/mediaStreamTrack,
-// localAudioTrack.enabled, leave()) — same minimal shape regardless of provider, since
-// App only reads the provider-agnostic KioskVideoSession, never provider internals.
+// localAudioTrack.enabled, leave()) — same minimal shape the provider-agnostic
+// KioskVideoSession type promises; App never reads provider internals.
 function fakeSession(): KioskVideoSession {
   return {
     localVideo: {
@@ -80,7 +81,7 @@ function fakeSession(): KioskVideoSession {
   };
 }
 
-describe("App onStartCall — provider ternary routes to the matching join fn", () => {
+describe("App onStartCall — routes the video token to the LiveKit join", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.fetchKioskConfig.mockResolvedValue(config);
@@ -89,34 +90,7 @@ describe("App onStartCall — provider ternary routes to the matching join fn", 
     api.sendHeartbeat.mockResolvedValue(undefined);
   });
 
-  it('provider "agora" routes to joinAgora with the token fields (and never joinLiveKit)', async () => {
-    api.fetchVideoToken.mockResolvedValue({
-      provider: "agora",
-      appId: "app-1",
-      channelName: "ch-1",
-      token: "tok-1",
-      uid: 123,
-    });
-    video.joinAgora.mockResolvedValue(fakeSession());
-
-    render(<App />);
-
-    const tap = await screen.findByRole("button", { name: /tap to connect/i });
-    tap.click();
-
-    await waitFor(() => {
-      expect(video.joinAgora).toHaveBeenCalledTimes(1);
-    });
-    expect(video.joinAgora.mock.calls[0]![0]).toMatchObject({
-      appId: "app-1",
-      channel: "ch-1",
-      token: "tok-1",
-      uid: 123,
-    });
-    expect(video.joinLiveKit).not.toHaveBeenCalled();
-  });
-
-  it('provider "livekit" routes to joinLiveKit with url+token (and never joinAgora)', async () => {
+  it('provider "livekit" routes to joinLiveKit with url+token', async () => {
     api.fetchVideoToken.mockResolvedValue({
       provider: "livekit",
       url: "wss://lk",
@@ -137,6 +111,5 @@ describe("App onStartCall — provider ternary routes to the matching join fn", 
       url: "wss://lk",
       token: "jwt-1",
     });
-    expect(video.joinAgora).not.toHaveBeenCalled();
   });
 });

@@ -84,7 +84,7 @@ describe("createCaptionStream", () => {
 
     // Requests a 16 kHz context so the browser resamples once at the source —
     // speech STT gains nothing above 16 kHz and the native 48 kHz tripled the
-    // upstream bandwidth competing with the live Agora/Twilio media.
+    // upstream bandwidth competing with the live LiveKit/Twilio media.
     expect(audioCtxArgs[0]).toEqual({ sampleRate: 16000 });
     expect(sm.client.start).toHaveBeenCalledWith(
       "jwt",

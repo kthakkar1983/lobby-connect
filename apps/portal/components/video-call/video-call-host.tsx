@@ -10,7 +10,7 @@ import {
 } from "@/lib/hooks/use-incoming-video-calls";
 import { unlockAudioPlayback } from "@/lib/video/audio-unlock";
 
-// Agora is a client-only SDK (touches window/WebRTC on import), so load the
+// LiveKit is a client-only SDK (touches window/WebRTC on import), so load the
 // call surface lazily and skip SSR entirely.
 const VideoCall = dynamic(() => import("./video-call").then((m) => m.VideoCall), {
   ssr: false,

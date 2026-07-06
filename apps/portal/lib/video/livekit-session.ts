@@ -25,7 +25,7 @@ export interface LiveKitCallSession {
  */
 export interface LiveKitCallCallbacks {
   onRemoteVideo(handle: PortalVideoHandle): void;
-  /** Raw W3C REMOTE AUDIO track for the captions tap (same object family as Agora's getMediaStreamTrack()). */
+  /** Raw W3C REMOTE AUDIO track for the captions tap (a standard MediaStreamTrack). */
   onRemoteAudioTrack(track: MediaStreamTrack): void;
   /** Fired when the browser blocks remote-audio autoplay; recover() = room.startAudio(). */
   onAudioBlocked(recover: () => void): void;
@@ -56,11 +56,10 @@ function handleFor(track: AttachableTrack, opts?: { mirror?: boolean }): PortalV
 }
 
 /**
- * The portal's LiveKit leg (Phase 4, spec §4.2) — the provider sibling of the
- * Agora code inside video-call.tsx. Behavior parity requirements it owns:
- * mic-first publish; INDEPENDENT device acquisition (a busy webcam — e.g.
- * NotReadableError — must NOT abandon the call: connect audio-only and report
- * mediaWarning, mirroring the Agora branch's resilient-acquire block).
+ * The portal's LiveKit leg (Phase 4, spec §4.2), consumed by video-call.tsx.
+ * Behavior requirements it owns: mic-first publish; INDEPENDENT device
+ * acquisition (a busy webcam — e.g. NotReadableError — must NOT abandon the
+ * call: connect audio-only and report mediaWarning).
  */
 export async function joinLiveKitCall(
   opts: { url: string; token: string } & LiveKitCallCallbacks,
@@ -87,8 +86,8 @@ export async function joinLiveKitCall(
 
   await room.connect(opts.url, opts.token);
 
-  // Acquire mic + camera INDEPENDENTLY and resiliently (parity with the Agora
-  // branch): join with whatever media is available so the guest always connects.
+  // Acquire mic + camera INDEPENDENTLY and resiliently: join with whatever
+  // media is available so the guest always connects.
   let audio: Awaited<ReturnType<typeof createLocalAudioTrack>> | null = null;
   let video: Awaited<ReturnType<typeof createLocalVideoTrack>> | null = null;
   try {

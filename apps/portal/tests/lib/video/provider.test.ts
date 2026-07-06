@@ -1,23 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { getVideoProvider, getLiveKitConfig } from "@/lib/video/provider";
+import { getLiveKitConfig } from "@/lib/video/provider";
 
 beforeEach(() => {
   vi.unstubAllEnvs();
-});
-
-describe("getVideoProvider", () => {
-  it("defaults to agora when unset (prod-inert merge, D8)", () => {
-    vi.stubEnv("VIDEO_PROVIDER", "");
-    expect(getVideoProvider()).toBe("agora");
-  });
-  it("returns livekit when set", () => {
-    vi.stubEnv("VIDEO_PROVIDER", "livekit");
-    expect(getVideoProvider()).toBe("livekit");
-  });
-  it("treats unknown values as agora (typo cannot dark-launch livekit)", () => {
-    vi.stubEnv("VIDEO_PROVIDER", "liveKit");
-    expect(getVideoProvider()).toBe("agora");
-  });
 });
 
 describe("getLiveKitConfig", () => {

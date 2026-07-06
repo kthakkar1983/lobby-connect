@@ -14,9 +14,8 @@ interface AttachableTrack {
 /**
  * Wrap a LiveKit track in the provider-agnostic handle (spec D13). attach()
  * lets the SDK create the element (it sets playsInline/autoplay itself, incl.
- * the Safari quirk), styles it to fill the container — visual parity with
- * Agora's `track.play(container)` — and appends it. `mirror` flips the LOCAL
- * self-view horizontally, matching Agora's default local mirroring.
+ * the Safari quirk), styles it to fill the container, and appends it. `mirror`
+ * flips the LOCAL self-view horizontally, matching a front-camera selfie view.
  */
 function liveKitHandle(track: AttachableTrack, opts?: { mirror?: boolean }): VideoTrackHandle {
   return {
@@ -36,13 +35,14 @@ function liveKitHandle(track: AttachableTrack, opts?: { mirror?: boolean }): Vid
 }
 
 /**
- * LiveKit sibling of joinChannel (src/lib/agora.ts) — SAME callback contract,
- * chosen by the /api/video/token provider field. Dynamic-imports the SDK
- * (bundle parity with the Agora path). Connection events are translated into
- * the kiosk's existing vocabulary so interpretConnectionState + App.tsx stay
- * untouched: Reconnecting -> RECONNECTING, Reconnected -> CONNECTED,
- * Disconnected(CLIENT_INITIATED, i.e. our own leave()) -> "LEAVE" (inert, like
- * Agora's LEAVE reason); any other disconnect reason is terminal.
+ * The kiosk's video-provider adapter — implements the JoinCallbacks contract
+ * (see lib/video/types.ts), chosen by the /api/video/token provider field.
+ * Dynamic-imports the SDK so it's only ever pulled into the bundle when a call
+ * actually starts. Connection events are translated into the kiosk's own
+ * vocabulary so interpretConnectionState + App.tsx stay provider-agnostic:
+ * Reconnecting -> RECONNECTING, Reconnected -> CONNECTED, Disconnected
+ * (CLIENT_INITIATED, i.e. our own leave()) -> "LEAVE" (inert — a normal
+ * hang-up, already handled); any other disconnect reason is terminal.
  */
 export async function joinLiveKit(
   opts: { url: string; token: string } & JoinCallbacks,
@@ -59,7 +59,7 @@ export async function joinLiveKit(
   room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
     if (track.kind === Track.Kind.Video) {
       opts.onRemoteVideo(liveKitHandle(track as unknown as AttachableTrack));
-      // Fire "agent present" once, on video — parity with the Agora impl.
+      // Fire "agent present" once, on video — not on each subscribed track.
       if (!agentJoinedFired) {
         agentJoinedFired = true;
         opts.onAgentJoined();
@@ -92,10 +92,11 @@ export async function joinLiveKit(
 
   await room.connect(opts.url, opts.token);
 
-  // Mic FIRST, camera second — same reason as the Agora impl: the camera's cold
-  // warm-up (seconds, plus a permission prompt on a fresh device) must not gate
-  // the guest's voice. A camera failure throws out of joinLiveKit -> App's catch
-  // -> apology (the kiosk REQUIRES a camera; it is the guest's face).
+  // Mic FIRST, camera second: the camera's cold warm-up (seconds, plus a
+  // permission prompt on a fresh device) must not gate the guest's voice, so
+  // publish audio the instant it's ready and only then acquire video. A camera
+  // failure throws out of joinLiveKit -> App's catch -> apology (the kiosk
+  // REQUIRES a camera; it is the guest's face).
   const localAudio = await createLocalAudioTrack();
   await room.localParticipant.publishTrack(localAudio);
   const localVideo = await createLocalVideoTrack();

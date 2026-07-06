@@ -1,7 +1,8 @@
 /**
- * Maps an Agora `connection-state-change` event to what the kiosk UI should do.
+ * Maps a connection-state-change event (translated into this vocabulary by the
+ * LiveKit adapter, see lib/video/livekit.ts) to what the kiosk UI should do.
  *
- * The kiosk has no recovery path of its own once the channel drops — without
+ * The kiosk has no recovery path of its own once the room drops — without
  * this, a mid-call network loss leaves the Connected screen frozen on the last
  * frame forever (the SDK retries silently, the app shows nothing). We surface a
  * "Reconnecting…" overlay while the SDK retries, and fall through to the apology

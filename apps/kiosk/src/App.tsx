@@ -4,7 +4,6 @@ import { RING_WINDOW_MS, MAX_CALL_DURATION_MS } from "@lc/shared";
 import * as Sentry from "@sentry/react";
 import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat } from "./lib/portal-api";
-import { joinAgora } from "./lib/video/agora";
 import { joinLiveKit } from "./lib/video/livekit";
 import type { KioskVideoSession, VideoTrackHandle } from "./lib/video/types";
 import { unlockAudioPlayback } from "./lib/audio-unlock";
@@ -33,7 +32,7 @@ export function App() {
   const callIdRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Cost backstop: caps a CONNECTED call's duration (armed on connect, cleared on
-  // teardown) so an abandoned call can't hold the Agora channel + billing open.
+  // teardown) so an abandoned call can't hold the video room open.
   const maxCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every teardown to abort an in-flight call setup (see onStartCall).
   const callGenRef = useRef(0);
@@ -52,7 +51,7 @@ export function App() {
   const teardown = useCallback(async () => {
     // Invalidate any in-flight call setup: if the guest cancels during the async
     // startCall/join (many seconds on a cold first call), the setup must NOT go on
-    // to join Agora + arm the no-answer timer behind their back, which would leave
+    // to join the room + arm the no-answer timer behind their back, which would leave
     // an uncancellable call ringing for the full window.
     callGenRef.current += 1;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -80,6 +79,7 @@ export function App() {
       // Cancelled during the (cold-slow) startCall? Close the row we just created.
       if (aborted()) { void endCall(callId, "cancelled"); return; }
       callIdRef.current = callId;
+      // Legacy wire param — the token route still validates uid; LiveKit ignores it.
       const uid = Math.floor(Math.random() * 1_000_000) + 1;
       const tok = await fetchVideoToken(channelName, uid);
       if (aborted()) { void endCall(callId, "cancelled"); return; }
@@ -94,7 +94,7 @@ export function App() {
           }
           dispatch({ type: "AGENT_JOINED" });
           // Arm the max-duration cost cap. If the guest walks away mid-call, this
-          // ends it (leave Agora + close the row) instead of letting the channel
+          // ends it (leave the room + close the row) instead of letting the room
           // bill on to the 1h token expiry. The guard keeps a late fire inert.
           maxCallTimeoutRef.current = setTimeout(() => {
             if (!shouldEndForMaxDuration(screenRef.current)) return;
@@ -126,10 +126,7 @@ export function App() {
           }
         },
       };
-      const session =
-        tok.provider === "livekit"
-          ? await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks })
-          : await joinAgora({ appId: tok.appId, channel: tok.channelName, token: tok.token, uid: tok.uid, ...callbacks });
+      const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
       // Cancelled while joining? Leave the channel we just joined and close the
       // call instead of committing to it behind the guest's back.
       if (aborted()) {
@@ -153,7 +150,7 @@ export function App() {
     } catch {
       if (aborted()) return; // teardown already ran (cancel); don't override with apology
       // Close the row we already created (callIdRef is set once startCall resolved).
-      // Without this, a post-create setup failure (e.g. Agora token 500) leaves a
+      // Without this, a post-create setup failure (e.g. video token 500) leaves a
       // live, answerable RINGING row under the apology screen; answering it sticks
       // the call IN_PROGRESS and 0016-blocks the property for up to 30 min.
       const id = callIdRef.current;
@@ -164,7 +161,7 @@ export function App() {
   }, [teardown]);
 
   const onEnd = useCallback(async () => {
-    // End locally first — leave Agora + return home immediately — then notify the
+    // End locally first — leave the room + return home immediately — then notify the
     // server in the background. The server round-trip must never gate the button:
     // a slow/cold call-ended route was leaving End apparently unresponsive.
     const id = callIdRef.current;
@@ -228,7 +225,7 @@ export function App() {
   );
 }
 
-/** Shown over the live call while the Agora SDK retries a dropped connection. */
+/** Shown over the live call while the video SDK retries a dropped connection. */
 function ReconnectingOverlay() {
   return (
     <div

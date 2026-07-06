@@ -32,10 +32,9 @@ const api = vi.hoisted(() => ({
   endCall: vi.fn(),
   sendHeartbeat: vi.fn(),
 }));
-const video = vi.hoisted(() => ({ joinAgora: vi.fn(), joinLiveKit: vi.fn() }));
+const video = vi.hoisted(() => ({ joinLiveKit: vi.fn() }));
 
 vi.mock("@/lib/portal-api", () => api);
-vi.mock("@/lib/video/agora", () => ({ joinAgora: video.joinAgora }));
 vi.mock("@/lib/video/livekit", () => ({ joinLiveKit: video.joinLiveKit }));
 vi.mock("@/lib/audio-unlock", () => ({
   unlockAudioPlayback: vi.fn(),
@@ -85,8 +84,7 @@ describe("App onStartCall — setup-failure catch closes the created row", () =>
     await waitFor(() => {
       expect(api.endCall).toHaveBeenCalledWith("call-1", "failed");
     });
-    // The token fetch failed before either provider join could run.
-    expect(video.joinAgora).not.toHaveBeenCalled();
+    // The token fetch failed before the provider join could run.
     expect(video.joinLiveKit).not.toHaveBeenCalled();
   });
 });

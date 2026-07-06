@@ -1,7 +1,7 @@
 "use client";
 // Phase-3 call-surface context (spec D1): the Softphone and the video host
 // PUBLISH their incoming/active call state here; property cards, the call
-// tile, and duty controls CONSUME it. The Twilio Device / Agora machinery
+// tile, and duty controls CONSUME it. The Twilio Device / video-call machinery
 // stays inside its existing owners — this is state mirroring + dispatch,
 // never a second call engine.
 

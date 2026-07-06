@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import type { KioskConfig, CallStartResult, AgoraTokenResult } from "../src/kiosk-api.js";
+import type { KioskConfig, CallStartResult, VideoTokenResult } from "../src/kiosk-api.js";
 
 /**
  * Compile-time type-lock tests for kiosk↔portal wire DTOs.
@@ -47,25 +47,24 @@ describe("CallStartResult", () => {
   });
 });
 
-describe("AgoraTokenResult", () => {
-  it("accepts a valid AgoraTokenResult object (compile-time check)", () => {
-    const result: AgoraTokenResult = {
-      appId: "agora-app-id",
+describe("VideoTokenResult", () => {
+  it("accepts a valid VideoTokenResult object (compile-time check)", () => {
+    const result: VideoTokenResult = {
+      provider: "livekit",
+      url: "wss://livekit.lobby-connect.com",
       channelName: "call_abc123",
-      uid: 42,
-      token: "007eJxTokx...",
+      token: "eyJhbGciOi...",
     };
     void result;
   });
 
-  it("uid is a number (not string)", () => {
-    // Type-level assertion: assigning a string should fail typecheck.
-    // We confirm by constructing with the correct type.
-    const uid: AgoraTokenResult["uid"] = 0;
-    void uid;
+  it("provider is the single-member livekit literal (not a free string)", () => {
+    // Type-level assertion: assigning any other string should fail typecheck.
+    const provider: VideoTokenResult["provider"] = "livekit";
+    void provider;
 
-    // @ts-expect-error — uid must be a number, not a string
-    const _badUid: AgoraTokenResult["uid"] = "0";
-    void _badUid;
+    // @ts-expect-error — provider must be the "livekit" literal, not an arbitrary string
+    const _badProvider: VideoTokenResult["provider"] = "other-provider";
+    void _badProvider;
   });
 });

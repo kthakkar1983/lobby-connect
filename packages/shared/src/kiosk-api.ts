@@ -30,20 +30,15 @@ export interface CallStartResult {
   channelName: string;
 }
 
-/** Returned by GET /api/agora/token (both kiosk-token and session-token branches) */
-export interface AgoraTokenResult {
-  appId: string;
+/**
+ * Returned by GET /api/video/token. The `provider` literal is the wire
+ * discriminator: the SERVER decides the provider per call (today: always
+ * "livekit") so kiosk and portal can never disagree mid-call; a future
+ * second provider re-adds its variant here.
+ */
+export interface VideoTokenResult {
+  provider: "livekit";
+  url: string;
   channelName: string;
-  uid: number;
   token: string;
 }
-
-/**
- * Returned by GET /api/video/token (Phase 4 provider seam). The SERVER decides
- * the provider per call (VIDEO_PROVIDER env, portal-only) so kiosk and portal
- * can never disagree mid-call. The agora variant embeds AgoraTokenResult so the
- * existing Agora client code consumes it unchanged.
- */
-export type VideoTokenResult =
-  | ({ provider: "agora" } & AgoraTokenResult)
-  | { provider: "livekit"; url: string; channelName: string; token: string };

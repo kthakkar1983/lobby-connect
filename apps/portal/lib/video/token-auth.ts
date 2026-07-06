@@ -9,13 +9,12 @@ import { ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 export type VideoTokenRequester = { kind: "kiosk" } | { kind: "session"; userId: string };
 
 /**
- * Shared authorization for the video token routes (/api/agora/token and
- * /api/video/token): resolve the LIVE call by channel, then dual-auth — kiosk
- * config token (property-scoped) OR an AGENT/ADMIN session in the call's
- * operator (OWNER rejected — publisher tokens would let a read-only role join
- * a live guest call). Extracted VERBATIM from /api/agora/token in Phase 4;
- * behavior byte-identical (that route's tests are the guard). The requester
- * identity feeds the LiveKit branch's participant identity (spec D9).
+ * Shared authorization for the /api/video/token route: resolve the LIVE call by
+ * channel, then dual-auth — kiosk config token (property-scoped) OR an
+ * AGENT/ADMIN session in the call's operator (OWNER rejected — publisher tokens
+ * would let a read-only role join a live guest call). The video-token route's
+ * tests are the guard for this authorization. The requester identity feeds the
+ * LiveKit participant identity (spec D9).
  */
 export async function authorizeVideoTokenRequest(
   request: Request,

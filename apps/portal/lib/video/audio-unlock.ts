@@ -1,7 +1,7 @@
 // Keep the remote call audio audible without ever showing a customer-facing
 // "tap to hear" prompt.
 //
-// The problem: on a cold first call after idle, the Agora join chain (answer
+// The problem: on a cold first call after idle, the video join chain (answer
 // route → token route → SDK import → join → remote publish) runs for seconds
 // before the guest's audio `play()` is attempted. By then the start gesture's
 // autoplay permission can have lapsed and an idle AudioContext may be suspended,
@@ -10,7 +10,7 @@
 // Two-pronged, both invisible:
 //  1. unlockAudioPlayback() — called inside the gesture that already starts the
 //     call (kiosk "tap to connect" / agent "Accept") to keep output permitted.
-//  2. recoverAudioOnNextGesture() — if Agora still reports a block, re-play on
+//  2. recoverAudioOnNextGesture() — if the SDK still reports a block, re-play on
 //     the very next pointer/key interaction. No prompt, no UI.
 
 let ctx: AudioContext | null = null;

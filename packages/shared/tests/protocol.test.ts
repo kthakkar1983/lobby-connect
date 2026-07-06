@@ -10,7 +10,7 @@ import {
   MAX_CALL_DURATION_MS,
 } from "../src/protocol";
 
-const AGORA_TOKEN_TTL_MS = 3_600_000; // agora/token mints a 3600s token, no renewal
+const VIDEO_TOKEN_TTL_MS = 3_600_000; // video/token mints a 3600s join token, no renewal
 
 describe("protocol timing invariants", () => {
   it("reaper ringing cutoff outlasts the ring window", () => {
@@ -22,10 +22,10 @@ describe("protocol timing invariants", () => {
     expect(INCOMING_VIDEO_FALLBACK_POLL_MS).toBeGreaterThanOrEqual(30_000);
   });
 
-  it("max-call-duration cap ends a connected call BEFORE the Agora token TTL (the cost backstop)", () => {
+  it("max-call-duration cap ends a connected call BEFORE the video join token TTL (the cost backstop)", () => {
     // If the cap exceeded the 3600s token, a silent token-expiry disconnect — not
     // our cap — would be what ends an abandoned call, defeating the purpose.
-    expect(MAX_CALL_DURATION_MS).toBeLessThan(AGORA_TOKEN_TTL_MS);
+    expect(MAX_CALL_DURATION_MS).toBeLessThan(VIDEO_TOKEN_TTL_MS);
     expect(MAX_CALL_DURATION_MS).toBeGreaterThan(RING_WINDOW_MS); // never cut a still-ringing call short
   });
 

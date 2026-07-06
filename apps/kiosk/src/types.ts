@@ -1,1 +1,1 @@
-export type { KioskConfig, CallStartResult, AgoraTokenResult, VideoTokenResult } from "@lc/shared";
+export type { KioskConfig, CallStartResult, VideoTokenResult } from "@lc/shared";

@@ -1,8 +1,8 @@
 /**
  * Provider-agnostic video seam (Phase 4, spec D13). Screens and App consume
- * ONLY these shapes; the agora/livekit modules produce them. The handle
- * normalizes the one provider-typed thing screens used to touch:
- * Agora `track.play(el)` vs LiveKit `track.attach()`.
+ * ONLY these shapes; the livekit module produces them. The handle exists so a
+ * future second provider can be dropped in without screens/App touching a
+ * provider-typed track API directly (today: LiveKit `track.attach()`).
  */
 export interface VideoTrackHandle {
   /**
