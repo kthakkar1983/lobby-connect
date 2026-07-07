@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
-import { isLiveStatus } from "@/lib/voice/presence";
+import { isLiveShift, isLiveStatus } from "@/lib/voice/presence";
 import { PRESENCE_STALE_AFTER_MS, REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -93,4 +93,28 @@ export async function POST(request: Request): Promise<NextResponse> {
     .lt("last_seen_at", staleCutoffIso);
 
   return NextResponse.json({ onDuty: false });
+}
+
+/**
+ * Duty hydration (D13): the client inits onDuty + the Accepting toggle from the
+ * SERVER instead of assuming true on mount. Server clock does the staleness math
+ * (no client clock skew). AGENT/ADMIN only — this is a softphone endpoint.
+ */
+export async function GET(): Promise<NextResponse> {
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("profiles")
+    .select("status, last_seen_at")
+    .eq("id", actor.userId)
+    .maybeSingle();
+
+  const status = data?.status ?? "OFFLINE";
+  return NextResponse.json({
+    onDuty: isLiveShift(status, data?.last_seen_at ?? null, Date.now()),
+    accepting: status !== "AWAY",
+  });
 }

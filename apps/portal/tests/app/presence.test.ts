@@ -30,6 +30,12 @@ function profilesUpdate(v: unknown) {
 let videoCallRows: unknown[] = [];
 // Spy to capture the .gte("answered_at", ...) call added by the S3 fix.
 const gteSpy = vi.fn();
+// D13 GET hydration: the duty-read row served when `select` is NOT the
+// requireApiActor actor-columns query (matched on `cols.includes("role")`).
+let dutyRow: { status: string; last_seen_at: string | null } | null = {
+  status: "AVAILABLE",
+  last_seen_at: new Date().toISOString(),
+};
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -44,12 +50,14 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       if (table === "profiles") {
         return {
-          select: () => ({
+          select: (cols: string) => ({
             eq: () => ({
               maybeSingle: () =>
-                Promise.resolve({
-                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
-                }),
+                Promise.resolve(
+                  cols.includes("role")
+                    ? { data: { id: "u1", operator_id: "op-1", role: "AGENT" } }
+                    : { data: dutyRow },
+                ),
             }),
           }),
           update: profilesUpdate,
@@ -60,7 +68,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-import { POST } from "@/app/api/presence/route";
+import { POST, GET } from "@/app/api/presence/route";
 
 function req(body: unknown) {
   return new Request("http://localhost:3000/api/presence", {
@@ -78,6 +86,7 @@ beforeEach(() => {
   updateFilters = [];
   refreshedRows = [{ id: "u1" }];
   refreshError = null;
+  dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
 });
 
 describe("POST /api/presence", () => {
@@ -223,5 +232,43 @@ describe("D13 duty gate (spec §3.4)", () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledTimes(1); // no second (lapse-persist) update
+  });
+});
+
+describe("GET /api/presence (D13 hydration)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("401 when unauthenticated", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    expect((await GET()).status).toBe(401);
+  });
+
+  it("fresh AVAILABLE → on duty, accepting", async () => {
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: true });
+  });
+
+  it("fresh AWAY → on duty, not accepting", async () => {
+    dutyRow = { status: "AWAY", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: false });
+  });
+
+  it("explicit OFFLINE → off duty (accepting defaults true)", async () => {
+    dutyRow = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("lapsed shift (stale AVAILABLE) → off duty", async () => {
+    dutyRow = {
+      status: "AVAILABLE",
+      last_seen_at: new Date(Date.now() - 120_000).toISOString(),
+    };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("missing row → off duty, accepting true", async () => {
+    dutyRow = null;
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
   });
 });
