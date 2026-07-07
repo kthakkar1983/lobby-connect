@@ -15,9 +15,8 @@
 #   $rustdesk_cfg — the exported server config string: PM entry "RustDesk exported server
 #                   config" (produced once via Settings → Network → Export Server Config
 #                   on a configured client — Phase-2 runsheet H3).
-#   $rustdesk_pw  — per-PC unattended password. Generate fresh per property; record in
-#                   the PM as "RustDesk unattended — <property>" (v1; Phase 3 moves
-#                   storage to the brokered property_remote_access table).
+#   $rustdesk_pw  — per-PC unattended password. Generate fresh per property; enter it
+#                   into the property's Remote-access admin card (PM keeps a backup copy).
 #
 # Manual fallback (if --config is ever flaky): RustDesk → Settings → Network → unlock →
 #   ID server:    relay.lobby-connect.com
@@ -63,6 +62,6 @@ Write-Output "Applying server config + unattended password..."
 $rustdesk_id = (.\rustdesk.exe --get-id | Out-String).Trim()
 Write-Output ""
 Write-Output "=== Provisioned ==="
-Write-Output "Peer ID: $rustdesk_id   <- record this (Phase 3: property_remote_access.peer_id)"
-Write-Output "Unattended password: in your PM entry for this property"
+Write-Output "Peer ID: $rustdesk_id   <- enter this into the property's Remote-access admin card"
+Write-Output "Unattended password: enter into the same Remote-access admin card (PM keeps a backup copy)"
 Write-Output "Verify in the RustDesk UI: Ready (green) + our server under Settings -> Network."

@@ -1,7 +1,7 @@
 "use client";
 // Phase-3 property card (spec §3.1): one card per property, both dashboards.
 // Ringing expands in place; Answer claims through the EXISTING accept flows
-// via CallSurfaceProvider (D1/D2). Connect lands in Phase E (Task 19).
+// via CallSurfaceProvider (D1/D2). Connect is injected via connectSlot (Phase E).
 
 import { useEffect, useState } from "react";
 import { BellOff } from "lucide-react";
@@ -36,7 +36,7 @@ export function PropertyCard({
   property: PropertyCardData;
   /** Admins: gated by covering (D11). Agents: always true. */
   canAnswer?: boolean;
-  /** Phase E injects the Connect button here; null until then. */
+  /** The per-property Connect button (Phase E), supplied by PodCardGrid. */
   connectSlot?: React.ReactNode;
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerSlot?: React.ReactNode;

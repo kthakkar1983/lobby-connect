@@ -58,13 +58,13 @@ describe("VideoCall — livekit provider branch", () => {
   });
 
   it("joins via joinLiveKitCall with the token payload", async () => {
-    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" />);
+    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lkSession.joinLiveKitCall).toHaveBeenCalledTimes(1));
     expect(lkSession.joinLiveKitCall.mock.calls[0]![0]).toMatchObject({ url: "wss://lk", token: "jwt" });
   });
 
   it("guest-left finalizes via end-video", async () => {
-    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" />);
+    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lkSession.joined.opts).not.toBeNull());
     (lkSession.joined.opts!.onGuestLeft as () => void)();
     await waitFor(() =>
@@ -73,14 +73,14 @@ describe("VideoCall — livekit provider branch", () => {
   });
 
   it("mute button drives setMicMuted", async () => {
-    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" />);
+    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lkSession.joinLiveKitCall).toHaveBeenCalled());
     await userEvent.click(screen.getByRole("button", { name: /mute/i }));
     expect(lkSession.session.setMicMuted).toHaveBeenCalledWith(true);
   });
 
   it("remote audio track reaches the captions hook", async () => {
-    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" />);
+    render(<VideoCall callId="c1" onClose={() => {}} propertyName="Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lkSession.joined.opts).not.toBeNull());
     const track = { id: "guest" } as unknown as MediaStreamTrack;
     (lkSession.joined.opts!.onRemoteAudioTrack as (t: MediaStreamTrack) => void)(track);

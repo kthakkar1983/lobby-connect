@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Database } from "@lc/shared";
 import type { AuditDetails } from "@/lib/auth/audit";
 import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
@@ -15,6 +16,10 @@ import {
   validateKioskMessage,
 } from "@/lib/properties/validate";
 import { validateAgentId } from "@/lib/assignments/validate";
+import {
+  validatePeerId,
+  validateUnattendedPassword,
+} from "@/lib/remote-access/validate";
 import {
   planAssignmentChange,
   type CurrentAssignment,
@@ -519,5 +524,183 @@ export async function setCallAvailabilityAction(
   }
 
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+// Defense-in-depth beyond RLS (this table has zero client policies — see
+// migration 0020): confirms the property exists in the actor's operator and
+// returns its operator_id, so a tampered/foreign property id gets a clear
+// error instead of an opaque write failure.
+async function assertValidRemoteAccessProperty(
+  admin: ReturnType<typeof createAdminClient>,
+  operatorId: string,
+  propertyId: string,
+): Promise<{ operatorId: string } | { error: string }> {
+  const { data } = await admin
+    .from("properties")
+    .select("id, operator_id")
+    .eq("id", propertyId)
+    .maybeSingle();
+
+  if (!data || data.operator_id !== operatorId) {
+    return { error: "Property not found in your operator." };
+  }
+  return { operatorId: data.operator_id };
+}
+
+// RustDesk unattended-access credentials (spec §3.5/D14). `property_remote_access`
+// has NO client RLS policies at all — every access goes through this
+// service-role path. Never log the password itself; only peer_id.
+export async function upsertRemoteAccessAction(
+  propertyId: string,
+  peerId: string,
+  password: string,
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const peerError = validatePeerId(peerId);
+  if (peerError) return { ok: false, error: peerError };
+
+  const admin = createAdminClient();
+
+  const propertyCheck = await assertValidRemoteAccessProperty(
+    admin,
+    actor.operator_id,
+    propertyId,
+  );
+  if ("error" in propertyCheck) {
+    return { ok: false, error: propertyCheck.error };
+  }
+
+  const { data: existing } = await admin
+    .from("property_remote_access")
+    .select("id, peer_id, unattended_password")
+    .eq("property_id", propertyId)
+    .maybeSingle();
+
+  // Write-only model: an admin never sees the stored password, so a blank
+  // password on an EXISTING row means "keep the current one" (e.g. to fix a
+  // typo'd peer id). A blank password on a NEW row is still an error — fresh
+  // credentials require a password.
+  const keepPassword = password === "" && !!existing;
+  if (!keepPassword) {
+    const passwordError = validateUnattendedPassword(password);
+    if (passwordError) return { ok: false, error: passwordError };
+  }
+
+  const trimmedPeerId = peerId.trim();
+
+  if (keepPassword) {
+    // Peer-id-only update. NOT an upsert: unattended_password is NOT NULL, so
+    // an upsert's INSERT tuple would violate the constraint before ON CONFLICT
+    // resolves. A row is guaranteed to exist here (keepPassword implies it).
+    const { error } = await admin
+      .from("property_remote_access")
+      .update({ peer_id: trimmedPeerId })
+      .eq("property_id", propertyId);
+
+    if (error) {
+      return {
+        ok: false,
+        error: `Failed to save remote-access credentials: ${error.message}`,
+      };
+    }
+
+    await logAuditEvent({
+      actorUserId: actor.id,
+      action: AUDIT_ACTIONS.REMOTE_ACCESS_UPDATED,
+      entityType: "property",
+      entityId: propertyId,
+      details: { peer_id: trimmedPeerId },
+    });
+
+    revalidatePath(`/admin/properties/${propertyId}`);
+    return { ok: true };
+  }
+
+  const { error } = await admin.from("property_remote_access").upsert(
+    {
+      property_id: propertyId,
+      operator_id: propertyCheck.operatorId,
+      peer_id: trimmedPeerId,
+      unattended_password: password,
+    },
+    { onConflict: "property_id" },
+  );
+
+  if (error) {
+    return {
+      ok: false,
+      error: `Failed to save remote-access credentials: ${error.message}`,
+    };
+  }
+
+  const isRotation =
+    !!existing &&
+    existing.peer_id === trimmedPeerId &&
+    existing.unattended_password !== password;
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: isRotation
+      ? AUDIT_ACTIONS.REMOTE_ACCESS_ROTATED
+      : AUDIT_ACTIONS.REMOTE_ACCESS_UPDATED,
+    entityType: "property",
+    entityId: propertyId,
+    details: { peer_id: trimmedPeerId },
+  });
+
+  revalidatePath(`/admin/properties/${propertyId}`);
+  return { ok: true };
+}
+
+export async function deleteRemoteAccessAction(
+  propertyId: string,
+): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const admin = createAdminClient();
+
+  const propertyCheck = await assertValidRemoteAccessProperty(
+    admin,
+    actor.operator_id,
+    propertyId,
+  );
+  if ("error" in propertyCheck) {
+    return { ok: false, error: propertyCheck.error };
+  }
+
+  const { data: existing } = await admin
+    .from("property_remote_access")
+    .select("peer_id")
+    .eq("property_id", propertyId)
+    .maybeSingle();
+
+  if (!existing) {
+    // Idempotent: nothing to remove.
+    return { ok: true };
+  }
+
+  const { error } = await admin
+    .from("property_remote_access")
+    .delete()
+    .eq("property_id", propertyId);
+
+  if (error) {
+    return {
+      ok: false,
+      error: `Failed to remove remote-access credentials: ${error.message}`,
+    };
+  }
+
+  await logAuditEvent({
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.REMOTE_ACCESS_REMOVED,
+    entityType: "property",
+    entityId: propertyId,
+    details: { peer_id: existing.peer_id },
+  });
+
+  revalidatePath(`/admin/properties/${propertyId}`);
   return { ok: true };
 }
