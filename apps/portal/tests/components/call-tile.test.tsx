@@ -95,7 +95,9 @@ function Harness({
     useCallSurface();
   return (
     <div>
-      <button onClick={() => publishActive(active)}>publish active</button>
+      <button onClick={() => publishActive(active?.channel ?? "AUDIO", active)}>
+        publish active
+      </button>
       <button onClick={() => registerCallControls(controls)}>register controls</button>
       <button onClick={() => publishGuestVideoTrack(track ?? null)}>publish track</button>
       <button onClick={() => openTileForCall()}>open tile</button>

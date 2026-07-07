@@ -46,8 +46,9 @@ function Publisher() {
     <div>
       <button onClick={() => publishRings("video", [videoRing])}>publish rings</button>
       <button onClick={() => publishRings("video", [])}>clear rings</button>
-      <button onClick={() => publishActive(activeCall)}>publish active</button>
-      <button onClick={() => publishActive(null)}>clear active</button>
+      <button onClick={() => publishActive("VIDEO", activeCall)}>publish active</button>
+      <button onClick={() => publishActive("VIDEO", null)}>clear active</button>
+      <button onClick={() => publishActive("AUDIO", null)}>audio clears active</button>
       <button onClick={() => registerAcceptVideo((callId) => acceptVideoSpy(callId))}>
         register acceptVideo
       </button>
@@ -158,6 +159,36 @@ describe("CallSurfaceProvider", () => {
 
     await act(async () => {
       screen.getByText("clear active").click();
+    });
+    expect(screen.getByTestId("active-property").textContent).toBe("none");
+  });
+
+  it("a null from the OTHER channel cannot clear the slot (publisher ownership)", async () => {
+    // Root cause of the 2026-07-07 reopen-affordance bug: closing the tile
+    // focuses the tab, the softphone's error-phase reconnect self-heal flaps
+    // `phase`, its publisher re-runs and publishes an AUDIO null mid-VIDEO-call
+    // — which used to wipe the slot (and with it the reopen flag). A publisher
+    // may only clear what it owns.
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <Consumer />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish active").click();
+    });
+    expect(screen.getByTestId("active-property").textContent).toBe("The Grand Hotel");
+
+    await act(async () => {
+      screen.getByText("audio clears active").click(); // the softphone phase-flap publish
+    });
+    expect(screen.getByTestId("active-property").textContent).toBe("The Grand Hotel");
+
+    await act(async () => {
+      screen.getByText("clear active").click(); // the owner's null still clears
     });
     expect(screen.getByTestId("active-property").textContent).toBe("none");
   });

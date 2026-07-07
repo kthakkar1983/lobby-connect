@@ -62,7 +62,12 @@ export interface RegisteredCallControls {
 interface CallSurfaceValue extends CallSurfaceSnapshot {
   actions: CallSurfaceActions;
   publishRings: (source: "audio" | "video", rings: IncomingRing[]) => void;
-  publishActive: (active: ActiveCallInfo | null) => void;
+  /**
+   * Publish/clear the active call FOR ONE CHANNEL. A non-null always takes the
+   * slot; a null only clears the caller's own channel (an AUDIO publisher's
+   * phase flap must never wipe a live VIDEO call's state — see the dispatcher).
+   */
+  publishActive: (channel: "AUDIO" | "VIDEO", active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
   /**
@@ -105,28 +110,6 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   const [audioRings, setAudioRings] = useState<IncomingRing[]>([]);
   const [videoRings, setVideoRings] = useState<IncomingRing[]>([]);
   const [active, setActive] = useState<ActiveCallInfo | null>(null);
-  // ── TEMP tile-debug strip (2026-07-07 reopen-affordance diagnosis) ─────────
-  // DevTools can't be used on the real machine (opening it interferes with the
-  // DocPiP window — observed by Kumar), so the probes render ON-PAGE, Gate-3.0
-  // prototype style. Raw colors are deliberate throwaway chrome. REMOVE this
-  // whole block (state + tileLog + probe calls + the strip JSX) after diagnosis.
-  const [tileDebugLines, setTileDebugLines] = useState<string[]>([]);
-  const tileLog = useCallback((line: string) => {
-    console.log("[tile-debug]", line);
-    setTileDebugLines((prev) => [
-      ...prev.slice(-7),
-      `${new Date().toLocaleTimeString()} ${line}`,
-    ]);
-  }, []);
-  // TEMP: bridge so the two publisher components (softphone / video host) can
-  // write into the strip without a context-type change. Removed with the block.
-  useEffect(() => {
-    (window as unknown as { __tileLog?: (l: string) => void }).__tileLog = tileLog;
-    return () => {
-      delete (window as unknown as { __tileLog?: (l: string) => void }).__tileLog;
-    };
-  }, [tileLog]);
-  // ── end TEMP block header (probe call sites + strip JSX below) ─────────────
   // Handlers live in state, not refs: a ref write doesn't trigger a re-render,
   // so the `value` memo below would keep returning a stale `actions` snapshot
   // from before a late Softphone/video-host registration. State makes the
@@ -165,7 +148,24 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
   }, []);
-  const publishActive = useCallback((a: ActiveCallInfo | null) => setActive(a), []);
+  // Two components write this one slot — the audio softphone and the video
+  // host — and each may only CLEAR what it owns: publishing a call always takes
+  // the slot, but a null from channel X is ignored while channel Y's call holds
+  // it. Root cause this encodes (2026-07-07 staging): closing the tile focuses
+  // the tab → the softphone's error-phase reconnect self-heal flapped `phase` →
+  // its publisher re-ran and published an AUDIO null mid-VIDEO-call → the slot
+  // cleared → the auto-close effect wiped the just-set reopen flag. Functional
+  // update = atomic (no read-then-write race between the two publishers).
+  const publishActive = useCallback(
+    (channel: "AUDIO" | "VIDEO", a: ActiveCallInfo | null) => {
+      setActive((prev) => {
+        if (a) return a;
+        if (prev && prev.channel !== channel) return prev; // not yours to clear
+        return null;
+      });
+    },
+    [],
+  );
   const registerAcceptAudio = useCallback((fn: (() => void) | null) => {
     // Functional updates can't hold a plain function value (React would call
     // it as an updater), so wrap it in an updater that returns the function.
@@ -203,34 +203,24 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // — openCallTile() calls requestWindow() before returning, satisfying the
   // "must run inside the click, before any await" constraint.
   const openTileForCall = useCallback(() => {
-    if (tileHandleRef.current) {
-      tileLog("openTileForCall: no-op (already open)"); // TEMP tile-debug
-      return; // already open — no-op
-    }
-    tileLog("openTileForCall: requestWindow…"); // TEMP tile-debug
+    if (tileHandleRef.current) return; // already open — no-op
     openCallTile(
       (handle) => {
         tileHandleRef.current = handle;
         setTileMount(handle.mount);
         setTileClosedByUser(false);
-        tileLog("onReady — tile open"); // TEMP tile-debug
       },
       () => {
         const wasProgrammatic = programmaticCloseRef.current;
         programmaticCloseRef.current = false;
         tileHandleRef.current = null;
         setTileMount(null);
-        // TEMP tile-debug — `programmatic:true` = OUR closeTile (auto-close on
-        // active→null); `false` = Chrome/user closed it.
-        tileLog(
-          `onClosed programmatic:${String(wasProgrammatic)} active:${activeRef.current?.channel ?? "null"}`,
-        );
         if (!wasProgrammatic && activeRef.current) {
           setTileClosedByUser(true);
         }
       },
     );
-  }, [tileLog]);
+  }, []);
 
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
   // changes, drop any silenced key that is no longer ringing. A brand-new call
@@ -257,17 +247,11 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // left to reopen into. closeTile is []-stable, so this effect only reruns
   // on real `active` transitions, not on every render.
   useEffect(() => {
-    tileLog(`active → ${active ? active.channel : "null"}`); // TEMP tile-debug
     if (active === null) {
       closeTile();
       setTileClosedByUser(false);
     }
-  }, [active, closeTile, tileLog]);
-
-  // TEMP tile-debug: the value every overlay's "Reopen tile" gate reads.
-  useEffect(() => {
-    tileLog(`tileClosedByUser → ${String(tileClosedByUser)}`);
-  }, [tileClosedByUser, tileLog]);
+  }, [active, closeTile]);
 
   const value = useMemo<CallSurfaceValue>(
     () => ({
@@ -316,20 +300,6 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     <CallSurfaceContext.Provider value={value}>
       {children}
       {tileMount ? createPortal(<CallTile />, tileMount) : null}
-      {/* TEMP tile-debug strip — on-page probe output (raw colors deliberate,
-          throwaway diagnostic chrome). REMOVE with the rest of the TEMP block. */}
-      {tileDebugLines.length > 0 && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed bottom-2 left-2 z-[9999] max-w-sm rounded-md p-2 font-mono text-[10px] leading-tight"
-          style={{ background: "rgba(0,0,0,0.72)", color: "#fff" }}
-        >
-          <div style={{ opacity: 0.7 }}>tile-debug</div>
-          {tileDebugLines.map((l, i) => (
-            <div key={i}>{l}</div>
-          ))}
-        </div>
-      )}
     </CallSurfaceContext.Provider>
   );
 }

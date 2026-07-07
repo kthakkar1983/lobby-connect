@@ -110,8 +110,9 @@ function Publisher() {
       <button onClick={() => registerAcceptVideo((callId) => acceptVideoSpy(callId))}>
         register acceptVideo
       </button>
-      <button onClick={() => publishActive(activeCall)}>publish active</button>
-      <button onClick={() => publishActive(null)}>hang up</button>
+      <button onClick={() => publishActive("VIDEO", activeCall)}>publish active</button>
+      <button onClick={() => publishActive("VIDEO", null)}>hang up</button>
+      <button onClick={() => publishActive("AUDIO", null)}>audio phase-flap null</button>
     </div>
   );
 }
@@ -215,6 +216,51 @@ describe("call-tile-manager", () => {
     });
 
     expect(screen.getByTestId("tile-open").textContent).toBe("no");
+    expect(screen.getByTestId("tile-closed-by-user").textContent).toBe("yes");
+  });
+
+  it("an off-channel null publish can't wipe the reopen flag (the softphone phase-flap bug)", async () => {
+    // 2026-07-07 staging root cause: closing the tile focuses the tab → the
+    // softphone's error-phase reconnect self-heal flaps `phase` → its publisher
+    // publishes an AUDIO null while the VIDEO call is live → the slot cleared →
+    // the auto-close effect reset tileClosedByUser milliseconds after the
+    // user-close set it. Ownership in publishActive must prevent the wipe.
+    const { win, fireUserClose } = makeFakePip();
+    (window as unknown as { documentPictureInPicture: unknown }).documentPictureInPicture = {
+      requestWindow: vi.fn(() => Promise.resolve(win)),
+    };
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+        <TileProbe />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish active").click(); // VIDEO call live
+    });
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+    await act(async () => {
+      screen.getByRole("button", { name: "Answer" }).click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireUserClose(); // agent closes the tile mid-call
+    });
+    expect(screen.getByTestId("tile-closed-by-user").textContent).toBe("yes");
+
+    // The tab regains focus → the softphone's publisher fires an AUDIO null.
+    await act(async () => {
+      screen.getByText("audio phase-flap null").click();
+    });
+
+    // The VIDEO slot survives, so the reopen flag must too.
     expect(screen.getByTestId("tile-closed-by-user").textContent).toBe("yes");
   });
 
