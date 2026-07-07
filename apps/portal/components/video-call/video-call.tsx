@@ -54,6 +54,10 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   const registerCallControls = surface?.registerCallControls;
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
+  // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
+  useEffect(() => {
+    console.log("[tile-debug] VideoCall sees tileClosedByUser =", tileClosedByUser);
+  }, [tileClosedByUser]);
 
   const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
   // Gating the track (not just hiding the band) tears down the STT stream when

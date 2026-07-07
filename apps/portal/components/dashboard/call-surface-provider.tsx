@@ -187,12 +187,20 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
         tileHandleRef.current = handle;
         setTileMount(handle.mount);
         setTileClosedByUser(false);
+        // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
+        console.log("[tile-debug] onReady — tile open");
       },
       () => {
         const wasProgrammatic = programmaticCloseRef.current;
         programmaticCloseRef.current = false;
         tileHandleRef.current = null;
         setTileMount(null);
+        // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
+        console.log("[tile-debug] onClosed", {
+          wasProgrammatic,
+          hasActive: !!activeRef.current,
+          activeChannel: activeRef.current?.channel ?? null,
+        });
         if (!wasProgrammatic && activeRef.current) {
           setTileClosedByUser(true);
         }
@@ -225,6 +233,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // left to reopen into. closeTile is []-stable, so this effect only reruns
   // on real `active` transitions, not on every render.
   useEffect(() => {
+    // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
+    console.log("[tile-debug] active →", active ? active.channel : "null");
     if (active === null) {
       closeTile();
       setTileClosedByUser(false);
