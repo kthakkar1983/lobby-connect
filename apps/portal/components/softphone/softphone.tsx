@@ -7,6 +7,7 @@ import * as Sentry from "@sentry/nextjs";
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
 import { DutyControls } from "@/components/dashboard/duty-controls";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
+import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
@@ -29,12 +30,28 @@ const HEARTBEAT_MS = 20_000;
 // too tight to reliably refetch before the token lapses).
 const TOKEN_REFRESH_LEAD_MS = 30_000;
 
-async function postPresence(status: PresenceStatus): Promise<void> {
-  await fetch("/api/presence", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ status }),
-  }).catch(() => {});
+type BeatResult = "ok" | "off-duty" | "failed";
+
+// D13: a beat can come back "off-duty" (the server gated it — the shift ended
+// in another tab or lapsed); the caller flips local duty state to match. Only
+// an explicit `onDuty: false` counts — anything shapeless/non-JSON is ok/failed,
+// NEVER off-duty, so a proxy hiccup can't end a shift client-side (fail-open;
+// the server gate is the enforcement).
+async function postPresence(status: PresenceStatus): Promise<BeatResult> {
+  try {
+    const res = await fetch("/api/presence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.status === 200) {
+      const body = (await res.json().catch(() => null)) as { onDuty?: boolean } | null;
+      if (body?.onDuty === false) return "off-duty";
+    }
+    return res.ok ? "ok" : "failed";
+  } catch {
+    return "failed";
+  }
 }
 
 async function fetchVoiceToken(): Promise<string> {
@@ -89,13 +106,17 @@ export function Softphone({ role }: SoftphoneProps) {
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
-  // Duty state (spec D6): true = on shift. "End shift" flips it false, which
-  // both disarms the heartbeat (via onDutyRef, read inside the interval so the
-  // effect deps never change) and drops the fleet card out of "On duty". The ref
-  // mirror lets endShift stop the next beat BEFORE the re-render lands.
+  // D13 (spec §3.4): duty is SERVER-truth — status=OFFLINE ⇔ off duty. These
+  // inits are the FAIL-OPEN defaults only: hydration (below) corrects them from
+  // GET /api/presence, and the heartbeat gate makes a wrong guess harmless (a
+  // gated beat answers { onDuty:false } and we flip off). The ref mirror lets
+  // endShift stop the next beat BEFORE the re-render lands.
   const [onDuty, setOnDuty] = useState(true);
   const onDutyRef = useRef(true);
   onDutyRef.current = onDuty;
+  // Beats wait for hydration so the first one can't post the pre-hydration
+  // Accepting default over a real AWAY (spec §3.4 ordering rule).
+  const dutyHydratedRef = useRef(false);
 
   // Notes save is decoupled from call phase: a failure surfaces in a banner that
   // outlives the call so the typed text is never silently lost.
@@ -148,6 +169,66 @@ export function Softphone({ role }: SoftphoneProps) {
     return readyRef.current ? "AVAILABLE" : "AWAY";
   }, [phase]);
 
+  // Flip local duty off when the server gates a beat. Stable ([]).
+  const applyBeatResult = useCallback((result: BeatResult) => {
+    if (result === "off-duty") {
+      onDutyRef.current = false;
+      setOnDuty(false);
+    }
+  }, []);
+
+  // One beat: skipped until hydrated and while off duty; the gate's answer is
+  // applied either way. Same [intendedStatus] stability as the old inline beats.
+  const beat = useCallback(async () => {
+    if (!dutyHydratedRef.current || !onDutyRef.current) return;
+    applyBeatResult(await postPresence(intendedStatus()));
+  }, [intendedStatus, applyBeatResult]);
+  // Ref-mirror so one-shot effects (hydration) can fire a beat without
+  // depending on `beat`'s identity (it changes with phase — DEP-HYGIENE).
+  const beatRef = useRef(beat);
+  beatRef.current = beat;
+
+  // Shared hydration applier (mount hydration + off-duty resync): only literal
+  // booleans are applied — anything shapeless is fail-open (defaults stand).
+  // Stable ([]) — writes refs + setState only.
+  const applyDutyHydration = useCallback(
+    (body: { onDuty?: boolean; accepting?: boolean } | null) => {
+      if (typeof body?.onDuty === "boolean") {
+        onDutyRef.current = body.onDuty;
+        setOnDuty(body.onDuty);
+      }
+      if (typeof body?.accepting === "boolean") {
+        readyRef.current = body.accepting;
+        setReady(body.accepting);
+      }
+    },
+    [],
+  );
+
+  // D13 follow-up (2026-07-06 smoke finding): an OFF-duty tab beats nothing, so
+  // it would never learn the shift resumed from another tab's Go on duty. Resync
+  // by re-reading the hydration GET on the beat cadence (interval + focus) —
+  // READ-ONLY, so it can never resurrect a shift; the server gate stays the
+  // enforcement. Applies `accepting` BEFORE the follow-up beat so that beat
+  // can't post a stale default over a real AWAY. Self-gates: no-op while on
+  // duty or pre-hydration (mirror image of beat()).
+  const resyncDuty = useCallback(async () => {
+    if (!dutyHydratedRef.current || onDutyRef.current) return;
+    try {
+      const res = await fetch("/api/presence");
+      if (!res.ok) return; // fail-open: stay as-is, retry next tick
+      const body = (await res.json().catch(() => null)) as
+        | { onDuty?: boolean; accepting?: boolean }
+        | null;
+      applyDutyHydration(body);
+      // Shift is live again: stamp last_seen right away (mirrors hydration's
+      // immediate first beat) with the just-applied accepting state.
+      if (onDutyRef.current) void beatRef.current();
+    } catch {
+      /* next tick retries */
+    }
+  }, [applyDutyHydration]);
+
   // Beacon: report line phase to the LineStatusContext so the greeting widget
   // can reflect live status. The default context is a no-op, so this is safe
   // in layouts that don't mount a provider (admin layout).
@@ -172,6 +253,13 @@ export function Softphone({ role }: SoftphoneProps) {
   // below re-runs and stops our own ringtone element. With no provider it's
   // undefined, so nothing is ever silenced (the ring always plays).
   const silencedKeys = surface?.silencedKeys;
+  // Task 17: register this call's controls with the tile + surface the "Reopen
+  // tile" affordance. registerCallControls is []-stable (mirrors the pattern
+  // above); tileClosedByUser/openTileForCall are read as plain values/functions,
+  // never depended on inside a publisher-style effect.
+  const registerCallControls = surface?.registerCallControls;
+  const tileClosedByUser = surface?.tileClosedByUser ?? false;
+  const openTileForCall = surface?.openTileForCall;
   const ringtoneRef = useRef<Ringtone | null>(null);
   // The raw ring audio element, so "Go on duty" can prime the REAL element the
   // ring plays (not a throwaway) inside its own user gesture.
@@ -200,7 +288,12 @@ export function Softphone({ role }: SoftphoneProps) {
   // Publish active-call info while in-call.
   useEffect(() => {
     if (!publishActive) return;
+    // Channel-tagged (post-smoke fix): this AUDIO publisher re-runs on every
+    // phase change — incl. the error-phase reconnect self-heal firing on tab
+    // focus — so its null must never clear a live VIDEO call's slot. The
+    // provider enforces the ownership; the tag says who's asking.
     publishActive(
+      "AUDIO",
       phase === "in-call" && callIdRef.current
         ? {
             callId: callIdRef.current,
@@ -345,7 +438,11 @@ export function Softphone({ role }: SoftphoneProps) {
       });
 
       await device.register();
-      await postPresence("AVAILABLE");
+      // Registration stamp rides the duty gate (D13): beat() posts the real
+      // intendedStatus (not a hardcoded AVAILABLE, which used to overwrite an
+      // AWAY toggle) and no-ops while off duty or pre-hydration — the hydration
+      // effect fires the first beat itself.
+      await beatRef.current();
     } catch {
       if (mountedRef.current) setPhase("error");
     } finally {
@@ -386,24 +483,56 @@ export function Softphone({ role }: SoftphoneProps) {
     };
   }, [connect]);
 
-  // Heartbeat: keep last_seen + status fresh while mounted. Off-shift, a beat is
-  // suppressed so it can't flip the agent back to AVAILABLE right after "End
-  // shift". Read the REF (not `onDuty` state) so the effect deps stay
-  // [intendedStatus] and the interval isn't torn down/rebuilt on every toggle.
+  // Heartbeat + off-duty resync, one cadence: each tick fires both paths and
+  // each self-gates on the opposite duty state (beat() while on duty, resync
+  // while off). Refs are read inside the interval so a duty flip never tears
+  // the interval down; deps rebuild exactly when [intendedStatus] did
+  // (resyncDuty is []-stable).
   useEffect(() => {
-    const id = setInterval(() => {
-      if (!onDutyRef.current) return;
-      void postPresence(intendedStatus());
-    }, HEARTBEAT_MS);
-    const onFocus = () => {
-      if (onDutyRef.current) void postPresence(intendedStatus());
+    const tick = () => {
+      void beat();
+      void resyncDuty();
     };
-    window.addEventListener("focus", onFocus);
+    const id = setInterval(tick, HEARTBEAT_MS);
+    window.addEventListener("focus", tick);
     return () => {
       clearInterval(id);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", tick);
     };
-  }, [intendedStatus]);
+  }, [beat, resyncDuty]);
+
+  // D13 hydration: init duty + Accepting from the SERVER instead of assuming
+  // true on mount (the pre-D13 leak: any refresh silently re-entered the shift
+  // and the next beat overwrote End-shift's OFFLINE). Runs once; fires the
+  // first beat AFTER applying the answer (spec §3.4 ordering rule) through
+  // beatRef (DEP-HYGIENE). Missing/shapeless fields = fail-open: defaults
+  // stand, beats flow, the server gate decides.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/presence");
+        if (res.ok) {
+          const body = (await res.json().catch(() => null)) as
+            | { onDuty?: boolean; accepting?: boolean }
+            | null;
+          if (!cancelled) applyDutyHydration(body);
+        }
+      } catch {
+        /* fail-open: defaults stand */
+      }
+      if (!cancelled) {
+        dutyHydratedRef.current = true;
+        // Immediate first beat: a mid-shift refresh must re-stamp last_seen
+        // before the 90s window lapses (hydration read it as live at up-to-89s).
+        void beatRef.current();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // applyDutyHydration is []-stable, so this still runs exactly once.
+  }, [applyDutyHydration]);
 
   // Clean up the caption-grab poll if the component unmounts mid-call.
   useEffect(() => () => {
@@ -495,11 +624,14 @@ export function Softphone({ role }: SoftphoneProps) {
     }
     setGuestAudioTrack(null);
     setPhase("ready");
-    await postPresence(readyRef.current ? "AVAILABLE" : "AWAY");
+    // Post-call restore also applies the gate's verdict (D13): if the shift
+    // lapsed mid-call (slept machine), the tab flips off duty now instead of
+    // waiting for the next interval beat.
+    applyBeatResult(await postPresence(readyRef.current ? "AVAILABLE" : "AWAY"));
     if (id && (room || note)) {
       void saveNotes({ callId: id, roomNumber: room, notes: note });
     }
-  }, [saveNotes]);
+  }, [saveNotes, applyBeatResult]);
 
   const toggleMute = useCallback(() => {
     const next = !muted;
@@ -559,11 +691,43 @@ export function Softphone({ role }: SoftphoneProps) {
     }
   }, []);
 
+  // Task 17: register this call's controls with the CallSurfaceProvider so the
+  // tile can drive mute/hang-up/911/notes. Reuses the EXISTING handlers verbatim
+  // — toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
+  // the real 911 POST trigger (the same function the AudioCallOverlay's confirm
+  // dialog invokes), not a re-implementation. saveNote syncs roomNumber/notes
+  // state so the tab overlay and the tile agree, then reuses the real saveNotes
+  // notes-durability path (no new save path).
+  const registerSaveNote = useCallback(
+    (room: string, note: string) => {
+      setRoomNumber(room);
+      setNotes(note);
+      const id = callIdRef.current;
+      return saveNotes({ callId: id, roomNumber: room, notes: note });
+    },
+    [saveNotes],
+  );
+  useEffect(() => {
+    if (!registerCallControls) return;
+    if (phase !== "in-call") {
+      registerCallControls(null);
+      return;
+    }
+    registerCallControls({
+      toggleMute,
+      muted,
+      hangUp: () => void endCall(),
+      triggerEmergency: () => void triggerEmergency(),
+      saveNote: registerSaveNote,
+    });
+    return () => registerCallControls(null);
+  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency, registerSaveNote]);
+
   const toggleReady = useCallback(() => {
     const next = !ready;
     setReady(next);
-    void postPresence(next ? "AVAILABLE" : "AWAY");
-  }, [ready]);
+    void postPresence(next ? "AVAILABLE" : "AWAY").then(applyBeatResult);
+  }, [ready, applyBeatResult]);
 
   // "End shift" (spec D6): flip presence to OFFLINE immediately (so the admin
   // fleet reads true without waiting for staleness) and disarm the heartbeat.
@@ -575,13 +739,16 @@ export function Softphone({ role }: SoftphoneProps) {
     setOnDuty(false);
     await fetch("/api/presence/end-shift", { method: "POST" }).catch(() => {});
   }, []);
-  // "Go on duty" resume: re-arm the heartbeat and beat immediately so the fleet
-  // flips back to on-duty fast. Idempotent if already on duty.
+  // "Go on duty" (D13): the ONLY transition out of OFFLINE — the dedicated
+  // route, not a beat (beats can't start a shift). Optimistic local flip; if
+  // the route fails, the next beat is gated and flips us back off.
   const resumeDuty = useCallback(() => {
     onDutyRef.current = true;
     setOnDuty(true);
-    void postPresence(intendedStatus());
-  }, [intendedStatus]);
+    void fetch("/api/presence/go-on-duty", { method: "POST" })
+      .then(() => beatRef.current()) // stamps intendedStatus (AWAY if not accepting)
+      .catch(() => {});
+  }, []);
 
   // End shift is disabled mid-call/mid-ring — you can't leave a live call.
   const canEndShift = phase !== "in-call" && phase !== "incoming";
@@ -704,6 +871,8 @@ export function Softphone({ role }: SoftphoneProps) {
           captionPartial={captions.partial}
           captionsEnabled={captionsEnabled}
           onToggleCaptions={toggleCaptions}
+          showReopenTile={tileClosedByUser && docPipSupported()}
+          onReopenTile={() => openTileForCall?.()}
         />
       )}
 

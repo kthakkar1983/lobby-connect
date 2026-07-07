@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the approved Phase-3 workspace design (`docs/specs/2026-07-04-phase3-workspace-design.md`, D1–D12): push-first alerting with an audible contract, dashboard-first property-card answering, the call-scoped Document-PiP tile, RustDesk remote-access credentials + Connect (card and in-call), and duty controls — with the dial/911/overlay machinery untouched except the additive, byte-reviewed seam this plan names explicitly (Task 4). **Hold is DEFERRED out of Phase 3** (Kumar, plan gate 2026-07-04: "push it to when we have more than one property") — the recorded design lives in spec §3.6; cards/tile/provider keep a dormant `on-hold` state seam and nothing sets it.
+**Goal:** Ship the approved Phase-3 workspace design (`docs/specs/2026-07-04-phase3-workspace-design.md`, D1–D13): push-first alerting with an audible contract, dashboard-first property-card answering, the call-scoped Document-PiP tile, RustDesk remote-access credentials + Connect (card and in-call), and duty controls — with the dial/911/overlay machinery untouched except the additive, byte-reviewed seam this plan names explicitly (Task 4). **Hold is DEFERRED out of Phase 3** (Kumar, plan gate 2026-07-04: "push it to when we have more than one property") — the recorded design lives in spec §3.6; cards/tile/provider keep a dormant `on-hold` state seam and nothing sets it.
 
-**Architecture:** Five shippable phases in spec §6 order — (A) Gate 3.1 push-ring spike, (B) property cards + ring-on-card, (C) push productionized + Go on duty / End shift, (D) call tile, (E) remote access + Connect, then close-out. The client work pivots on one new context (`CallSurfaceProvider`, grown beside the existing `LineStatusProvider`) that `Softphone` and the video-incoming hook *publish into* and cards/tile *consume from* — the Twilio `Device` and Agora machinery stay mounted exactly where they are today (D1/D2). Push is a third transport for the existing "calls-changed" nudge (SW message → the same `tick()` refetch realtime triggers), not a new ring pathway.
+**Architecture:** Five shippable phases in spec §6 order — (A) Gate 3.1 push-ring spike, (B) property cards + ring-on-card, (C) push productionized + Go on duty / End shift, (D) **D13 duty persistence, then** the call tile, (E) remote access + Connect, then close-out. The client work pivots on one new context (`CallSurfaceProvider`, grown beside the existing `LineStatusProvider`) that `Softphone` and the video-incoming hook *publish into* and cards/tile *consume from* — the Twilio `Device` and video-session machinery (Agora at plan time; **LiveKit since the 2026-07-06 strip** — Phase-D task text is re-aimed accordingly) stay mounted exactly where they are today (D1/D2). Push is a third transport for the existing "calls-changed" nudge (SW message → the same `tick()` refetch realtime triggers), not a new ring pathway.
 
-**Tech Stack:** Next.js 15 App Router (typed routes), React 19, Tailwind v4 brand tokens, Twilio Voice SDK + REST, Agora RTC, Supabase (Postgres + RLS + Realtime), `web-push@3.6.7` (new dep), Document Picture-in-Picture (Chromium), Vitest (node + jsdom profiles).
+**Tech Stack:** Next.js 15 App Router (typed routes), React 19, Tailwind v4 brand tokens, Twilio Voice SDK + REST, ~~Agora RTC~~ LiveKit (self-hosted, since the 2026-07-06 strip), Supabase (Postgres + RLS + Realtime), `web-push@3.6.7` (new dep), Document Picture-in-Picture (Chromium), Vitest (node + jsdom profiles).
 
 **Conventions (house rules — every task):**
 - No hardcoded hex; brand tokens only (`bg-live`, `text-attention-text`, `border-border`, …). Red = 911/destructive only; blaze = sparing attention accent; rings/live = mint.
@@ -15,9 +15,9 @@
 - Typed routes: no `as never`; dynamic hrefs use `as Route`.
 - Per-task gate: `pnpm -F @lc/portal typecheck && pnpm -F @lc/portal test` (+ `pnpm lint`, `pnpm check:routes`, `pnpm -F @lc/portal build` at phase ends). Full suite currently ~523 tests — keep green.
 - Commit after every task (`Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`, no emojis).
-- Branch: `phase3-workspace`. Staging = push the `staging` branch (box auto-deploys); prod = PR to `main` (Claude cannot push `main`).
+- Branch: `phase3-workspace` for Phases A–C (merged via PR #29); **Phase D onward builds on `phase3d-duty-tile`** (off the LiveKit-only `main`). Staging = push the `staging` branch (box auto-deploys); prod = PR to `main` (Claude cannot push `main`).
 
-**Load-bearing DO-NOT-TOUCH list (spec §4):** dial/routing semantics (`plan-dial`, presence gating, apology TwiML), the 911 conference machinery (with hold deferred, NOTHING in this plan touches it; Task 4 touches adjacent TwiML and carries an explicit byte-review step), both in-call overlays' call logic (additive controls only), kiosk semantics, RLS posture, heartbeat presence model, reaper/finalization.
+**Load-bearing DO-NOT-TOUCH list (spec §4):** dial/routing semantics (`plan-dial`, presence gating, apology TwiML), the 911 conference machinery (with hold deferred, NOTHING in this plan touches it; Task 4 touches adjacent TwiML and carries an explicit byte-review step), both in-call overlays' call logic (additive controls only), kiosk semantics, RLS posture, heartbeat presence *model* (cadence/constants/service-role writes — the D13 tasks add a duty gate to the route, spec §3.4/§4), reaper/finalization.
 
 ---
 
@@ -39,7 +39,7 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/lib/dashboard/pods.ts` | Pure pod-grouping + card live-state + duty-label helpers (TDD) | 5 |
 | `apps/portal/components/dashboard/call-surface-provider.tsx` | New context: incoming/active call state + accept dispatchers | 6 |
 | `apps/portal/lib/hooks/use-incoming-video-calls.ts` | Video-incoming detection (moved out of the banner; realtime + poll + focus + SW message) | 7 |
-| `apps/portal/components/softphone/softphone.tsx` | Publish into provider; incoming block UI retired; duty/heartbeat arm | 7, 15 |
+| `apps/portal/components/softphone/softphone.tsx` | Publish into provider; incoming block UI retired; duty/heartbeat arm; D13 hydration + gated beats | 7, 15, 15d |
 | `apps/portal/components/video-call/video-call-host.tsx` | Headless incoming publisher + overlay mount | 7 |
 | `apps/portal/components/dashboard/property-card.tsx` | Shared card (both scopes): identity, live state, tonight, Answer/Connect | 8, 19 (Connect) |
 | `apps/portal/app/(agent)/agent/page.tsx` | Pod card grid replaces right-rail placements | 8, 9 |
@@ -51,6 +51,9 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/lib/push/client.ts` | Browser subscribe/sync manager | 12 |
 | `apps/portal/app/api/kiosk/call-started/route.ts` (+ answer-video, end-video, call-ended) | Push send beside broadcast in `after()` | 13 |
 | `apps/portal/components/dashboard/duty-controls.tsx` + `app/api/presence/end-shift/route.ts` | Go on duty / End shift | 14, 15 |
+| `apps/portal/lib/voice/presence.ts` | + `isLiveShift` (D13); `DEFAULT_LOGIN_STATUS` retired | 15b |
+| `apps/portal/app/api/presence/route.ts` | POST duty gate — beats only refresh a live shift — + GET hydration (D13) | 15b, 15c |
+| `apps/portal/app/api/presence/go-on-duty/route.ts` | The only OFFLINE→live transition (D13) | 15c |
 | `apps/portal/lib/duty-tile/call-tile-manager.ts` + `components/call-tile/*` | Call-scoped DocPiP tile | 16, 17 |
 | `supabase/migrations/0020_property_remote_access.sql` | Credentials table, service-role only | 18 |
 | `apps/portal/app/api/remote-access/[propertyId]/route.ts` + `lib/remote-access/*` + admin CRUD | Credential API + Connect + pre-warm | 18, 19, 20 |
@@ -1652,9 +1655,659 @@ Then Phase-C staging + prod smoke (HUMAN, record here): fresh browser → Go on 
 
 ---
 
-# PHASE D — the call tile (D4, D2)
+# PHASE D — D13 duty persistence, then the call tile (D13, D4, D2) — ✅ CODE-COMPLETE (2026-07-06)
 
-## Task 16: call-tile manager — synchronous open inside the Answer gesture
+**Phase D built subagent-driven on `phase3d-duty-tile` (fresh implementer + two-stage review per task; final whole-branch review = SHIP). 11 commits `0cd5185`→`65f3782`. Full gate GREEN: node 606 + jsdom 115 · typecheck · lint · check:routes · portal build. Reviews caught 4 real defects pre-merge: 15b heartbeat gate failed CLOSED on a DB error (→ `3b01e88`), 15c GET hydration leaked a valid off-duty 200 on a read error (→ `0fe6b4a`), 16 video calls never published `active` so tile auto-close/reopen no-op'd for the primary channel (I-1 → fixed in 17), 17 shipped a wall-clock-flaky timer assertion (→ `65f3782`). Build also closed a plan-missed leak: `connect()`'s hardcoded-AVAILABLE registration stamp (in `c7357fc`). Divergences of record: tile 911 is AUDIO-face-only (`triggerEmergency` optional — video has no 911 machinery anywhere; inventing one was out of scope); no `tileRequested` boolean (`tileMount !== null` is the open-signal). Remaining: the Phase-D HUMAN smoke below.**
+
+**D13 (spec §3.4, rewritten 2026-07-06, Kumar-approved):** the Phase-5 re-smoke found duty was per-tab client state — `onDuty` inits `true` on every mount, so any refresh re-entered the shift and the next heartbeat overwrote End-shift's OFFLINE; a second tab resurrected an ended shift the same way; the Accepting toggle reset to accepting on refresh. Tasks 15b–15d make `profiles.status` the enforced duty truth (zero migrations — dial/push/fleet already read it) BEFORE the tile tasks, so one Phase-D smoke covers both. Build discipline unchanged: fresh implementer + spec review + quality review per task; final whole-branch review before merge. ⚠ DEP-HYGIENE remains the standing risk (two prior render-loop OOMs): effects depend on stable dispatchers, one-shot effects read changing callbacks through refs — Task 15d is explicit about both.
+
+## Task 15b: D13 — `isLiveShift` + the heartbeat duty gate (TDD) — ✅ DONE (`013a664` + fail-open fix `3b01e88`)
+
+**Files:**
+- Modify: `apps/portal/lib/voice/presence.ts` (add `isLiveShift`; delete `DEFAULT_LOGIN_STATUS`)
+- Modify: `apps/portal/app/api/presence/route.ts` (POST gains the gate)
+- Test: `apps/portal/tests/lib/voice/presence.test.ts`, `apps/portal/tests/app/presence.test.ts`
+
+Spec §3.4: a beat may only **refresh a live shift**, never start one. The liveness check and the write are ONE conditional `UPDATE` (atomic — no read-then-write race). ON_CALL bypasses the gate entirely (a live call outranks raw OFFLINE and staleness). A gated beat that finds a *lapsed* shift (raw status live, heartbeat stale) persists OFFLINE — the event-driven sweep — with staleness re-checked in the WHERE so it can never clobber a concurrent go-on-duty.
+
+- [ ] **Step 1: Failing pure tests** in `tests/lib/voice/presence.test.ts` — add the describe below; DELETE the `DEFAULT_LOGIN_STATUS` import and its assertion (the constant's "login defaults to AVAILABLE" is false under D13):
+
+```ts
+describe("isLiveShift (D13)", () => {
+  const now = Date.parse("2026-07-06T12:00:00Z");
+  const fresh = new Date(now - 30_000).toISOString();
+  const stale = new Date(now - 120_000).toISOString();
+
+  it("live for any fresh non-OFFLINE status", () => {
+    expect(isLiveShift("AVAILABLE", fresh, now)).toBe(true);
+    expect(isLiveShift("AWAY", fresh, now)).toBe(true);
+    expect(isLiveShift("ON_CALL", fresh, now)).toBe(true);
+  });
+
+  it("over when explicitly OFFLINE, even with a fresh heartbeat", () => {
+    expect(isLiveShift("OFFLINE", fresh, now)).toBe(false);
+  });
+
+  it("over when the heartbeat lapsed or never happened, whatever the raw status", () => {
+    expect(isLiveShift("AVAILABLE", stale, now)).toBe(false);
+    expect(isLiveShift("AVAILABLE", null, now)).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 2: Run** `pnpm -F @lc/portal test tests/lib/voice/presence.test.ts` — expect FAIL (`isLiveShift` not exported).
+
+- [ ] **Step 3: Implement** in `lib/voice/presence.ts` (below `effectivePresence`); delete `DEFAULT_LOGIN_STATUS` + its comment in the same edit:
+
+```ts
+/**
+ * D13: is this agent's SHIFT live right now? Built on effectivePresence, so a
+ * shift is over when explicitly ended (raw OFFLINE), swept, or lapsed past
+ * PRESENCE_STALE_AFTER_MS. The heartbeat route refuses to refresh a non-live
+ * shift; POST /api/presence/go-on-duty is the only way back in.
+ */
+export function isLiveShift(
+  status: string,
+  lastSeenAt: string | null,
+  nowMs: number,
+): boolean {
+  return effectivePresence(status, lastSeenAt, nowMs) !== "OFFLINE";
+}
+```
+
+Run the file again — PASS. Then `grep -rn "DEFAULT_LOGIN_STATUS" apps packages` — expect zero hits.
+
+- [ ] **Step 4: Failing route tests.** In `tests/app/presence.test.ts`, replace ONLY the `profiles.update` mock so it records filter chains and lets tests control what the conditional update matches — **every existing assertion keeps passing unchanged** (`updateSpy` still receives the payloads):
+
+```ts
+// Replaces: const updateSpy = vi.fn((_v) => ({ eq: () => Promise.resolve({ error: null }) }));
+const updateSpy = vi.fn();
+let updateFilters: string[][] = [];
+let refreshedRows: unknown[] = [{ id: "u1" }]; // what the D13 conditional update matches
+function profilesUpdate(v: unknown) {
+  updateSpy(v);
+  const filters: string[] = [];
+  updateFilters.push(filters);
+  const chain = {
+    eq: () => { filters.push("eq"); return chain; },
+    neq: () => { filters.push("neq"); return chain; },
+    gte: () => { filters.push("gte"); return chain; },
+    lt: () => { filters.push("lt"); return chain; },
+    select: () => Promise.resolve({ data: refreshedRows, error: null }),
+    // Unconditional writes (ON_CALL bypass, lapse-persist) are awaited directly.
+    then: (onFulfilled: (v: { error: null }) => unknown) =>
+      Promise.resolve({ error: null }).then(onFulfilled),
+  };
+  return chain;
+}
+```
+
+Wire it: in the `profiles` branch use `update: profilesUpdate` (and the bare `return { update: ... }` fallback too); reset in `beforeEach`: `updateFilters = []; refreshedRows = [{ id: "u1" }];`. New describe:
+
+```ts
+describe("D13 duty gate (spec §3.4)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("an allowed beat refreshes via a CONDITIONAL update (neq OFFLINE + gte cutoff)", async () => {
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateFilters[0]).toEqual(["eq", "neq", "gte"]);
+  });
+
+  it("a gated beat writes nothing live, persists the lapse, returns onDuty:false", async () => {
+    refreshedRows = []; // the conditional update matched 0 rows — shift is over
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ onDuty: false });
+    // Second update = lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateSpy.mock.calls[1]?.[0]).toEqual({ status: "OFFLINE" });
+    expect(updateFilters[1]).toEqual(["eq", "neq", "lt"]);
+  });
+
+  it("AWAY beats are gated identically", async () => {
+    refreshedRows = [];
+    const res = await POST(req({ status: "AWAY" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ onDuty: false });
+  });
+
+  it("ON_CALL bypasses the gate — unconditional write, 204", async () => {
+    refreshedRows = []; // would gate an AVAILABLE beat
+    const res = await POST(req({ status: "ON_CALL" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateFilters[0]).toEqual(["eq"]); // no conditional filters
+  });
+
+  it("a video-upgraded AVAILABLE beat also bypasses (resolved status is ON_CALL)", async () => {
+    refreshedRows = [];
+    videoCallRows = [{ id: "c1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+});
+```
+
+Run the file — the new describe FAILS (route still writes unconditionally), the pre-existing tests PASS.
+
+- [ ] **Step 5: Implement the gate.** In `app/api/presence/route.ts`, add `PRESENCE_STALE_AFTER_MS` to the existing `@lc/shared` import, then replace the final unconditional update + `204` return with:
+
+```ts
+  const nowIso = new Date().toISOString();
+
+  // D13 ON_CALL exception (spec §3.4): a live call outranks the duty gate —
+  // raw OFFLINE included (the accepted two-tab edge) — so a >90s network blip
+  // mid-call can't dump the agent off duty. Exactly the pre-D13 write.
+  if (status === "ON_CALL") {
+    await admin
+      .from("profiles")
+      .update({ status, last_seen_at: nowIso })
+      .eq("id", actor.userId);
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // D13 duty gate: an AVAILABLE/AWAY beat may only REFRESH a live shift. The
+  // liveness check and the write are one atomic conditional UPDATE (no
+  // read-then-write race): match only a row that isn't explicitly OFFLINE and
+  // whose heartbeat is still fresh. Zero rows = the shift is over — only
+  // /api/presence/go-on-duty starts one.
+  const staleCutoffIso = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
+  const { data: refreshed } = await admin
+    .from("profiles")
+    .update({ status, last_seen_at: nowIso })
+    .eq("id", actor.userId)
+    .neq("status", "OFFLINE")
+    .gte("last_seen_at", staleCutoffIso)
+    .select("id");
+
+  if (refreshed && refreshed.length > 0) return new NextResponse(null, { status: 204 });
+
+  // Gated. If the shift LAPSED (raw status still live, heartbeat stale), persist
+  // OFFLINE now — the event-driven version of the daily sweep — so video push
+  // stops targeting a lapsed shift immediately. Staleness is re-checked in the
+  // WHERE so this can never clobber a concurrent go-on-duty; last_seen_at is
+  // untouched. A raw-OFFLINE row matches nothing (nothing to persist).
+  await admin
+    .from("profiles")
+    .update({ status: "OFFLINE" })
+    .eq("id", actor.userId)
+    .neq("status", "OFFLINE")
+    .lt("last_seen_at", staleCutoffIso);
+
+  return NextResponse.json({ onDuty: false });
+```
+
+- [ ] **Step 6: Run** `pnpm -F @lc/portal test tests/app/presence.test.ts tests/lib/voice/presence.test.ts` — all PASS.
+
+- [ ] **Step 7: Gate + commit** — `pnpm -F @lc/portal typecheck && pnpm -F @lc/portal test`; commit `feat(presence): D13 heartbeat duty gate — beats only refresh a live shift`.
+
+## Task 15c: D13 — go-on-duty route + GET hydration endpoint (TDD) — ✅ DONE (`1648728` + GET-500 fix `0fe6b4a`)
+
+**Files:**
+- Create: `apps/portal/app/api/presence/go-on-duty/route.ts`
+- Modify: `apps/portal/app/api/presence/route.ts` (add `GET`)
+- Test: `apps/portal/tests/app/presence-go-on-duty.test.ts` (new), `apps/portal/tests/app/presence.test.ts` (GET describe)
+
+- [ ] **Step 1: Failing go-on-duty tests** — new file `tests/app/presence-go-on-duty.test.ts` (same mock family as `presence-end-shift.test.ts`):
+
+```ts
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const getUser = vi.fn();
+vi.mock("@/lib/supabase/server", () => ({
+  createServerClient: () =>
+    Promise.resolve({ auth: { getUser: () => getUser() } }),
+}));
+
+const updateSpy = vi.fn();
+let updateError: { message: string } | null = null;
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: (table: string) => {
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+                }),
+            }),
+          }),
+          update: (v: unknown) => {
+            updateSpy(v);
+            return { eq: () => Promise.resolve({ error: updateError }) };
+          },
+        };
+      }
+      return {};
+    },
+  }),
+}));
+
+import { POST } from "@/app/api/presence/go-on-duty/route";
+
+beforeEach(() => {
+  getUser.mockReset();
+  updateSpy.mockClear();
+  updateError = null;
+});
+
+describe("POST /api/presence/go-on-duty", () => {
+  it("401 when unauthenticated", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    expect((await POST()).status).toBe(401);
+  });
+
+  it("writes AVAILABLE + a fresh last_seen (the only OFFLINE→live transition)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const res = await POST();
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "AVAILABLE" }),
+    );
+    const vals = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(vals).toHaveProperty("last_seen_at");
+  });
+
+  it("500 when the write fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    updateError = { message: "boom" };
+    expect((await POST()).status).toBe(500);
+  });
+});
+```
+
+- [ ] **Step 2: Implement the route** (mirror of `end-shift/route.ts`):
+
+```ts
+import { NextResponse } from "next/server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiActor } from "@/lib/auth/api-actor";
+
+export const runtime = "nodejs";
+
+/**
+ * "Go on duty" (spec §3.4/D13): the ONLY transition out of OFFLINE. Sets
+ * AVAILABLE + a fresh heartbeat so the very next beat finds a live shift.
+ * Service-role like every presence write (migration-0012 column guard); not
+ * audited (presence writes never are).
+ */
+export async function POST(): Promise<NextResponse> {
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ status: "AVAILABLE", last_seen_at: new Date().toISOString() })
+    .eq("id", actor.userId);
+
+  if (error) {
+    return NextResponse.json({ error: "Could not go on duty" }, { status: 500 });
+  }
+  return new NextResponse(null, { status: 204 });
+}
+```
+
+Run the new test file — PASS.
+
+- [ ] **Step 3: Failing GET tests.** In `tests/app/presence.test.ts`, make the `profiles.select` mock dispatch on the selected columns — keep the actor row **byte-identical** (`requireApiActor` selects `"id, operator_id, role, active"`; match on `"role"`), serve the new duty read (selects `"status, last_seen_at"`) from a controllable `dutyRow`:
+
+```ts
+let dutyRow: { status: string; last_seen_at: string | null } | null = {
+  status: "AVAILABLE",
+  last_seen_at: new Date().toISOString(),
+};
+// profiles branch:
+select: (cols: string) => ({
+  eq: () => ({
+    maybeSingle: () =>
+      Promise.resolve(
+        cols.includes("role")
+          ? { data: { id: "u1", operator_id: "op-1", role: "AGENT" } }
+          : { data: dutyRow },
+      ),
+  }),
+}),
+```
+
+(Reset `dutyRow` to the fresh-AVAILABLE default in `beforeEach`.) Import `GET` beside `POST`, add:
+
+```ts
+describe("GET /api/presence (D13 hydration)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("401 when unauthenticated", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    expect((await GET()).status).toBe(401);
+  });
+
+  it("fresh AVAILABLE → on duty, accepting", async () => {
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: true });
+  });
+
+  it("fresh AWAY → on duty, not accepting", async () => {
+    dutyRow = { status: "AWAY", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: false });
+  });
+
+  it("explicit OFFLINE → off duty (accepting defaults true)", async () => {
+    dutyRow = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("lapsed shift (stale AVAILABLE) → off duty", async () => {
+    dutyRow = {
+      status: "AVAILABLE",
+      last_seen_at: new Date(Date.now() - 120_000).toISOString(),
+    };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("missing row → off duty, accepting true", async () => {
+    dutyRow = null;
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+});
+```
+
+- [ ] **Step 4: Implement GET** in `app/api/presence/route.ts` (import `isLiveShift` from `@/lib/voice/presence`):
+
+```ts
+/**
+ * Duty hydration (D13): the client inits onDuty + the Accepting toggle from the
+ * SERVER instead of assuming true on mount. Server clock does the staleness math
+ * (no client clock skew). AGENT/ADMIN only — this is a softphone endpoint.
+ */
+export async function GET(): Promise<NextResponse> {
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("profiles")
+    .select("status, last_seen_at")
+    .eq("id", actor.userId)
+    .maybeSingle();
+
+  const status = data?.status ?? "OFFLINE";
+  return NextResponse.json({
+    onDuty: isLiveShift(status, data?.last_seen_at ?? null, Date.now()),
+    accepting: status !== "AWAY",
+  });
+}
+```
+
+- [ ] **Step 5: Run** both presence test files — PASS.
+
+- [ ] **Step 6: Gate + commit** — typecheck + portal tests; commit `feat(presence): D13 go-on-duty route + GET duty hydration`.
+
+## Task 15d: D13 — softphone hydration + gated-beat handling (client) — ✅ DONE (`c7357fc` + hardening tests `1c374f4`; includes the connect() stamp fix)
+
+**Files:**
+- Modify: `apps/portal/components/softphone/softphone.tsx`
+- Test: `apps/portal/tests/components/softphone.test.tsx` (new describe)
+
+⚠ DEP-HYGIENE (both prior OOMs were exactly this class): the hydration effect runs ONCE (`[]` deps) and fires the post-hydration beat through a **ref mirror** of `beat` — `beat`'s identity changes with `phase` via `intendedStatus`, and depending on it would re-run hydration every phase change. The heartbeat-interval effect depends on `[beat]`, the same rebuild cadence as today's `[intendedStatus]`.
+
+- [ ] **Step 1: Replace `postPresence`** (module-level helper) — it now reports the gate's answer:
+
+```ts
+type BeatResult = "ok" | "off-duty" | "failed";
+
+// D13: a beat can come back "off-duty" (the server gated it — the shift ended
+// in another tab or lapsed); the caller flips local duty state to match. Only
+// an explicit `onDuty: false` counts — anything shapeless/non-JSON is ok/failed,
+// NEVER off-duty, so a proxy hiccup can't end a shift client-side (fail-open;
+// the server gate is the enforcement).
+async function postPresence(status: PresenceStatus): Promise<BeatResult> {
+  try {
+    const res = await fetch("/api/presence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.status === 200) {
+      const body = (await res.json().catch(() => null)) as { onDuty?: boolean } | null;
+      if (body?.onDuty === false) return "off-duty";
+    }
+    return res.ok ? "ok" : "failed";
+  } catch {
+    return "failed";
+  }
+}
+```
+
+- [ ] **Step 2: Duty state block** (softphone.tsx:92-98) — replace the comment + add the hydration gate ref:
+
+```ts
+  // D13 (spec §3.4): duty is SERVER-truth — status=OFFLINE ⇔ off duty. These
+  // inits are the FAIL-OPEN defaults only: hydration (below) corrects them from
+  // GET /api/presence, and the heartbeat gate makes a wrong guess harmless (a
+  // gated beat answers { onDuty:false } and we flip off). The ref mirror lets
+  // endShift stop the next beat BEFORE the re-render lands.
+  const [onDuty, setOnDuty] = useState(true);
+  const onDutyRef = useRef(true);
+  onDutyRef.current = onDuty;
+  // Beats wait for hydration so the first one can't post the pre-hydration
+  // Accepting default over a real AWAY (spec §3.4 ordering rule).
+  const dutyHydratedRef = useRef(false);
+```
+
+- [ ] **Step 3: `applyBeatResult` + `beat` + ref mirror** (place beside `intendedStatus`):
+
+```ts
+  // Flip local duty off when the server gates a beat. Stable ([]).
+  const applyBeatResult = useCallback((result: BeatResult) => {
+    if (result === "off-duty") {
+      onDutyRef.current = false;
+      setOnDuty(false);
+    }
+  }, []);
+
+  // One beat: skipped until hydrated and while off duty; the gate's answer is
+  // applied either way. Same [intendedStatus] stability as the old inline beats.
+  const beat = useCallback(async () => {
+    if (!dutyHydratedRef.current || !onDutyRef.current) return;
+    applyBeatResult(await postPresence(intendedStatus()));
+  }, [intendedStatus, applyBeatResult]);
+  // Ref-mirror so one-shot effects (hydration) can fire a beat without
+  // depending on `beat`'s identity (it changes with phase — DEP-HYGIENE).
+  const beatRef = useRef(beat);
+  beatRef.current = beat;
+```
+
+- [ ] **Step 4: Heartbeat effect** (softphone.tsx:389-406) — same shape, beats through `beat`:
+
+```ts
+  // Heartbeat: keep last_seen + status fresh while ON duty (hydration-gated —
+  // see beat()). Refs are read inside the interval so a duty flip never tears
+  // the interval down; deps [beat] rebuild exactly when [intendedStatus] did.
+  useEffect(() => {
+    const id = setInterval(() => void beat(), HEARTBEAT_MS);
+    const onFocus = () => void beat();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [beat]);
+```
+
+- [ ] **Step 5: Hydration effect** (new, place after the heartbeat effect):
+
+```ts
+  // D13 hydration: init duty + Accepting from the SERVER instead of assuming
+  // true on mount (the pre-D13 leak: any refresh silently re-entered the shift
+  // and the next beat overwrote End-shift's OFFLINE). Runs once; fires the
+  // first beat AFTER applying the answer (spec §3.4 ordering rule) through
+  // beatRef (DEP-HYGIENE). Missing/shapeless fields = fail-open: defaults
+  // stand, beats flow, the server gate decides.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/presence");
+        if (res.ok) {
+          const body = (await res.json().catch(() => null)) as
+            | { onDuty?: boolean; accepting?: boolean }
+            | null;
+          if (!cancelled && typeof body?.onDuty === "boolean") {
+            onDutyRef.current = body.onDuty;
+            setOnDuty(body.onDuty);
+          }
+          if (!cancelled && typeof body?.accepting === "boolean") {
+            readyRef.current = body.accepting;
+            setReady(body.accepting);
+          }
+        }
+      } catch {
+        /* fail-open: defaults stand */
+      }
+      if (!cancelled) {
+        dutyHydratedRef.current = true;
+        // Immediate first beat: a mid-shift refresh must re-stamp last_seen
+        // before the 90s window lapses (hydration read it as live at up-to-89s).
+        void beatRef.current();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+```
+
+- [ ] **Step 6: Rewire the duty transitions.** `endShift` is UNCHANGED. Replace `resumeDuty` and `toggleReady`:
+
+```ts
+  // "Go on duty" (D13): the ONLY transition out of OFFLINE — the dedicated
+  // route, not a beat (beats can't start a shift). Optimistic local flip; if
+  // the route fails, the next beat is gated and flips us back off.
+  const resumeDuty = useCallback(() => {
+    onDutyRef.current = true;
+    setOnDuty(true);
+    void fetch("/api/presence/go-on-duty", { method: "POST" })
+      .then(() => beatRef.current()) // stamps intendedStatus (AWAY if not accepting)
+      .catch(() => {});
+  }, []);
+```
+
+```ts
+  const toggleReady = useCallback(() => {
+    const next = !ready;
+    setReady(next);
+    void postPresence(next ? "AVAILABLE" : "AWAY").then(applyBeatResult);
+  }, [ready, applyBeatResult]);
+```
+
+- [ ] **Step 7: jsdom tests** — new describe in `tests/components/softphone.test.tsx` (own fetch mock like the existing describes; **no fake timers — force beats via the focus handler**). Mocked responses MUST carry `status` (the real `Response` contract; the 2026-06-18 lesson):
+
+```tsx
+describe("Softphone — D13 duty hydration + gated beats", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let hydration: { onDuty: boolean; accepting: boolean };
+  let beatResponse: { status: number; body: unknown };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hydration = { onDuty: true, accepting: true };
+    beatResponse = { status: 204, body: {} };
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ token: "test-token" }),
+        });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(hydration),
+        });
+      }
+      if (url === "/api/presence") {
+        return Promise.resolve({
+          ok: true,
+          status: beatResponse.status,
+          json: () => Promise.resolve(beatResponse.body),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  function presencePosts() {
+    return fetchMock.mock.calls.filter(
+      (args) =>
+        args[0] === "/api/presence" &&
+        (args[1] as RequestInit | undefined)?.method === "POST",
+    );
+  }
+
+  it("hydrates OFF duty from the server and suppresses beats", async () => {
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); // would beat if on duty
+    });
+    expect(presencePosts()).toHaveLength(0);
+  });
+
+  it("hydrates the Accepting toggle from accepting:false (AWAY survives refresh)", async () => {
+    hydration = { onDuty: true, accepting: false };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Not accepting calls"));
+  });
+
+  it("a gated beat ({onDuty:false}) flips the tab off duty", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i)); // hydrated on duty
+    beatResponse = { status: 200, body: { onDuty: false } };
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); // force a beat
+    });
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+  });
+
+  it("Go on duty calls the dedicated route, not a bare beat", async () => {
+    hydration = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+    await user.click(screen.getByText("Go on duty to resume"));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+      ).toBe(true),
+    );
+  });
+});
+```
+
+- [ ] **Step 8: Run the FULL portal jsdom suite.** The pre-existing describes' generic mocks return `{}` for GET `/api/presence` — hydration ignores non-boolean fields (fail-open) so they keep passing. The hydration-triggered first beat adds one POST `/api/presence` per mount: if any existing test **counts** presence POSTs, update its expectation (intended new behavior — note it in the commit body).
+
+- [ ] **Step 9: Full gate + commit** — typecheck · portal tests (node + jsdom) · lint · check:routes; commit `feat(softphone): D13 duty hydration + gated-beat handling — refresh can no longer re-enter a shift`.
+
+## Task 16: call-tile manager — synchronous open inside the Answer gesture — ✅ DONE (`6557906`; I-1 video-active gap found in review, fixed in Task 17)
 
 **Files:**
 - Create: `apps/portal/lib/duty-tile/call-tile-manager.tsx`
@@ -1715,7 +2368,7 @@ export function openCallTile(onReady: (h: CallTileHandle) => void, onClosed: () 
 
 - [ ] **Step 5: Gate + commit** (`feat(tile): call-scoped DocPiP manager, opened inside the Answer gesture`).
 
-## Task 17: tile faces + overlay integration (guest-video-first)
+## Task 17: tile faces + overlay integration (guest-video-first) — ✅ DONE (`726da8f` + regex fix `65f3782`; incl. I-1 + M-1 fold-ins)
 
 **Files:**
 - Create: `apps/portal/components/call-tile/call-tile.tsx`
@@ -1724,7 +2377,19 @@ export function openCallTile(onReady: (h: CallTileHandle) => void, onClosed: () 
 - Modify: `apps/portal/components/softphone/audio-call-overlay.tsx` + `video-call.tsx` ("Reopen tile" button when `tileClosedByUser`)
 - Test: `apps/portal/tests/components/call-tile.test.tsx`
 
-- [ ] **Step 1: Track sharing without disturbing Agora:** `VideoCall` grabs the remote video `MediaStreamTrack` in its existing `user-published` handler (`user.videoTrack?.getMediaStreamTrack()` — same API family the captions use for audio) and publishes it via a new provider field `publishGuestVideoTrack(track | null)` (cleared on user-left/teardown). The tile renders its OWN `<video>` from `new MediaStream([track])` — Agora's overlay element is never re-parented:
+- [ ] **Step 1: Track sharing without disturbing the LiveKit session** *(re-aimed 2026-07-06 — the plan predated the Agora strip)*: `video-call.tsx`'s existing `onRemoteVideo` callback (line ~78) already receives a `PortalVideoHandle` whose `mediaStreamTrack()` returns the raw W3C track (`lib/video/livekit-session.ts` — same API family the captions use via `onRemoteAudioTrack`). Publish it additively via a new provider field `publishGuestVideoTrack(track | null)` — a `useCallback([])`-stable dispatcher like every Task-6 dispatcher — and clear it (`null`) in `handleEnd`/teardown and on guest-left. `joinLiveKitCall` itself is NOT modified:
+
+```tsx
+// video-call.tsx — inside the existing joinLiveKitCall({ ... }) options, ADDITIVE:
+onRemoteVideo: (h) => {
+  if (!cancelled && remoteRef.current) h.attach(remoteRef.current);
+  // Phase-D tile seam: expose the raw track so the tile renders its OWN <video>
+  // (the LiveKit attach()ed element is never re-parented).
+  if (!cancelled) publishGuestVideoTrack(h.mediaStreamTrack());
+},
+```
+
+The tile renders its OWN `<video>` from `new MediaStream([track])`:
 
 ```tsx
 function GuestVideo({ track }: { track: MediaStreamTrack }): React.JSX.Element {
@@ -1752,7 +2417,11 @@ function GuestVideo({ track }: { track: MediaStreamTrack }): React.JSX.Element {
 
 - [ ] **Step 5: Full gate incl. `build` + commit** (`feat(tile): guest-video-first call tile faces + reopen affordance; overlay changes additive`).
 
-Phase-D staging/prod smoke (HUMAN): answer video from card → tile opens with guest video over fullscreen RustDesk → mute/hang-up from tile → tile dies at hang-up; close tile mid-call → overlay offers Reopen; non-Chromium (Safari) → no tile, call normal. Record here.
+Phase-D staging smoke — ✅ PASSED 2026-07-06→07 (Kumar) after a 3-fix loop. Findings + dispositions: (1) refresh/end-shift/accepting-off semantics all held on first pass. (2) NEW BUG two-tab resync — an off-duty tab never learned the shift resumed (off-duty tabs beat nothing, hydration was mount-only) → fixed `93d4bec` (read-only hydration re-poll on the beat cadence; spec §3.4 amended). (3) NEW BUG the Reopen-tile button never appeared — root-caused via an on-page Gate-3.0-style debug strip after DevTools proved unusable (it interferes with the DocPiP window): closing the tile focuses the tab → the softphone's error-phase reconnect self-heal flaps `phase` → its publisher published an AUDIO null mid-VIDEO-call → slot cleared → auto-close wiped the flag → fixed `e3cd01c` (channel-scoped `publishActive(channel, info|null)` — a publisher may only clear its own channel; 2 regression tests) → CONFIRMED working 2026-07-07. (4) kiosk empty-target full-window ring → v2-backlog note. (5) tile 911 audio-only + video ⏎-parity = by design/deferred. Reopen-button reposition + color → the post-migration dashboard polish list. Original checklist:
+
+Phase-D staging/prod smoke (HUMAN) — duty (D13) first, then tile:
+- **Duty:** refresh mid-shift → still On duty, no click (fleet label holds; ring primes on first click). End shift → hard refresh → STILL off duty; video push does not fire for a kiosk call; Go on duty → next kiosk call rings + pushes again. Two tabs: End shift in tab A → tab B flips to "Go on duty to resume" within ~20s (its next beat). Accepting OFF → refresh → still "Not accepting calls".
+- **Tile:** answer video from card → tile opens with guest video over fullscreen RustDesk → mute/hang-up from tile → tile dies at hang-up; close tile mid-call → overlay offers Reopen; non-Chromium (Safari) → no tile, call normal. Record here.
 
 ---
 

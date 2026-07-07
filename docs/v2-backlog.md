@@ -209,3 +209,11 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Observation.** Reloading the agent/admin tab during a live video call ends the call for both sides. Root cause is design, not a bug: page unload drops the participant → the kiosk's `onAgentLeft` fires → `endCall(callId, "completed")` finalizes the row instantly. Byte-identical behavior on Agora (pre-Phase-4 prod) and LiveKit. LiveKit's D9 duplicate-identity rule prevents ZOMBIE collisions on rejoin; it is not a resume feature — nothing re-mounts an in-progress call after reload, and the kiosk has already finalized. (Network blips WITHOUT a reload do survive via the SDK's same-session auto-reconnect.)
 
 **Fix sketch (v2).** Kiosk-side grace window on agent-left (e.g. 10-15s "reconnecting the agent" state before finalizing) + portal-side re-offer: after reload, detect an IN_PROGRESS call `handled_by` self and re-mount the overlay straight into a rejoin (D9 then kicks the stale participant if any). Intersects the ChunkLoadError/mid-shift-deploy reload-guard carry-forward — a deploy-driven reload mid-call is the same wound. Design both together.
+
+### Kiosk empty-target ring: apologize immediately when nobody is targetable
+
+**Status:** open · **Raised:** 2026-07-06 (Phase-3D staging smoke, Kumar) · **Pilot workaround:** acceptable — the window only opens when every agent is off duty AND no admin is covering.
+
+**Observation.** A kiosk video call placed while the target set is empty (assigned agent off duty/lapsed, all admins `covering=false`) rings out the FULL ring window before the guest sees the apology — nobody is polled/pushed, but nothing tells the kiosk that upfront, so the guest waits ~120s for a call that can never be answered. (Audio already short-circuits: the voice webhook's presence-gated dial plays the apology immediately on an empty target set + Sentry-warns.)
+
+**Fix sketch.** Mirror the audio behavior at video-call creation: `POST /api/kiosk/call-started` (or the shared target resolver) computes the eligible-target set; when it's empty, finalize the row NO_ANSWER immediately and return a "no one available" signal so the kiosk jumps straight to the apology screen + Sentry warning (uncovered-property observability, same as audio). Care: keep fail-open — only short-circuit on a CLEAN empty set, never on a resolver error.

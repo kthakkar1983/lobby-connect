@@ -5,7 +5,10 @@
 // stays inside its existing owners — this is state mirroring + dispatch,
 // never a second call engine.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { openCallTile, type CallTileHandle } from "@/lib/duty-tile/call-tile-manager";
+import { CallTile } from "@/components/call-tile/call-tile";
 
 export interface IncomingRing {
   key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
@@ -39,10 +42,32 @@ export interface CallSurfaceActions {
   acceptVideo: ((callId: string) => void) | null;
 }
 
+/**
+ * Call controls the tile drives (Task 17). Registered by whichever component
+ * owns the live call (Softphone for AUDIO, VideoCall for VIDEO) while a call is
+ * in progress; cleared (null) on teardown. `triggerEmergency` is OPTIONAL — 911
+ * is an audio-only mechanism (there is no video emergency path anywhere in the
+ * codebase; see lib/emergency/, app/api/calls/[id]/emergency/*), so the video
+ * registration simply omits it and the tile hides its 911 control when absent.
+ * Do NOT invent a video 911 path here — this is a UI-composition seam only.
+ */
+export interface RegisteredCallControls {
+  toggleMute: () => void;
+  muted: boolean;
+  hangUp: () => void;
+  triggerEmergency?: () => void;
+  saveNote: (room: string, note: string) => Promise<boolean>;
+}
+
 interface CallSurfaceValue extends CallSurfaceSnapshot {
   actions: CallSurfaceActions;
   publishRings: (source: "audio" | "video", rings: IncomingRing[]) => void;
-  publishActive: (active: ActiveCallInfo | null) => void;
+  /**
+   * Publish/clear the active call FOR ONE CHANNEL. A non-null always takes the
+   * slot; a null only clears the caller's own channel (an AUDIO publisher's
+   * phase flap must never wipe a live VIDEO call's state — see the dispatcher).
+   */
+  publishActive: (channel: "AUDIO" | "VIDEO", active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
   /**
@@ -55,6 +80,28 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   silencedKeys: ReadonlySet<string>;
   /** Silence the local audio ringer for one ring key (idempotent). */
   silenceRing: (key: string) => void;
+  /**
+   * Call-scoped Document-PiP tile (spec §3.3). `tileMount` is the element
+   * consumers portal into — null while no tile is open. `tileClosedByUser` is
+   * true when the agent closed the tile mid-call (drives the Task-17 "Reopen
+   * tile" affordance) and resets to false once the call ends or a new tile opens.
+   */
+  tileMount: HTMLElement | null;
+  tileClosedByUser: boolean;
+  /** Open the tile. Must be called synchronously inside the Answer click. */
+  openTileForCall: () => void;
+  /** Close the tile programmatically (e.g. on hang-up). No-op if none is open. */
+  closeTile: () => void;
+  /**
+   * The guest's remote video track (LiveKit), shared so the tile can render its
+   * own <video> face without a second subscription. Null when no video call is
+   * live, or on an AUDIO call.
+   */
+  guestVideoTrack: MediaStreamTrack | null;
+  publishGuestVideoTrack: (track: MediaStreamTrack | null) => void;
+  /** The live call's controls, mirrored so the tile can drive mute/hang-up/911/notes. */
+  callControls: RegisteredCallControls | null;
+  registerCallControls: (controls: RegisteredCallControls | null) => void;
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -70,15 +117,55 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // needing a synthetic version-counter dependency to force a recompute.
   const [acceptAudioFn, setAcceptAudioFn] = useState<(() => void) | null>(null);
   const [acceptVideoFn, setAcceptVideoFn] = useState<((callId: string) => void) | null>(null);
+  // Guest video track (LiveKit) — plain state, not a ref: the tile must re-render
+  // when the track arrives/clears to (un)mount its <video> face.
+  const [guestVideoTrack, setGuestVideoTrack] = useState<MediaStreamTrack | null>(null);
+  // Call controls — held in STATE (not a ref) so the tile re-renders when they're
+  // registered/cleared. Registration happens in effects on answer/teardown, not
+  // per-render, so this doesn't churn.
+  const [callControls, setCallControls] = useState<RegisteredCallControls | null>(null);
   // Ring keys the local user has silenced (audio only). Immutable updates keep
   // the Set's identity stable when nothing actually changes, so publisher
   // effects that read it don't churn.
   const [silencedKeys, setSilencedKeys] = useState<ReadonlySet<string>>(() => new Set());
 
+  // Call-scoped Document-PiP tile. The handle (window/close fn) is a REF — it's
+  // an imperative object, not render-relevant; only the mount element and the
+  // reopen-affordance boolean are state (consumers must re-render on them).
+  const [tileMount, setTileMount] = useState<HTMLElement | null>(null);
+  const [tileClosedByUser, setTileClosedByUser] = useState(false);
+  const tileHandleRef = useRef<CallTileHandle | null>(null);
+  // pagehide fires on BOTH user-close and our own programmatic close() — this
+  // ref disambiguates so a hang-up-driven close never flips the reopen flag.
+  const programmaticCloseRef = useRef(false);
+  // Mirrors `active` for the onClosed callback, which must stay []-stable (no
+  // `active` in its deps) yet still needs to know if a call is still live.
+  const activeRef = useRef<ActiveCallInfo | null>(null);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
   }, []);
-  const publishActive = useCallback((a: ActiveCallInfo | null) => setActive(a), []);
+  // Two components write this one slot — the audio softphone and the video
+  // host — and each may only CLEAR what it owns: publishing a call always takes
+  // the slot, but a null from channel X is ignored while channel Y's call holds
+  // it. Root cause this encodes (2026-07-07 staging): closing the tile focuses
+  // the tab → the softphone's error-phase reconnect self-heal flapped `phase` →
+  // its publisher re-ran and published an AUDIO null mid-VIDEO-call → the slot
+  // cleared → the auto-close effect wiped the just-set reopen flag. Functional
+  // update = atomic (no read-then-write race between the two publishers).
+  const publishActive = useCallback(
+    (channel: "AUDIO" | "VIDEO", a: ActiveCallInfo | null) => {
+      setActive((prev) => {
+        if (a) return a;
+        if (prev && prev.channel !== channel) return prev; // not yours to clear
+        return null;
+      });
+    },
+    [],
+  );
   const registerAcceptAudio = useCallback((fn: (() => void) | null) => {
     // Functional updates can't hold a plain function value (React would call
     // it as an updater), so wrap it in an updater that returns the function.
@@ -87,11 +174,52 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   const registerAcceptVideo = useCallback((fn: ((callId: string) => void) | null) => {
     setAcceptVideoFn(() => fn);
   }, []);
+  const publishGuestVideoTrack = useCallback((track: MediaStreamTrack | null) => {
+    setGuestVideoTrack(track);
+  }, []);
+  // No functional-update wrap needed here (unlike registerAcceptAudio/Video):
+  // RegisteredCallControls is always an object or null, never a bare function,
+  // so React can't misinterpret it as a state updater.
+  const registerCallControls = useCallback((controls: RegisteredCallControls | null) => {
+    setCallControls(controls);
+  }, []);
 
   // Identity-stable dispatcher: silence one ring key. Returns the same Set when
   // the key is already present so a double-silence doesn't churn identity.
   const silenceRing = useCallback((key: string) => {
     setSilencedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  }, []);
+
+  // Close the tile programmatically — sets the flag BEFORE calling close() so
+  // the pagehide it triggers is recognized as ours, not a user close.
+  const closeTile = useCallback(() => {
+    const handle = tileHandleRef.current;
+    if (!handle) return;
+    programmaticCloseRef.current = true;
+    handle.close();
+  }, []);
+
+  // Open the tile for the active call. Synchronous entry point for the gesture
+  // — openCallTile() calls requestWindow() before returning, satisfying the
+  // "must run inside the click, before any await" constraint.
+  const openTileForCall = useCallback(() => {
+    if (tileHandleRef.current) return; // already open — no-op
+    openCallTile(
+      (handle) => {
+        tileHandleRef.current = handle;
+        setTileMount(handle.mount);
+        setTileClosedByUser(false);
+      },
+      () => {
+        const wasProgrammatic = programmaticCloseRef.current;
+        programmaticCloseRef.current = false;
+        tileHandleRef.current = null;
+        setTileMount(null);
+        if (!wasProgrammatic && activeRef.current) {
+          setTileClosedByUser(true);
+        }
+      },
+    );
   }, []);
 
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
@@ -114,6 +242,17 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     });
   }, [ringKeys]);
 
+  // Auto-close: when the call ends (active → null), any open tile closes with
+  // it and the reopen affordance resets — the call is over, there's nothing
+  // left to reopen into. closeTile is []-stable, so this effect only reruns
+  // on real `active` transitions, not on every render.
+  useEffect(() => {
+    if (active === null) {
+      closeTile();
+      setTileClosedByUser(false);
+    }
+  }, [active, closeTile]);
+
   const value = useMemo<CallSurfaceValue>(
     () => ({
       rings: [...audioRings, ...videoRings],
@@ -125,6 +264,14 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       silencedKeys,
       silenceRing,
+      tileMount,
+      tileClosedByUser,
+      openTileForCall,
+      closeTile,
+      guestVideoTrack,
+      publishGuestVideoTrack,
+      callControls,
+      registerCallControls,
     }),
     [
       audioRings,
@@ -138,10 +285,23 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       silencedKeys,
       silenceRing,
+      tileMount,
+      tileClosedByUser,
+      openTileForCall,
+      closeTile,
+      guestVideoTrack,
+      publishGuestVideoTrack,
+      callControls,
+      registerCallControls,
     ],
   );
 
-  return <CallSurfaceContext.Provider value={value}>{children}</CallSurfaceContext.Provider>;
+  return (
+    <CallSurfaceContext.Provider value={value}>
+      {children}
+      {tileMount ? createPortal(<CallTile />, tileMount) : null}
+    </CallSurfaceContext.Provider>
+  );
 }
 
 export function useCallSurface(): CallSurfaceValue {

@@ -6,11 +6,37 @@ vi.mock("@/lib/supabase/server", () => ({
     Promise.resolve({ auth: { getUser: () => getUser() } }),
 }));
 
-const updateSpy = vi.fn((_v: unknown) => ({ eq: () => Promise.resolve({ error: null }) }));
+const updateSpy = vi.fn();
+let updateFilters: string[][] = [];
+let refreshedRows: unknown[] = [{ id: "u1" }]; // what the D13 conditional update matches
+let refreshError: { message: string } | null = null;
+function profilesUpdate(v: unknown) {
+  updateSpy(v);
+  const filters: string[] = [];
+  updateFilters.push(filters);
+  const chain = {
+    eq: () => { filters.push("eq"); return chain; },
+    neq: () => { filters.push("neq"); return chain; },
+    gte: () => { filters.push("gte"); return chain; },
+    lt: () => { filters.push("lt"); return chain; },
+    select: () => Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
+    // Unconditional writes (ON_CALL bypass, lapse-persist) are awaited directly.
+    then: (onFulfilled: (v: { error: null }) => unknown) =>
+      Promise.resolve({ error: null }).then(onFulfilled),
+  };
+  return chain;
+}
 // Rows the simulated `calls` query returns for the on-call lookup.
 let videoCallRows: unknown[] = [];
 // Spy to capture the .gte("answered_at", ...) call added by the S3 fix.
 const gteSpy = vi.fn();
+// D13 GET hydration: the duty-read row served when `select` is NOT the
+// requireApiActor actor-columns query (matched on `cols.includes("role")`).
+let dutyRow: { status: string; last_seen_at: string | null } | null = {
+  status: "AVAILABLE",
+  last_seen_at: new Date().toISOString(),
+};
+let dutyReadError: { message: string } | null = null;
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -25,23 +51,25 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       if (table === "profiles") {
         return {
-          select: () => ({
+          select: (cols: string) => ({
             eq: () => ({
               maybeSingle: () =>
-                Promise.resolve({
-                  data: { id: "u1", operator_id: "op-1", role: "AGENT" },
-                }),
+                Promise.resolve(
+                  cols.includes("role")
+                    ? { data: { id: "u1", operator_id: "op-1", role: "AGENT" } }
+                    : { data: dutyReadError ? null : dutyRow, error: dutyReadError },
+                ),
             }),
           }),
-          update: (v: unknown) => updateSpy(v),
+          update: profilesUpdate,
         };
       }
-      return { update: (v: unknown) => updateSpy(v) };
+      return { update: profilesUpdate };
     },
   }),
 }));
 
-import { POST } from "@/app/api/presence/route";
+import { POST, GET } from "@/app/api/presence/route";
 
 function req(body: unknown) {
   return new Request("http://localhost:3000/api/presence", {
@@ -56,6 +84,11 @@ beforeEach(() => {
   updateSpy.mockClear();
   gteSpy.mockClear();
   videoCallRows = [];
+  updateFilters = [];
+  refreshedRows = [{ id: "u1" }];
+  refreshError = null;
+  dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
+  dutyReadError = null;
 });
 
 describe("POST /api/presence", () => {
@@ -148,5 +181,101 @@ describe("presence ON_CALL inference is time-bounded (S3)", () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     await POST(req({ status: "AWAY" }));
     expect(gteSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("D13 duty gate (spec §3.4)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("an allowed beat refreshes via a CONDITIONAL update (neq OFFLINE + gte cutoff)", async () => {
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateFilters[0]).toEqual(["eq", "neq", "gte"]);
+  });
+
+  it("a gated beat writes nothing live, persists the lapse, returns onDuty:false", async () => {
+    refreshedRows = []; // the conditional update matched 0 rows — shift is over
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ onDuty: false });
+    // Second update = lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateSpy.mock.calls[1]?.[0]).toEqual({ status: "OFFLINE" });
+    expect(updateFilters[1]).toEqual(["eq", "neq", "lt"]);
+  });
+
+  it("AWAY beats are gated identically", async () => {
+    refreshedRows = [];
+    const res = await POST(req({ status: "AWAY" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ onDuty: false });
+  });
+
+  it("ON_CALL bypasses the gate — unconditional write, 204", async () => {
+    refreshedRows = []; // would gate an AVAILABLE beat
+    const res = await POST(req({ status: "ON_CALL" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateFilters[0]).toEqual(["eq"]); // no conditional filters
+  });
+
+  it("a video-upgraded AVAILABLE beat also bypasses (resolved status is ON_CALL)", async () => {
+    refreshedRows = [];
+    videoCallRows = [{ id: "c1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+
+  it("a DB error on the refresh FAILS OPEN — 204, no gate verdict, no lapse-persist", async () => {
+    refreshError = { message: "boom" };
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1); // no second (lapse-persist) update
+  });
+});
+
+describe("GET /api/presence (D13 hydration)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("401 when unauthenticated", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    expect((await GET()).status).toBe(401);
+  });
+
+  it("fresh AVAILABLE → on duty, accepting", async () => {
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: true });
+  });
+
+  it("fresh AWAY → on duty, not accepting", async () => {
+    dutyRow = { status: "AWAY", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: false });
+  });
+
+  it("explicit OFFLINE → off duty (accepting defaults true)", async () => {
+    dutyRow = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("lapsed shift (stale AVAILABLE) → off duty", async () => {
+    dutyRow = {
+      status: "AVAILABLE",
+      last_seen_at: new Date(Date.now() - 120_000).toISOString(),
+    };
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("missing row → off duty, accepting true", async () => {
+    dutyRow = null;
+    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("a DB error on the duty read surfaces as 500 (client fails open on !res.ok)", async () => {
+    dutyReadError = { message: "boom" };
+    expect((await GET()).status).toBe(500);
   });
 });

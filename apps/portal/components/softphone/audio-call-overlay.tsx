@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff, PhoneOff, AlertTriangle, CornerDownLeft, Check, Loader2 } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  PhoneOff,
+  AlertTriangle,
+  CornerDownLeft,
+  Check,
+  Loader2,
+  PictureInPicture2,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +51,8 @@ export function AudioCallOverlay({
   captionPartial,
   captionsEnabled,
   onToggleCaptions,
+  showReopenTile = false,
+  onReopenTile,
 }: {
   readonly propertyName: string;
   readonly callId: string;
@@ -61,6 +72,11 @@ export function AudioCallOverlay({
   readonly captionPartial: string;
   readonly captionsEnabled: boolean;
   readonly onToggleCaptions: () => void;
+  /** Task 17: show the "Reopen tile" affordance (the agent closed the call tile
+   *  mid-call and DocPiP is supported). Defaults to false so every existing
+   *  caller/test that doesn't pass it renders exactly as before. */
+  readonly showReopenTile?: boolean;
+  readonly onReopenTile?: () => void;
 }) {
   // Call duration — self-tracked from mount (≈ answer time; not server-authoritative).
   const startRef = useRef(Date.now());
@@ -116,37 +132,51 @@ export function AudioCallOverlay({
           <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
           On call{propertyName ? ` · ${propertyName}` : ""}
         </span>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        <span className="flex items-center gap-2">
+          {/* Task 17: reopen the call tile if the agent closed it mid-call. Kept
+              to the LEFT of 911 so 911 stays the rightmost, alone-at-the-corner
+              control per the comment above. */}
+          {showReopenTile && (
             <button
               type="button"
-              disabled={emergencyActive}
-              className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50"
+              onClick={onReopenTile}
+              className="flex items-center gap-1.5 rounded-button border border-border px-3 py-1.5 text-sm text-foreground"
             >
-              <AlertTriangle size={15} /> {emergencyActive ? "911 active" : "Call 911"}
+              <PictureInPicture2 size={15} /> Reopen tile
             </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
-            </div>
-            {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
-                "also alerts the admin, owner, and property GM" line above. Don't render it until the
-                backend actually sends those alerts. */}
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onTriggerEmergency} className="bg-destructive text-destructive-foreground">
-                Yes — call 911
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                disabled={emergencyActive}
+                className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50"
+              >
+                <AlertTriangle size={15} /> {emergencyActive ? "911 active" : "Call 911"}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
+              </div>
+              {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
+                  "also alerts the admin, owner, and property GM" line above. Don't render it until the
+                  backend actually sends those alerts. */}
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onTriggerEmergency} className="bg-destructive text-destructive-foreground">
+                  Yes — call 911
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </span>
       </div>
 
       {/* Emergency banners — unchanged. */}
