@@ -10,6 +10,7 @@ import {
   Check,
   Loader2,
   PictureInPicture2,
+  Monitor,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -53,6 +54,7 @@ export function AudioCallOverlay({
   onToggleCaptions,
   showReopenTile = false,
   onReopenTile,
+  onConnect,
 }: {
   readonly propertyName: string;
   readonly callId: string;
@@ -77,6 +79,10 @@ export function AudioCallOverlay({
    *  caller/test that doesn't pass it renders exactly as before. */
   readonly showReopenTile?: boolean;
   readonly onReopenTile?: () => void;
+  /** Phase E (Task 19b): launch the hotel PC's remote-access session for this
+   *  call's property. Absent (undefined) when the ringing property is unknown
+   *  (nullable propertyId) — the control renders disabled in that case. */
+  readonly onConnect?: () => void;
 }) {
   // Call duration — self-tracked from mount (≈ answer time; not server-authoritative).
   const startRef = useRef(Date.now());
@@ -268,6 +274,14 @@ export function AudioCallOverlay({
         </div>
         <div className="flex items-center gap-2">
           <CaptionToggle enabled={captionsEnabled} onToggle={onToggleCaptions} />
+          <button
+            type="button"
+            disabled={!onConnect}
+            onClick={onConnect}
+            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50"
+          >
+            <Monitor size={16} /> Connect
+          </button>
           <button
             type="button"
             onClick={onToggleMute}

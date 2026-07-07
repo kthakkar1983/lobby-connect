@@ -604,6 +604,51 @@ export type Database = {
           },
         ];
       };
+      property_remote_access: {
+        Row: {
+          created_at: string;
+          id: string;
+          operator_id: string;
+          peer_id: string;
+          property_id: string;
+          unattended_password: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          operator_id: string;
+          peer_id: string;
+          property_id: string;
+          unattended_password: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          operator_id?: string;
+          peer_id?: string;
+          property_id?: string;
+          unattended_password?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "property_remote_access_operator_id_fkey";
+            columns: ["operator_id"];
+            isOneToOne: false;
+            referencedRelation: "operators";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "property_remote_access_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: true;
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       push_subscriptions: {
         Row: {
           auth: string;

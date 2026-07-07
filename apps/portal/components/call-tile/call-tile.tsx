@@ -214,9 +214,11 @@ export function CallTile(): React.JSX.Element | null {
             )}
             <button
               type="button"
-              disabled
-              title="Coming soon"
-              className="ml-auto rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground/50"
+              disabled={!active.propertyId}
+              onClick={() => {
+                if (active.propertyId) void surface?.connectToProperty(active.propertyId);
+              }}
+              className="ml-auto rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
             >
               Connect
             </button>

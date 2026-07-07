@@ -24,6 +24,10 @@ export const AUDIT_ACTIONS = {
   ASSIGNMENT_REMOVED: "assignment.removed",
   INCIDENT_RESOLVED: "incident.resolved",
   TRIGGER_EMERGENCY: "trigger_emergency",
+  REMOTE_ACCESS_UPDATED: "remote_access.updated",
+  REMOTE_ACCESS_ROTATED: "remote_access.rotated",
+  REMOTE_ACCESS_REMOVED: "remote_access.removed",
+  REMOTE_ACCESS_CREDENTIALS_ISSUED: "remote_access.credentials_issued",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

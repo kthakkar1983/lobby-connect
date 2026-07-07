@@ -5,6 +5,7 @@
 import { BellOff } from "lucide-react";
 
 import { useCallSurface, type IncomingRing } from "@/components/dashboard/call-surface-provider";
+import { ConnectButton } from "@/components/dashboard/connect-button";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { Button } from "@/components/ui/button";
 
@@ -79,7 +80,7 @@ export function PodCardGrid({
   properties: PropertyCardData[];
   /** Admins: gated by covering (D11), keyed by property id. Omitted => canAnswer defaults true (agents). */
   canAnswerByProperty?: Record<string, boolean>;
-  /** Phase E injects the per-property Connect button here; omitted until then. */
+  /** Optional per-property Connect override; defaults to <ConnectButton> (Phase E). */
   connectFor?: (propertyId: string) => React.ReactNode;
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerFor?: (propertyId: string) => React.ReactNode;
@@ -104,7 +105,7 @@ export function PodCardGrid({
             key={property.id}
             property={property}
             canAnswer={canAnswerByProperty ? (canAnswerByProperty[property.id] ?? false) : true}
-            connectSlot={connectFor ? connectFor(property.id) : null}
+            connectSlot={connectFor ? connectFor(property.id) : <ConnectButton propertyId={property.id} />}
             footerSlot={footerFor ? footerFor(property.id) : null}
           />
         ))}

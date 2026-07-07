@@ -9,6 +9,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { createPortal } from "react-dom";
 import { openCallTile, type CallTileHandle } from "@/lib/duty-tile/call-tile-manager";
 import { CallTile } from "@/components/call-tile/call-tile";
+import {
+  fetchRemoteCredentials,
+  launchRustdesk,
+  type RemoteCredentials,
+} from "@/lib/remote-access/connect";
 
 export interface IncomingRing {
   key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
@@ -102,6 +107,15 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   /** The live call's controls, mirrored so the tile can drive mute/hang-up/911/notes. */
   callControls: RegisteredCallControls | null;
   registerCallControls: (controls: RegisteredCallControls | null) => void;
+  /**
+   * Fetch (or reuse the pre-warmed) RustDesk credentials for a property and
+   * launch the native client. A cache HIT launches synchronously (before any
+   * await) so the click's transient activation carries the rustdesk:// nav; a
+   * miss / negative-cache entry always re-fetches (the negative cache never
+   * blocks a click). Returns `{ launched }` and, on a failed launch, whether
+   * the property simply has no remote access configured.
+   */
+  connectToProperty: (propertyId: string) => Promise<{ launched: boolean; notConfigured?: boolean }>;
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -144,6 +158,18 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  // Pre-warmed RustDesk credentials for the CURRENT call's property (spec §3.5).
+  // Refs only — NEVER context state: writing the cache into the memoized `value`
+  // would churn it every fetch and loop the whole tree. The map holds ONLY the
+  // current call's property — it's cleared on EVERY callId transition (call end
+  // OR a direct call-B-overwrites-call-A change), so a Connect during call B can
+  // never hit call A's stale creds and skip the issuance audit. `prewarmedCallIdRef`
+  // dedups the softphone's mid-call ActiveCallInfo republish (it re-publishes when
+  // callTimeZone arrives) and React StrictMode's double-invoke, so we fetch/audit
+  // exactly once per call.
+  const prewarmRef = useRef<Map<string, RemoteCredentials | "not-configured">>(new Map());
+  const prewarmedCallIdRef = useRef<string | null>(null);
 
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
@@ -222,6 +248,61 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     );
   }, []);
 
+  // Pre-warm the current call's remote-access credentials at Answer (spec §3.5).
+  // DEP-HYGIENE: depend on the PRIMITIVES (active?.callId + active?.propertyId),
+  // NEVER the `active` object — the softphone republishes a fresh ActiveCallInfo
+  // mid-call once callTimeZone arrives, so object-keying would re-run the effect
+  // and double-fetch AND double-audit every audio call. prewarmedCallIdRef gates
+  // out that republish + StrictMode's double-invoke.
+  useEffect(() => {
+    if (active?.callId == null) {
+      // Call ended (or none): clear the cache for the next call.
+      prewarmRef.current.clear();
+      prewarmedCallIdRef.current = null;
+      return;
+    }
+    if (active.callId === prewarmedCallIdRef.current) return; // republish / StrictMode dedup — keep current creds
+    // A genuinely new call (callId changed): drop any prior property's creds so
+    // a Connect during THIS call can only ever serve — or audit-miss on — the
+    // current property. Runs AFTER the same-callId early-return, so a republish
+    // never clears the current call's pre-warmed creds.
+    prewarmRef.current.clear();
+    prewarmedCallIdRef.current = active.callId;
+    if (active.propertyId == null) return; // nothing to key on
+    const callId = active.callId;
+    const propertyId = active.propertyId;
+    void fetchRemoteCredentials(propertyId, "prewarm").then((r) => {
+      // Stale-response guard: bail if this is no longer the pre-warmed call.
+      if (prewarmedCallIdRef.current !== callId) return;
+      if (r.ok) prewarmRef.current.set(propertyId, r.creds);
+      else if (r.notConfigured) prewarmRef.current.set(propertyId, "not-configured");
+      // A transient failure writes NOTHING — the next Connect click re-fetches.
+    });
+  }, [active?.callId, active?.propertyId]);
+
+  // Connect to a property's hotel PC. []-stable (reads refs only, which are
+  // stable). A cache HIT launches synchronously before any await so the click's
+  // transient activation carries the rustdesk:// navigation; a miss (or the
+  // negative "not-configured" entry) always re-fetches via the click path —
+  // click never trusts the negative cache. Click-fetched creds are NOT written
+  // back into prewarmRef (no long-lived plaintext parked in tab memory).
+  const connectToProperty = useCallback(
+    async (propertyId: string): Promise<{ launched: boolean; notConfigured?: boolean }> => {
+      const hit = prewarmRef.current.get(propertyId);
+      if (hit && hit !== "not-configured") {
+        launchRustdesk(hit); // synchronous — preserves the click's activation
+        return { launched: true };
+      }
+      const r = await fetchRemoteCredentials(propertyId, "click");
+      if (r.ok) {
+        launchRustdesk(r.creds);
+        return { launched: true };
+      }
+      return { launched: false, notConfigured: r.notConfigured };
+    },
+    [],
+  );
+
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
   // changes, drop any silenced key that is no longer ringing. A brand-new call
   // gets a new key that isn't silenced, so it rings again. ringKeys is memoized
@@ -272,6 +353,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishGuestVideoTrack,
       callControls,
       registerCallControls,
+      connectToProperty,
     }),
     [
       audioRings,
@@ -293,6 +375,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishGuestVideoTrack,
       callControls,
       registerCallControls,
+      connectToProperty,
     ],
   );
 

@@ -107,7 +107,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const onClose = vi.fn();
 
     render(
-      <VideoCall callId="call-99" onClose={onClose} propertyName="The Sample Hotel" />,
+      <VideoCall callId="call-99" onClose={onClose} propertyName="The Sample Hotel" propertyId="prop-1" />,
     );
 
     // Wait until the LiveKit session has joined — all async setup precedes join.
@@ -151,7 +151,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     lk.session.mediaWarning = "camera";
 
     render(
-      <VideoCall callId="call-busycam" onClose={onClose} propertyName="The Sample Hotel" />,
+      <VideoCall callId="call-busycam" onClose={onClose} propertyName="The Sample Hotel" propertyId="prop-1" />,
     );
 
     // Joined despite the camera being unavailable.
@@ -164,7 +164,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
   });
 
   it("captions the guest audio: captures the remote track and renders the band", async () => {
-    render(<VideoCall callId="call-cap" onClose={vi.fn()} propertyName="The Sample Hotel" />);
+    render(<VideoCall callId="call-cap" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lk.joined.opts).not.toBeNull());
 
     const guestTrack = { kind: "audio" } as unknown as MediaStreamTrack;
@@ -182,7 +182,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
   // on click. (The first-call no-audio symptom.)
   it("surfaces a 'Tap to hear guest' control on blocked autoplay and recovers on click", async () => {
     const user = userEvent.setup();
-    render(<VideoCall callId="call-autoplay" onClose={vi.fn()} propertyName="The Sample Hotel" />);
+    render(<VideoCall callId="call-autoplay" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lk.joined.opts).not.toBeNull());
 
     // No control while audio is presumed playing.
@@ -209,7 +209,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
   it("auto-ends the call at the max-duration cap (finalizes + leaves the room)", async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const onClose = vi.fn();
-    render(<VideoCall callId="call-cap" onClose={onClose} propertyName="The Sample Hotel" />);
+    render(<VideoCall callId="call-cap" onClose={onClose} propertyName="The Sample Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
 
     // The cap timer is armed with MAX_CALL_DURATION_MS once the call is joined.
@@ -232,5 +232,16 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await waitFor(() => expect(lk.session.leave).toHaveBeenCalled());
 
     setTimeoutSpy.mockRestore();
+  });
+
+  // Phase E (Task 19b): the Connect control (remote access to the hotel PC)
+  // is disabled when the call carries no propertyId to resolve credentials
+  // for — mirrors the nullable-propertyId rule used on the audio overlay.
+  it("disables the Connect control when propertyId is null", async () => {
+    render(
+      <VideoCall callId="call-noprop" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId={null} />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
   });
 });

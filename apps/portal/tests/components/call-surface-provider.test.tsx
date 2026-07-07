@@ -1,5 +1,15 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, act, cleanup, renderHook } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, act, cleanup, renderHook, waitFor } from "@testing-library/react";
+
+const { fetchRemoteCredentials, launchRustdesk } = vi.hoisted(() => ({
+  fetchRemoteCredentials: vi.fn(),
+  launchRustdesk: vi.fn(),
+}));
+
+vi.mock("@/lib/remote-access/connect", () => ({
+  fetchRemoteCredentials: (...args: unknown[]) => fetchRemoteCredentials(...args),
+  launchRustdesk: (...args: unknown[]) => launchRustdesk(...args),
+}));
 
 import {
   CallSurfaceProvider,
@@ -8,8 +18,16 @@ import {
   type IncomingRing,
   type ActiveCallInfo,
 } from "@/components/dashboard/call-surface-provider";
+import type { RemoteCredentials } from "@/lib/remote-access/connect";
 
 afterEach(() => cleanup());
+
+beforeEach(() => {
+  fetchRemoteCredentials.mockReset();
+  launchRustdesk.mockReset();
+  // Default: nothing configured — individual tests override.
+  fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: true });
+});
 
 const videoRing: IncomingRing = {
   key: "call-1",
@@ -272,5 +290,293 @@ describe("CallSurfaceProvider", () => {
     expect(inside.result.current).not.toBeNull();
     expect(inside.result.current?.rings).toEqual([]);
     expect(inside.result.current?.active).toBeNull();
+  });
+
+  describe("remote-access pre-warm + connectToProperty", () => {
+    /** Publishes arbitrary ActiveCallInfo objects and drives connectToProperty,
+     *  surfacing the last result so tests can assert launched/notConfigured. */
+    function PrewarmHarness() {
+      const { publishActive, connectToProperty } = useCallSurface();
+      return (
+        <div>
+          {/* Same callId, DIFFERENT object each click (fresh timeZone) — the
+              softphone's mid-call republish. */}
+          <button
+            onClick={() =>
+              publishActive("AUDIO", {
+                callId: "call-1",
+                channel: "AUDIO",
+                propertyId: "prop-1",
+                propertyName: "Hotel A",
+                onHold: false,
+                answeredAt: 2_000,
+                timeZone: null,
+              })
+            }
+          >
+            publish call-1 (tz null)
+          </button>
+          <button
+            onClick={() =>
+              publishActive("AUDIO", {
+                callId: "call-1",
+                channel: "AUDIO",
+                propertyId: "prop-1",
+                propertyName: "Hotel A",
+                onHold: false,
+                answeredAt: 2_000,
+                timeZone: "America/New_York",
+              })
+            }
+          >
+            republish call-1 (tz set)
+          </button>
+          <button onClick={() => publishActive("AUDIO", null)}>clear active</button>
+          {/* A genuinely new call (new callId) for a DIFFERENT property — the
+              call-B-overwrites-call-A transition with no intervening null. */}
+          <button
+            onClick={() =>
+              publishActive("VIDEO", {
+                callId: "call-2",
+                channel: "VIDEO",
+                propertyId: "prop-2",
+                propertyName: "Hotel B",
+                onHold: false,
+                answeredAt: 3_000,
+                timeZone: null,
+              })
+            }
+          >
+            publish call-2 (prop-2)
+          </button>
+          <button
+            onClick={async () => {
+              const r = await connectToProperty("prop-1");
+              const el = document.getElementById("connect-result")!;
+              el.textContent = JSON.stringify(r);
+            }}
+          >
+            connect prop-1
+          </button>
+          <div id="connect-result" data-testid="connect-result" />
+        </div>
+      );
+    }
+
+    it("pre-warms EXACTLY ONCE per call despite the mid-call republish (primitive deps)", async () => {
+      fetchRemoteCredentials.mockResolvedValue({
+        ok: true,
+        creds: { peerId: "p", password: "w" },
+      });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await act(async () => {
+        screen.getByText("republish call-1 (tz set)").click();
+      });
+
+      // Same callId → one pre-warm fetch only (republish + StrictMode deduped).
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+      expect(fetchRemoteCredentials).toHaveBeenCalledWith("prop-1", "prewarm");
+    });
+
+    it("clears the cache at call end so the next connect re-fetches", async () => {
+      fetchRemoteCredentials.mockResolvedValue({
+        ok: true,
+        creds: { peerId: "p", password: "w" },
+      });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Call ends → cache cleared.
+      await act(async () => {
+        screen.getByText("clear active").click();
+      });
+
+      // Now Connect must re-fetch (map was cleared) via the click path.
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+      expect(launchRustdesk).toHaveBeenCalledTimes(1);
+    });
+
+    it("a cache HIT launches synchronously (before awaiting) and skips the click-fetch", async () => {
+      fetchRemoteCredentials.mockResolvedValue({
+        ok: true,
+        creds: { peerId: "p", password: "w" },
+      });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      // Pre-warm resolves and populates the cache.
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Connect hits the cache: no additional fetch, launch fired.
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1); // NO click-fetch
+      expect(launchRustdesk).toHaveBeenCalledTimes(1);
+      expect(launchRustdesk).toHaveBeenCalledWith({ peerId: "p", password: "w" });
+      await waitFor(() =>
+        expect(screen.getByTestId("connect-result").textContent).toBe(
+          JSON.stringify({ launched: true }),
+        ),
+      );
+    });
+
+    it("a 404 pre-warm ('not-configured') is bypassed by a click, which still 404s", async () => {
+      fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: true });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      // Pre-warm writes the negative-cache entry.
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Connect must STILL fetch (click never trusts the negative cache).
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+      expect(launchRustdesk).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.getByTestId("connect-result").textContent).toBe(
+          JSON.stringify({ launched: false, notConfigured: true }),
+        ),
+      );
+    });
+
+    it("a pre-warm that resolves AFTER active went null never populates the cache (stale guard)", async () => {
+      // Deferred pre-warm resolution — we resolve it manually after clearing active.
+      let resolvePrewarm!: (v: { ok: true; creds: RemoteCredentials }) => void;
+      fetchRemoteCredentials.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolvePrewarm = resolve as typeof resolvePrewarm;
+          }),
+      );
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      // Call ends BEFORE the pre-warm resolves.
+      await act(async () => {
+        screen.getByText("clear active").click();
+      });
+      // Now the stale pre-warm resolves — the guard must drop it (cache stays empty).
+      await act(async () => {
+        resolvePrewarm({ ok: true, creds: { peerId: "stale", password: "x" } });
+      });
+
+      // A subsequent connect must re-fetch (nothing cached) via the click path.
+      fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: true });
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+      expect(launchRustdesk).not.toHaveBeenCalled();
+    });
+
+    it("a transport-failure pre-warm writes NOTHING → a later connect re-fetches", async () => {
+      // Pre-warm resolves as a transport failure (not a 404): the cache must stay
+      // empty so the next Connect click re-fetches rather than serving a stale miss.
+      fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: false });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Nothing cached → Connect re-fetches via the click path.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p", password: "w" },
+      });
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+      expect(launchRustdesk).toHaveBeenCalledTimes(1);
+    });
+
+    it("a new-call transition to a DIFFERENT property drops the prior entry (no stale hit)", async () => {
+      // Pre-warm prop-1 (resolves ok, cached), then a genuine new call (call-2)
+      // for prop-2 overwrites the active slot with NO intervening null. The cache
+      // must clear on the callId change, so a Connect to prop-1 re-fetches (and
+      // re-audits) rather than serving prop-1's now-stale creds.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p1", password: "w1" },
+      });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Call B (new callId, prop-2) directly overwrites call A — pre-warms prop-2.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p2", password: "w2" },
+      });
+      await act(async () => {
+        screen.getByText("publish call-2 (prop-2)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-2", "prewarm");
+
+      // prop-1 is no longer cached → Connect to prop-1 re-fetches (via click).
+      fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: true });
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(3));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+    });
   });
 });
