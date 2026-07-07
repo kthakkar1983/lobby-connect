@@ -42,7 +42,10 @@ export function openCallTile(onReady: (h: CallTileHandle) => void, onClosed: () 
         pip.close();
       }
     })
-    .catch(() => {
+    .catch((err: unknown) => {
       /* no tile — call continues in the tab */
+      // TEMP tile-debug (2026-07-07): surface WHY requestWindow rejected (the
+      // "won't open with DevTools" case). Console-only; remove after diagnosis.
+      console.log("[tile-debug] requestWindow rejected:", err);
     });
 }
