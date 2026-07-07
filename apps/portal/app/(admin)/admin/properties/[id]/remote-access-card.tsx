@@ -131,7 +131,8 @@ export function RemoteAccessCard({
           />
           {hasCredentials ? (
             <p className="text-xs text-text-muted">
-              •••• saved. Enter a new password and Save to rotate it.
+              •••• saved. Leave blank to keep the current password, or enter a
+              new one and Save to rotate it.
             </p>
           ) : null}
         </div>

@@ -28,6 +28,7 @@ type ExistingRow = {
 let propertyRow: PropertyRow = { id: "prop-1", operator_id: "op-1" };
 let existingRow: ExistingRow = null;
 const upsertSpy = vi.fn();
+const updateSpy = vi.fn();
 const deleteSpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -53,6 +54,12 @@ vi.mock("@/lib/supabase/admin", () => ({
             upsertSpy(row, opts);
             return Promise.resolve({ error: null });
           },
+          update: (patch: unknown) => ({
+            eq: (_col: string, id: string) => {
+              updateSpy(patch, id);
+              return Promise.resolve({ error: null });
+            },
+          }),
           delete: () => ({
             eq: (_col: string, id: string) => {
               deleteSpy(id);
@@ -75,6 +82,7 @@ beforeEach(() => {
   requireRole.mockReset();
   auditSpy.mockReset();
   upsertSpy.mockReset();
+  updateSpy.mockReset();
   deleteSpy.mockReset();
   requireRole.mockResolvedValue({ id: "admin-1", operator_id: "op-1" });
   propertyRow = { id: "prop-1", operator_id: "op-1" };
@@ -180,6 +188,31 @@ describe("upsertRemoteAccessAction", () => {
       expect.objectContaining({ peer_id: "123456789" }),
       expect.anything(),
     );
+  });
+
+  it("blank password on an EXISTING row updates only the peer_id, keeps the password, audits UPDATED", async () => {
+    existingRow = { peer_id: "111111111", unattended_password: "keepme12345" };
+    const res = await upsertRemoteAccessAction("prop-1", "222222222", "");
+    expect(res).toEqual({ ok: true });
+    // Peer-id-only UPDATE (never an upsert that would blank the password).
+    expect(updateSpy).toHaveBeenCalledWith({ peer_id: "222222222" }, "prop-1");
+    expect(upsertSpy).not.toHaveBeenCalled();
+    expect(auditSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "remote_access.updated",
+        details: { peer_id: "222222222" },
+      }),
+    );
+  });
+
+  it("blank password on a NEW property (no existing row) is rejected", async () => {
+    existingRow = null;
+    const res = await upsertRemoteAccessAction("prop-1", "123456789", "");
+    expect(res.ok).toBe(false);
+    expect((res as { error: string }).error).toMatch(/Password/);
+    expect(upsertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 });
 

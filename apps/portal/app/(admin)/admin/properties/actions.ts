@@ -560,8 +560,6 @@ export async function upsertRemoteAccessAction(
 
   const peerError = validatePeerId(peerId);
   if (peerError) return { ok: false, error: peerError };
-  const passwordError = validateUnattendedPassword(password);
-  if (passwordError) return { ok: false, error: passwordError };
 
   const admin = createAdminClient();
 
@@ -580,7 +578,45 @@ export async function upsertRemoteAccessAction(
     .eq("property_id", propertyId)
     .maybeSingle();
 
+  // Write-only model: an admin never sees the stored password, so a blank
+  // password on an EXISTING row means "keep the current one" (e.g. to fix a
+  // typo'd peer id). A blank password on a NEW row is still an error — fresh
+  // credentials require a password.
+  const keepPassword = password === "" && !!existing;
+  if (!keepPassword) {
+    const passwordError = validateUnattendedPassword(password);
+    if (passwordError) return { ok: false, error: passwordError };
+  }
+
   const trimmedPeerId = peerId.trim();
+
+  if (keepPassword) {
+    // Peer-id-only update. NOT an upsert: unattended_password is NOT NULL, so
+    // an upsert's INSERT tuple would violate the constraint before ON CONFLICT
+    // resolves. A row is guaranteed to exist here (keepPassword implies it).
+    const { error } = await admin
+      .from("property_remote_access")
+      .update({ peer_id: trimmedPeerId })
+      .eq("property_id", propertyId);
+
+    if (error) {
+      return {
+        ok: false,
+        error: `Failed to save remote-access credentials: ${error.message}`,
+      };
+    }
+
+    await logAuditEvent({
+      actorUserId: actor.id,
+      action: AUDIT_ACTIONS.REMOTE_ACCESS_UPDATED,
+      entityType: "property",
+      entityId: propertyId,
+      details: { peer_id: trimmedPeerId },
+    });
+
+    revalidatePath(`/admin/properties/${propertyId}`);
+    return { ok: true };
+  }
 
   const { error } = await admin.from("property_remote_access").upsert(
     {
