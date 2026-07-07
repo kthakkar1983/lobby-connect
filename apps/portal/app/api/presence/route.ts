@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
-import { isLiveStatus } from "@/lib/voice/presence";
-import { REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
+import { isLiveShift, isLiveStatus } from "@/lib/voice/presence";
+import { PRESENCE_STALE_AFTER_MS, REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -44,10 +44,84 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+
+  // D13 ON_CALL exception (spec §3.4): a live call outranks the duty gate —
+  // raw OFFLINE included (the accepted two-tab edge) — so a >90s network blip
+  // mid-call can't dump the agent off duty. Exactly the pre-D13 write.
+  if (status === "ON_CALL") {
+    await admin
+      .from("profiles")
+      .update({ status, last_seen_at: nowIso })
+      .eq("id", actor.userId);
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // D13 duty gate: an AVAILABLE/AWAY beat may only REFRESH a live shift. The
+  // liveness check and the write are one atomic conditional UPDATE (no
+  // read-then-write race): match only a row that isn't explicitly OFFLINE and
+  // whose heartbeat is still fresh. Zero rows = the shift is over — only
+  // /api/presence/go-on-duty starts one.
+  const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
+  const { data: refreshed, error: refreshError } = await admin
+    .from("profiles")
+    .update({ status, last_seen_at: nowIso })
+    .eq("id", actor.userId)
+    .neq("status", "OFFLINE")
+    .gte("last_seen_at", staleCutoffIso)
+    .select("id");
+
+  // FAIL OPEN on a real DB error (spec §3.4 + the lib/push/targets.ts rule: a
+  // blip must never end a live shift): behave like the pre-D13 fire-and-forget
+  // beat — 204, no gate verdict, no lapse-persist. Only a clean zero-row match
+  // means the shift is actually over.
+  if (refreshError) return new NextResponse(null, { status: 204 });
+
+  if (refreshed && refreshed.length > 0) return new NextResponse(null, { status: 204 });
+
+  // Gated. If the shift LAPSED (raw status still live, heartbeat stale), persist
+  // OFFLINE now — the event-driven version of the daily sweep — so video push
+  // stops targeting a lapsed shift immediately. Staleness is re-checked in the
+  // WHERE so this can never clobber a concurrent go-on-duty; last_seen_at is
+  // untouched. A raw-OFFLINE row matches nothing (nothing to persist).
   await admin
     .from("profiles")
-    .update({ status, last_seen_at: new Date().toISOString() })
-    .eq("id", actor.userId);
+    .update({ status: "OFFLINE" })
+    .eq("id", actor.userId)
+    .neq("status", "OFFLINE")
+    .lt("last_seen_at", staleCutoffIso);
 
-  return new NextResponse(null, { status: 204 });
+  return NextResponse.json({ onDuty: false });
+}
+
+/**
+ * Duty hydration (D13): the client inits onDuty + the Accepting toggle from the
+ * SERVER instead of assuming true on mount. Server clock does the staleness math
+ * (no client clock skew). AGENT/ADMIN only — this is a softphone endpoint.
+ */
+export async function GET(): Promise<NextResponse> {
+  const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
+  if (actorOrResponse instanceof NextResponse) return actorOrResponse;
+  const actor = actorOrResponse;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("status, last_seen_at")
+    .eq("id", actor.userId)
+    .maybeSingle();
+
+  // Surface a read error as 500 so the client's !res.ok path FAILS OPEN
+  // (spec §3.4: a blip must never hydrate a live agent off duty). A clean
+  // null row (profile deleted mid-request) still reads as off duty below.
+  if (error) {
+    return NextResponse.json({ error: "Could not read duty state" }, { status: 500 });
+  }
+
+  const status = data?.status ?? "OFFLINE";
+  return NextResponse.json({
+    onDuty: isLiveShift(status, data?.last_seen_at ?? null, Date.now()),
+    accepting: status !== "AWAY",
+  });
 }

@@ -36,6 +36,11 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
   const { calls } = useIncomingVideoCalls(operatorId, silencedKeys, active?.id ?? null);
   const publishRings = surface?.publishRings;
   const registerAcceptVideo = surface?.registerAcceptVideo;
+  const publishActive = surface?.publishActive;
+  // Stamped the moment the call becomes active (mirrors softphone's answeredAtRef).
+  // A ref (not state): it's read only by the publisher effect below, never
+  // rendered directly, so it doesn't need to trigger a re-render itself.
+  const answeredAtRef = useRef<number>(0);
 
   // ⚠ DEP-HYGIENE (Task-6 review): depend on the stable dispatchers, never on
   // `surface` — registering mutates the context value and would loop.
@@ -71,6 +76,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
     // gesture) so the guest's audio plays even after the cold join chain —
     // this used to live on the banner's Accept button.
     unlockAudioPlayback();
+    answeredAtRef.current = Date.now();
     setActive(call);
   }, []);
   useEffect(() => {
@@ -78,6 +84,29 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
     registerAcceptVideo(acceptVideoForCards);
     return () => registerAcceptVideo(null);
   }, [registerAcceptVideo, acceptVideoForCards]);
+
+  // Review fold-in I-1: publish VIDEO active-call info so the tile's
+  // auto-close/reopen (which key off CallSurfaceProvider's `active`) actually
+  // fire for video — previously only the audio softphone published `active`,
+  // so a video call's tile never auto-closed on hang-up/guest-left.
+  // ⚠ DEP-HYGIENE: depend on the stable dispatcher + `active` only, never on
+  // the whole `surface` object (mirrors the rings-publisher effect above).
+  useEffect(() => {
+    if (!publishActive) return;
+    publishActive(
+      active
+        ? {
+            callId: active.id,
+            channel: "VIDEO",
+            propertyId: active.propertyId,
+            propertyName: active.propertyName,
+            onHold: false,
+            answeredAt: answeredAtRef.current,
+            timeZone: null,
+          }
+        : null,
+    );
+  }, [publishActive, active]);
 
   return active ? (
     <VideoCall
