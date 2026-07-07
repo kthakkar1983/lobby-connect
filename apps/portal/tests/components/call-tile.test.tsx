@@ -173,7 +173,10 @@ describe("CallTile", () => {
     const tile = within(pipDoc.body);
     expect(tile.getByText("The Grand Hotel")).toBeTruthy();
     // ~65s elapsed from answeredAt — the compact "m:ss" format shows 1:05.
-    await waitFor(() => expect(tile.getByText(/1:0[4-6]/)).toBeTruthy());
+    // ANCHORED: the audio face also renders the hotel wall clock ("11:04 PM"),
+    // which contains "1:04"-style substrings at many times of day — an
+    // unanchored regex intermittently double-matched and failed on wall-clock.
+    await waitFor(() => expect(tile.getByText(/^1:0[4-6]$/)).toBeTruthy());
   });
 
   it("mounts a <video> whose srcObject received the published guest track", async () => {
