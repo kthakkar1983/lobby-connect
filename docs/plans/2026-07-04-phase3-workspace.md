@@ -15,7 +15,7 @@
 - Typed routes: no `as never`; dynamic hrefs use `as Route`.
 - Per-task gate: `pnpm -F @lc/portal typecheck && pnpm -F @lc/portal test` (+ `pnpm lint`, `pnpm check:routes`, `pnpm -F @lc/portal build` at phase ends). Full suite currently ~523 tests — keep green.
 - Commit after every task (`Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`, no emojis).
-- Branch: `phase3-workspace` for Phases A–C (merged via PR #29); **Phase D onward builds on `phase3d-duty-tile`** (off the LiveKit-only `main`). Staging = push the `staging` branch (box auto-deploys); prod = PR to `main` (Claude cannot push `main`).
+- Branch: `phase3-workspace` for Phases A–C (merged via PR #29); Phase D built on `phase3d-duty-tile` (merged via PR #32); **Phase E builds on `phase-e-remote-access`** (off `main` = `ca2765a`). Staging = push the `staging` branch (box auto-deploys); prod = PR to `main` (Claude cannot push `main`).
 
 **Load-bearing DO-NOT-TOUCH list (spec §4):** dial/routing semantics (`plan-dial`, presence gating, apology TwiML), the 911 conference machinery (with hold deferred, NOTHING in this plan touches it; Task 4 touches adjacent TwiML and carries an explicit byte-review step), both in-call overlays' call logic (additive controls only), kiosk semantics, RLS posture, heartbeat presence *model* (cadence/constants/service-role writes — the D13 tasks add a duty gate to the route, spec §3.4/§4), reaper/finalization.
 
@@ -41,7 +41,7 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/lib/hooks/use-incoming-video-calls.ts` | Video-incoming detection (moved out of the banner; realtime + poll + focus + SW message) | 7 |
 | `apps/portal/components/softphone/softphone.tsx` | Publish into provider; incoming block UI retired; duty/heartbeat arm; D13 hydration + gated beats | 7, 15, 15d |
 | `apps/portal/components/video-call/video-call-host.tsx` | Headless incoming publisher + overlay mount | 7 |
-| `apps/portal/components/dashboard/property-card.tsx` | Shared card (both scopes): identity, live state, tonight, Answer/Connect | 8, 19 (Connect) |
+| `apps/portal/components/dashboard/property-card.tsx` | Shared card (both scopes): identity, live state, tonight, Answer/Connect | 8 (19b fills `connectSlot` via the grid default — no card edit) |
 | `apps/portal/app/(agent)/agent/page.tsx` | Pod card grid replaces right-rail placements | 8, 9 |
 | `apps/portal/app/(admin)/admin/page.tsx` | Pod-grouped fleet cards replace ops table | 9 |
 | `apps/portal/components/dashboard-workspace.tsx` | Aside → headless hosts; toast retired | 9 |
@@ -56,7 +56,8 @@ Ship order puts push before remote access, so: **0019 = `push_subscriptions`** (
 | `apps/portal/app/api/presence/go-on-duty/route.ts` | The only OFFLINE→live transition (D13) | 15c |
 | `apps/portal/lib/duty-tile/call-tile-manager.ts` + `components/call-tile/*` | Call-scoped DocPiP tile | 16, 17 |
 | `supabase/migrations/0020_property_remote_access.sql` | Credentials table, service-role only | 18 |
-| `apps/portal/app/api/remote-access/[propertyId]/route.ts` + `lib/remote-access/*` + admin CRUD | Credential API + Connect + pre-warm | 18, 19, 20 |
+| `apps/portal/app/api/remote-access/[propertyId]/route.ts` + `lib/remote-access/*` + admin CRUD | Credential API (`no-store`, issuance-audited) + connect helpers + admin Remote-access card | 18, 19a, 20 |
+| `apps/portal/components/dashboard/connect-button.tsx` (+ provider pre-warm refs; grid/overlay/tile wiring) | `connectToProperty` + ConnectButton + Connect on every surface (D12) | 19a, 19b |
 | `packages/shared/src/protocol.ts` | + `PUSH_TTL_SECONDS` guard | 11 |
 
 (Hold files — migration, `lib/hold/`, hold route, dial-result/emergency touches — are DEFERRED with hold; recorded design in spec §3.6.)
@@ -1076,7 +1077,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
 "use client";
 // Phase-3 property card (spec §3.1): one card per property, both dashboards.
 // Ringing expands in place; Answer claims through the EXISTING accept flows
-// via CallSurfaceProvider (D1/D2). Connect lands in Phase E (Task 19).
+// via CallSurfaceProvider (D1/D2). Connect lands in Phase E (Tasks 19a/19b).
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -2427,23 +2428,26 @@ Phase-D staging/prod smoke (HUMAN) — duty (D13) first, then tile:
 
 # PHASE E — remote access + Connect everywhere (D10, D11, D12)
 
-## Task 18: migration 0020 + admin CRUD + audit actions
+## Task 18: migration 0020 + admin CRUD + audit actions *(rewritten 2026-07-07 — D14 + as-built trunk; see spec §3.5/D14)*
 
 **Files:**
 - Create: `supabase/migrations/0020_property_remote_access.sql`
 - Modify: `apps/portal/lib/audit/actions.ts`
 - Create: `apps/portal/lib/remote-access/validate.ts` + admin server actions in `app/(admin)/admin/properties/actions.ts`
-- Create: `apps/portal/app/(admin)/admin/properties/[id]/remote-access-card.tsx`
+- Create: `apps/portal/app/(admin)/admin/properties/[id]/remote-access-card.tsx` (+ mount in `[id]/page.tsx` as the 4th card)
+- Modify: `ops/rustdesk/provision-hotel-pc.ps1` (comments only)
 - Tests: `tests/lib/remote-access/validate.test.ts`, server-action tests per house pattern
 
-- [ ] **Step 1: Migration** — **RLS enabled with NO client policies at all** (service-role only, spec §3.5):
+- [ ] **Step 1: Migration** — **RLS enabled with NO client policies at all** (service-role only, spec §3.5/D14) **+ explicit REVOKE + house `updated_at` trigger + FK index**:
 
 ```sql
 -- 0020_property_remote_access.sql
--- Phase 3 (spec §3.5): RustDesk unattended-access credentials per property.
--- Deliberately NO RLS policies: with RLS enabled and zero policies, no client
--- role can read or write anything — every access goes through service-role
--- code paths (admin server actions + the audited credential API).
+-- Phase 3 (spec §3.5/D14): RustDesk unattended-access credentials per property.
+-- RLS is enabled with deliberately NO policies, plus explicit REVOKEs: no client
+-- role can read or write anything — every access goes through service-role code
+-- paths (admin server actions + the audited credential API). D14: the password is
+-- plaintext at rest (Supabase disk encryption; app-layer envelope encryption is a
+-- v2 seam riding per-connect rotation).
 
 create table public.property_remote_access (
   id uuid primary key default gen_random_uuid(),
@@ -2456,30 +2460,46 @@ create table public.property_remote_access (
 );
 
 alter table public.property_remote_access enable row level security;
+
+-- Belt-and-suspenders (0014 hardening spirit): even a future accidental policy
+-- add must not expose this table to client roles.
+revoke all on table public.property_remote_access from anon, authenticated;
+
+-- House updated_at trigger (0001 defines set_updated_at()).
+drop trigger if exists property_remote_access_set_updated_at on property_remote_access;
+create trigger property_remote_access_set_updated_at
+  before update on property_remote_access
+  for each row execute function set_updated_at();
+
+-- FK-index hygiene (0013 precedent).
+create index if not exists property_remote_access_operator_id_idx
+  on public.property_remote_access (operator_id);
 ```
 
-`pnpm gen:types` + commit generated file. Apply staging now, prod at phase merge.
+`pnpm gen:types` + commit generated file (no `supabase-types.ts` overlay entry — no CHECK columns). Apply **staging now; prod at Phase-5 step 5** (blue-green — the migration plan's step-5 line names it; 2026-07-07 edit).
 
-- [ ] **Step 2: Audit actions** — add to `AUDIT_ACTIONS`: `REMOTE_ACCESS_UPDATED: "remote_access.updated"`, `REMOTE_ACCESS_ROTATED: "remote_access.rotated"`, `REMOTE_ACCESS_CREDENTIALS_ISSUED: "remote_access.credentials_issued"`.
+- [ ] **Step 2: Audit actions** — add to `AUDIT_ACTIONS`: `REMOTE_ACCESS_UPDATED: "remote_access.updated"`, `REMOTE_ACCESS_ROTATED: "remote_access.rotated"`, `REMOTE_ACCESS_REMOVED: "remote_access.removed"`, `REMOTE_ACCESS_CREDENTIALS_ISSUED: "remote_access.credentials_issued"` (the audit-viewer `KNOWN_ACTIONS` dropdown derives all four automatically).
 
 - [ ] **Step 3: Validation helper (TDD)** `lib/remote-access/validate.ts`: `validatePeerId` (RustDesk ids: digits/word chars, 6–24 — trim + `/^[\w-]{6,24}$/`), `validateUnattendedPassword` (8–128 chars, no leading/trailing whitespace). Tests first.
 
-- [ ] **Step 4: Server actions** (in the properties actions file, `requireRole("ADMIN")` + service client + `logAuditEvent`): `upsertRemoteAccessAction(propertyId, peerId, password)` — validates, upserts on `property_id`, audits `REMOTE_ACCESS_UPDATED` (details: `{ peer_id }` — NEVER the password) or `REMOTE_ACCESS_ROTATED` when only the password changed; `deleteRemoteAccessAction(propertyId)` audited as `REMOTE_ACCESS_UPDATED` with `{ removed: true }`.
+- [ ] **Step 4: Server actions** (in the properties actions file, `requireRole("ADMIN")` + **`createAdminClient()` — a user-scoped client sees only silent empties on the zero-policy table** — + `logAuditEvent` + `revalidatePath`): `upsertRemoteAccessAction(propertyId, peerId, password)` — validates, resolves the property's existence + `operator_id` first, upserts on `property_id`, audits `REMOTE_ACCESS_UPDATED` (details: `{ peer_id }` — NEVER the password) or `REMOTE_ACCESS_ROTATED` when only the password changed; `deleteRemoteAccessAction(propertyId)` audited as `REMOTE_ACCESS_REMOVED` with `{ peer_id }`.
 
-- [ ] **Step 5: Admin card** on property detail: peer-id input + password input (`PasswordInput` component exists) + Save / Rotate password + "Credentials last issued" line (query `audit_logs` for the latest `remote_access.credentials_issued` on this entity — 2-query house pattern) + `updated_at`. Credentials are WRITE-ONLY in this UI: the password field never renders the stored value (placeholder "•••• saved").
+- [ ] **Step 5: Admin card** `remote-access-card.tsx` on property detail (4th card; mirror `AssignmentCard`: `SectionCard` + `useTransition` + `router.refresh()`): peer-id input + `PasswordInput` + Save / Rotate password / Remove + "Credentials last issued" line + `updated_at`. **Write-only credential rule (D14):** the RSC page read uses `createAdminClient()` selecting **`peer_id, updated_at` ONLY** — the stored password is never fetched to any client (placeholder "•••• saved" when a row exists); the last-issued line queries `audit_logs` for the latest `remote_access.credentials_issued` on this entity via the **user client** (admin SELECT policy exists — 2-query house pattern).
 
-- [ ] **Step 6: Gate + commit** (`feat(remote-access): 0020 credentials table (service-role only) + admin CRUD, audited`).
+- [ ] **Step 6: Provisioning-script comments** — repoint `provision-hotel-pc.ps1` (no behavior change): "record in the PM" → "enter into the property's Remote-access admin card (PM keeps a backup copy)"; update the trailing `=== Provisioned ===` banner lines to match.
 
-## Task 19: credential API + Connect client + card/in-call surfaces (D12)
+- [ ] **Step 7: Gate + commit** (`feat(remote-access): 0020 credentials table (service-role only, D14) + admin CRUD, audited`).
+
+## Task 19a: credential machinery — route, connect lib, provider pre-warm, ConnectButton *(2026-07-07 re-slice: all the risk in one reviewable diff; the provider file carries both documented codebase traps — the review reads its diff first)*
 
 **Files:**
 - Create: `apps/portal/app/api/remote-access/[propertyId]/route.ts`
 - Create: `apps/portal/lib/remote-access/connect.ts`
-- Modify: `property-card.tsx` (fill `connectSlot`), `audio-call-overlay.tsx`, `video-call.tsx`, `components/call-tile/call-tile.tsx` (Connect button)
-- Modify: `call-surface-provider.tsx` (pre-warm cache)
-- Tests: `tests/app/remote-access-route.test.ts`, `tests/lib/remote-access/connect.test.ts`
+- Modify: `apps/portal/components/dashboard/call-surface-provider.tsx` (pre-warm refs + `connectToProperty` context dispatcher)
+- Create: `apps/portal/components/dashboard/connect-button.tsx`
+- Tests: `tests/app/remote-access-route.test.ts`, `tests/lib/remote-access/connect.test.ts`, pre-warm cases in the call-surface-provider jsdom suite
 
-- [ ] **Step 1: Route** — operator-scoped, audited issuance:
+- [ ] **Step 1: Route** — operator-scoped, audited issuance (D14), **`Cache-Control: no-store`**:
 
 ```typescript
 // apps/portal/app/api/remote-access/[propertyId]/route.ts
@@ -2489,13 +2509,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
+// The only route that returns a long-lived secret — never cacheable anywhere.
+const NO_STORE = { "cache-control": "no-store" } as const;
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ propertyId: string }> },
 ): Promise<NextResponse> {
   const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
   if (actor instanceof NextResponse) return actor;
   const { propertyId } = await params;
+  const trigger =
+    new URL(request.url).searchParams.get("trigger") === "prewarm" ? "prewarm" : "connect";
 
   const admin = createAdminClient();
   const { data: row } = await admin
@@ -2505,51 +2530,110 @@ export async function GET(
     .maybeSingle();
   // Operator scoping (the v2 per-property tightening rides the existing seam).
   if (!row || row.operator_id !== actor.operatorId) {
-    return NextResponse.json({ error: "No remote access configured" }, { status: 404 });
+    return NextResponse.json(
+      { error: "No remote access configured" },
+      { status: 404, headers: NO_STORE },
+    );
   }
+  // D14: issuance IS the security event (audit-on-secret-read — deliberately the
+  // codebase's first audited GET; a cache-hit Connect emits no extra row).
   await logAuditEvent({
     actorUserId: actor.userId,
     action: AUDIT_ACTIONS.REMOTE_ACCESS_CREDENTIALS_ISSUED,
     entityType: "property",
     entityId: propertyId,
-    details: { peer_id: row.peer_id },
+    details: { peer_id: row.peer_id, trigger },
   });
-  return NextResponse.json({ peerId: row.peer_id, password: row.unattended_password });
+  return NextResponse.json(
+    { peerId: row.peer_id, password: row.unattended_password },
+    { headers: NO_STORE },
+  );
 }
 ```
 
-Route tests: 401/403; 404 wrong operator or unconfigured; 200 + audit row written (assert `logAuditEvent` mock called with `credentials_issued`).
+Route tests (node): 401; 403 OWNER; 404 unconfigured; 404 wrong operator; 200 + audit row (assert `logAuditEvent` called with `credentials_issued` + the `trigger` passthrough); **`cache-control: no-store` present on 200 AND 404**.
 
-- [ ] **Step 2: Client** `lib/remote-access/connect.ts` (TDD the pure part):
+- [ ] **Step 2: Client lib** `lib/remote-access/connect.ts` (TDD):
 
 ```typescript
+import { reliableFetch } from "@/lib/http/reliable-fetch";
+
+export interface RemoteCredentials {
+  peerId: string;
+  password: string;
+}
+
+export type FetchCredsResult =
+  | { ok: true; creds: RemoteCredentials }
+  | { ok: false; notConfigured: boolean };
+
 export function buildRustdeskUrl(peerId: string, password: string): string {
   return `rustdesk://connection/new/${encodeURIComponent(peerId)}?password=${encodeURIComponent(password)}`;
 }
 
-export async function fetchRemoteCredentials(propertyId: string): Promise<{ peerId: string; password: string } | null> {
-  const res = await fetch(`/api/remote-access/${propertyId}`).catch(() => null);
-  if (!res || !res.ok) return null;
-  return (await res.json()) as { peerId: string; password: string };
+/**
+ * kind "prewarm": background fetch at Answer — default retries; audited trigger=prewarm.
+ * kind "click": user-gesture path — retries capped at 1 so a crawling fetch cannot
+ * outlive the transient-activation window for the rustdesk:// navigation (spec §8.6).
+ * notConfigured distinguishes a 404 (negative-cacheable) from transport failure (never cached).
+ */
+export async function fetchRemoteCredentials(
+  propertyId: string,
+  kind: "prewarm" | "click",
+): Promise<FetchCredsResult> {
+  const qs = kind === "prewarm" ? "?trigger=prewarm" : "";
+  const res = await reliableFetch(`/api/remote-access/${propertyId}${qs}`, undefined, {
+    label: "remote_access.credentials",
+    ...(kind === "click" ? { retries: 1 } : {}),
+  });
+  if (!res) return { ok: false, notConfigured: false };
+  if (res.status === 404) return { ok: false, notConfigured: true };
+  if (!res.ok) return { ok: false, notConfigured: false };
+  const data = (await res.json().catch(() => null)) as RemoteCredentials | null;
+  return data ? { ok: true, creds: data } : { ok: false, notConfigured: false };
 }
 
 /** Launch the native client. location.assign on a custom scheme never unloads the page. */
-export function launchRustdesk(creds: { peerId: string; password: string }): void {
+export function launchRustdesk(creds: RemoteCredentials): void {
   window.location.assign(buildRustdeskUrl(creds.peerId, creds.password));
 }
 ```
 
-Tests: URL encoding (peer with spaces/`?`/unicode password), 404 → null.
+Tests: URL encoding (peer with spaces/`?`/unicode password); `?trigger=prewarm` only on prewarm; `retries: 1` passed only on click; 404 → `notConfigured: true`; transport null / non-404 failure → `notConfigured: false`.
 
-- [ ] **Step 3: Pre-warm (D10):** provider gains `prewarm: Map<string, {peerId,password}>` — in the Answer dispatch (after accept fires), `void fetchRemoteCredentials(propertyId).then(cache)`. `connectToProperty(propertyId)` = cache hit → `launchRustdesk` sync; miss → fetch then launch; failure → small inline error state ("No remote access configured — ask an admin").
+- [ ] **Step 3: Provider pre-warm + `connectToProperty` (D10/D14 — DEP-HYGIENE, spec §3.5):**
+  - **Refs only, never context state** (churning the provider's memoized context value is the documented render-loop trap): `prewarmRef: Map<string, RemoteCredentials | "not-configured">` + `prewarmedCallIdRef: string | null` (+ the existing active ref-mirror for the stale guard).
+  - Effect deps **`[active?.callId, active?.propertyId]` — primitives, never the `active` object** (the softphone republishes a fresh `ActiveCallInfo` mid-call when `callTimeZone` arrives; object-keying would double-fetch + double-audit every audio call): callId null → clear both refs (call-end cache clear); callId === `prewarmedCallIdRef.current` → return (republish + StrictMode dedup); else stamp the ref and, if propertyId non-null, `void fetchRemoteCredentials(propertyId, "prewarm").then(…)` — the `.then` writes into `prewarmRef` **only if that callId is still active** (stale-response guard); `notConfigured` writes `"not-configured"`; transport failure writes nothing.
+  - `connectToProperty = useCallback(async (propertyId) => …, [])` on the context: cache hit → `launchRustdesk(hit)` **before the first await** (synchronous within the click gesture — the activation-preserving property) → `{ launched: true }`; miss or negative-cache entry → click-path fetch (bypasses the negative cache by construction), launch on success; returns `{ launched: false, notConfigured }` for the surface's inline error.
+  - Provider jsdom tests: pre-warm fires **once** per call despite republish churn (publish active, then republish a fresh object w/ timeZone added, same callId → 1 fetch); cache cleared at call end (connect afterwards → fresh fetch); cache-hit connect calls `location.assign` synchronously; 404-prewarm then click → fetch fires again (negative-cache bypass); a fetch resolving after `active` went null never populates the cache.
 
-- [ ] **Step 4: Surfaces:** `connectSlot` on every property card (`Button variant="neutral"` "Connect" — NEVER gated, admins + agents, quiet + ringing + on-call alike); a Connect button in `audio-call-overlay.tsx` controls row, `video-call.tsx` control bar, and the tile bar — all calling `connectToProperty(active.propertyId)`. Overlay/`video-call` changes are these buttons only (D2/D12 discipline — state in the diff review).
+- [ ] **Step 4: `components/dashboard/connect-button.tsx`** — small client component: `useCallSurfaceOptional()`, `Button variant="neutral" size="sm"` "Connect", transient inline error line ("No remote access configured — ask an admin." / "Could not fetch credentials — try again."); renders nothing without a provider. **NEVER gated** (agents + admins, quiet + ringing + on-call alike — D10/D11).
 
-- [ ] **Step 5: Gate + commit** (`feat(remote-access): audited credential API + Connect from card, overlays, and tile (D12) with pre-warm`).
+- [ ] **Step 5: Gate + commit** (`feat(remote-access): audited credential API (no-store) + provider pre-warm + connectToProperty + ConnectButton (D14)`).
 
-## Task 20: Phase E smoke + pilot provisioning (HUMAN)
+## Task 19b: Connect surface wiring — grid default, overlays, tile (D12) *(2026-07-07 re-slice: mechanical + additive; D2/D12 discipline — buttons only, the review is a diff-shape check)*
 
-- [ ] Apply 0020 to prod at merge; Kumar enters the pilot hotel PC's peer id + unattended password via the new admin card (moves it out of the PM vault as the runtime source of truth; PM keeps a backup copy). Smoke on prod: Connect from the card (Mac, RustDesk installed) → session opens with no password prompt; answer a kiosk call → Connect from the overlay AND from the tile mid-call; audit log shows `credentials_issued` rows; agent role sees Connect but no admin CRUD. Record results.
+**Files:**
+- Modify: `apps/portal/components/dashboard/pod-card-grid.tsx` — default `connectSlot` to `<ConnectButton propertyId={p.id} />` when no `connectFor` override (**the grid is already client-side; injecting a function prop from the agent RSC page is impossible — server→client boundary — and the default means ZERO changes to the agent page, `fleet-board`, and `property-card`**)
+- Modify: `apps/portal/components/softphone/softphone.tsx` (pass `onConnect` built from `connectToProperty` + its `incomingPropertyIdRef`; propertyId null → pass `undefined`) + `apps/portal/components/softphone/audio-call-overlay.tsx` (new `onConnect?: () => void` prop; Connect button in the control bar beside Mute, disabled when absent — the overlay never had propertyId, it stays props-driven)
+- Modify: `apps/portal/components/video-call/video-call-host.tsx` (pass the call's `propertyId`) + `apps/portal/components/video-call/video-call.tsx` (new `propertyId: string | null` prop; Connect button in the control bar, disabled when null)
+- Modify: `apps/portal/components/call-tile/call-tile.tsx` (replace the disabled "Coming soon" placeholder: enabled when `active?.propertyId` non-null → `connectToProperty(active.propertyId)`; stays disabled otherwise — **nullable-propertyId rule**, spec §3.5; `UnmatchedRingCards` get no Connect — conscious omission)
+- Tests (jsdom): overlay renders Connect + fires `onConnect` / disabled without it; VideoCall Connect disabled when `propertyId` null; tile Connect enabled/disabled by `active.propertyId`, click calls `connectToProperty`.
+
+- [ ] **Step 1:** wire the four surfaces (buttons only — no call-logic line may move; the spec review checks exactly this).
+- [ ] **Step 2:** jsdom tests above.
+- [ ] **Step 3: Gate + commit** (`feat(remote-access): Connect on cards, both in-call overlays, and the call tile (D12)`).
+
+## Task 20: Phase E smoke on STAGING + provisioning notes (HUMAN) *(re-scoped 2026-07-07 — blue-green: `main` deploys nothing; live proof = box staging now, the Phase-5 cutover for the rest)*
+
+- [ ] Apply 0020 to **staging** Supabase; Kumar enters the pilot hotel PC's peer id + unattended password in the **staging** admin card (transient — deleted below). Smoke on box staging, Mac with RustDesk installed:
+  - Admin CRUD: save · rotate · Remove · "•••• saved" placeholder (the stored password never re-renders) · last-issued line.
+  - Connect from the card (agent role, AND admin on a NON-covered property) → native RustDesk opens the key-authed session with **no password prompt**.
+  - Answer a kiosk video call → Connect from the **video overlay** and **from the tile mid-call** (tile = named pass/fail — spec §8 risk 6 activation transfer; on fail, apply the recorded fallback — focus the main window first, then navigate — and re-test).
+  - `/admin/audit` shows `credentials_issued` rows with `trigger` values (`prewarm` from the answer, `connect` from card clicks); agent role sees Connect everywhere but no admin CRUD card.
+  - **Delete the staging credential row after the smoke** (transient residency — D14).
+- [ ] **NOT smokeable here:** Connect from the AUDIO in-call overlay (staging has no Twilio) — jsdom-covered in Task 19b; live-verified at the Phase-5 cutover (migration-plan step 8 names it; 2026-07-07 edit).
+- [ ] **Prod bits re-homed (blue-green):** 0020 → prod Supabase and the real pilot credential entry (the password's runtime home moves PM → vault; PM keeps a backup) happen at migration-plan **Phase-5 step 5** — both already written into that plan (2026-07-07 edits). Record smoke results here.
 
 ---
 
@@ -2560,8 +2644,8 @@ Tests: URL encoding (peer with spaces/`?`/unicode password), 404 → null.
 ## Task 21: Phase-3 close-out (HUMAN + docs)
 
 - [ ] **Retire the prototype:** delete `app/duty-tile-prototype/` + `components/duty-tile/duty-tile-prototype.tsx` + `tile-window.tsx` + the Gate-3.0 test route surface (keep `pip-document.ts` — the call tile imports it; keep `tick-stats.ts` + its test only if something still imports it, else delete) + prod route gone. Full suite green after deletion.
-- [ ] **Done-when checklist (migration plan Phase 3, hold line removed):** answer on expanded card (agent + covering admin) ✓ · one-click Connect from card AND from inside a live call ✓ · admin-connect to a non-covered property ✓ · loud ring with browser minimized behind fullscreen RustDesk (push) + toast observed ✓ · tile opens on Answer and carries the call over RustDesk ✓.
-- [ ] **Docs sync:** stamp the migration plan Phase-3 STATUS + done-when (hold moved to the deferred list); CLAUDE.md current-focus; `MEMORY.md` + `memory/project-status.md`; tag `plan-phase3-workspace-complete` after Kumar's final nod.
+- [ ] **Done-when checklist (migration plan Phase 3, hold line removed):** answer on expanded card (agent + covering admin) ✓ · one-click Connect from card AND from inside a live call ✓\* · admin-connect to a non-covered property ✓ · loud ring with browser minimized behind fullscreen RustDesk (push) + toast observed ✓ · tile opens on Answer and carries the call over RustDesk ✓. \* *The AUDIO-overlay in-call Connect line is checked at the Phase-5 cutover — staging has no Twilio (spec §6, 2026-07-07).*
+- [ ] **Docs sync:** stamp the migration plan Phase-3 STATUS + done-when (hold moved to the deferred list); CLAUDE.md current-focus; `MEMORY.md` + `memory/project-status.md`; **`docs/security-posture.md` addendum — the RustDesk credential class (storage posture, access paths, issuance audit, full residency incl. the box's nightly `pg_dump` set — D14)**; tag `plan-phase3-workspace-complete` after Kumar's final nod.
 - [ ] **Whole-branch review:** opus-tier subagent over the full Phase-3 diff (house pattern) before the final PR.
 
 ---

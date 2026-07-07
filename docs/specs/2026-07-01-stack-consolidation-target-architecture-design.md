@@ -70,7 +70,7 @@ Why not the usual suspects:
 
 **Connect flow (agent side):**
 1. Agent clicks **Connect** (property card, or in-call).
-2. Portal API returns `{ peerId, password }` just-in-time — authenticated via `requireApiActor` (operator-scoped like every session route; per-property tightening rides the existing v2 scoping seam), audited (`remote_access.connected`).
+2. Portal API returns `{ peerId, password }` just-in-time — authenticated via `requireApiActor` (operator-scoped like every session route; per-property tightening rides the existing v2 scoping seam), audited (~~`remote_access.connected`~~ **superseded 2026-07-07, workspace-spec D14: issuance-based `remote_access.credentials_issued`** — pre-warm at Answer is an issuance; a cache-hit in-call Connect emits no extra row; connect-level audit truth returns with the v2 rotation seam).
 3. Client fires the deep link **`rustdesk://connection/new/<peerId>?password=<pw>`** — format verified in RustDesk's shipped source (`urlLinkToCmdArgs` in [flutter/lib/common.dart](https://github.com/rustdesk/rustdesk/blob/master/flutter/lib/common.dart); community-confirmed in [discussion #5299](https://github.com/rustdesk/rustdesk/discussions/5299)). Fire via programmatic navigation (no history entry); CLI equivalent `rustdesk --connect <id> --password <pw>` exists for a future desktop shell.
 4. Native RustDesk opens the session; the call (if any) morphs into the floating window (§5).
 
@@ -110,7 +110,7 @@ Detailed UX spec comes at Phase-3 build; the locked direction (amended after Kum
 
 - **Fleet view, grouped by pod:** agent header (presence) + their properties beneath, for every pod; the existing command-center strip (live calls, agents online, open incidents, phone health) stays on top. Same shared card component as the agent view — only the selection differs.
 - **Ringing/Answer on admin cards is gated by `covering`** — exactly the existing dial-routing rule; no routing changes.
-- **Connect is NOT gated by covering: admins can Connect to any property's hotel PC at any time** (fleet-support role — "let me look at hotel 12's PC"). Locked per Kumar. Credential API stays operator-scoped (`requireApiActor`), which already permits this; every connect is audited either way.
+- **Connect is NOT gated by covering: admins can Connect to any property's hotel PC at any time** (fleet-support role — "let me look at hotel 12's PC"). Locked per Kumar. Credential API stays operator-scoped (`requireApiActor`), which already permits this; ~~every connect is audited either way~~ **(amended 2026-07-07, workspace-spec D14: audit is issuance-based — the fleet-support card-Connect always fetches fresh credentials and is therefore always audited; only an in-call cache-hit Connect after pre-warm emits no extra row).**
 - Admins get the same deskphone tile + layered alerting; RLS is already operator-wide for admins, so no policy changes.
 
 ## 6. Video: Agora → LiveKit
