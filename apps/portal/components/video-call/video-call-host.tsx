@@ -113,6 +113,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
     <VideoCall
       callId={active.id}
       propertyName={active.propertyName}
+      propertyId={active.propertyId}
       onClose={() => setActive(null)}
     />
   ) : null;

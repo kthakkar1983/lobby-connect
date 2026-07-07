@@ -98,4 +98,20 @@ describe("AudioCallOverlay", () => {
     expect(onSaveNotes).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.getByText(/notes saved/i)).toBeTruthy());
   });
+
+  // Phase E (Task 19b): the Connect control launches remote access for the
+  // call's property; disabled when the caller has no propertyId to resolve
+  // (e.g. the ringing call's propertyId Parameter was absent).
+  it("calls onConnect from the Connect control when provided", async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn();
+    render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+    expect(onConnect).toHaveBeenCalledOnce();
+  });
+
+  it("disables the Connect control when onConnect is absent", () => {
+    render(<AudioCallOverlay {...baseProps} />);
+    expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
+  });
 });

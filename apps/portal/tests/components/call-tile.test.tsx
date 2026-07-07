@@ -12,6 +12,23 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, cleanup, waitFor, within } from "@testing-library/react";
+import type * as RemoteAccessConnect from "@/lib/remote-access/connect";
+
+// Phase E (Task 19b): the tile's Connect control calls the REAL
+// connectToProperty (via the real CallSurfaceProvider below) — mock only its
+// leaf dependencies (network fetch + navigation) so the test stays a unit test.
+const remoteAccess = vi.hoisted(() => ({
+  fetchRemoteCredentials: vi.fn(),
+  launchRustdesk: vi.fn(),
+}));
+vi.mock("@/lib/remote-access/connect", async (importOriginal) => {
+  const actual = await importOriginal<typeof RemoteAccessConnect>();
+  return {
+    ...actual,
+    fetchRemoteCredentials: remoteAccess.fetchRemoteCredentials,
+    launchRustdesk: remoteAccess.launchRustdesk,
+  };
+});
 
 import {
   CallSurfaceProvider,
@@ -41,6 +58,13 @@ beforeEach(() => {
     configurable: true,
     value: vi.fn().mockResolvedValue(undefined),
   });
+  remoteAccess.fetchRemoteCredentials.mockReset();
+  // Every publishActive() fires a "prewarm" fetch (call-surface-provider's own
+  // effect) before any test-specific Connect click — default it to a benign
+  // miss so tests that don't care about Connect aren't broken by an unhandled
+  // rejection/undefined `.then()`. Connect-specific tests override as needed.
+  remoteAccess.fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: true });
+  remoteAccess.launchRustdesk.mockReset();
 });
 
 afterEach(() => {
@@ -351,5 +375,58 @@ describe("CallTile", () => {
     // tileMount stays null (no call → no reason to have opened one) → no portal
     // exists anywhere, so there's nothing to query for tile content.
     expect(screen.queryByText("The Grand Hotel")).toBeNull();
+  });
+
+  // Phase E (Task 19b): the tile's Connect control mirrors the property card's
+  // ConnectButton via the same connectToProperty() on the surface. publishActive
+  // pre-warms credentials in the background (call-surface-provider's own
+  // effect), so a click that lands after the pre-warm resolved is a cache HIT —
+  // it launches synchronously without a second ("click") fetch.
+  it("Connect is enabled and launches remote access for the active call's property", async () => {
+    remoteAccess.fetchRemoteCredentials.mockResolvedValue({
+      ok: true,
+      creds: { peerId: "peer-1", password: "pw" },
+    });
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    // Let the background pre-warm fetch resolve and cache the creds.
+    await waitFor(() =>
+      expect(remoteAccess.fetchRemoteCredentials).toHaveBeenCalledWith(
+        audioActive.propertyId,
+        "prewarm",
+      ),
+    );
+
+    const tile = within(pipDoc.body);
+    const connectBtn = tile.getByText("Connect").closest("button") as HTMLButtonElement;
+    expect(connectBtn.disabled).toBe(false);
+
+    await act(async () => {
+      connectBtn.click();
+    });
+
+    expect(remoteAccess.launchRustdesk).toHaveBeenCalledWith({ peerId: "peer-1", password: "pw" });
+  });
+
+  it("disables Connect when the active call has no propertyId", async () => {
+    const { pipDoc } = renderTile({
+      active: { ...audioActive, propertyId: null },
+      controls: makeControls(),
+    });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    const connectBtn = tile.getByText("Connect").closest("button") as HTMLButtonElement;
+    expect(connectBtn.disabled).toBe(true);
+
+    await act(async () => {
+      connectBtn.click();
+    });
+    expect(remoteAccess.fetchRemoteCredentials).not.toHaveBeenCalled();
   });
 });

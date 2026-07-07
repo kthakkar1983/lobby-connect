@@ -753,6 +753,10 @@ export function Softphone({ role }: SoftphoneProps) {
   // End shift is disabled mid-call/mid-ring — you can't leave a live call.
   const canEndShift = phase !== "in-call" && phase !== "incoming";
 
+  // Phase E (Task 19b): the current call's propertyId for the overlay's Connect
+  // button — read at render from the ref the "incoming" handler already set.
+  const connectPropertyId = incomingPropertyIdRef.current;
+
   return (
     <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
       <div className="flex items-center justify-between">
@@ -873,6 +877,11 @@ export function Softphone({ role }: SoftphoneProps) {
           onToggleCaptions={toggleCaptions}
           showReopenTile={tileClosedByUser && docPipSupported()}
           onReopenTile={() => openTileForCall?.()}
+          onConnect={
+            surface?.connectToProperty && connectPropertyId
+              ? () => void surface.connectToProperty(connectPropertyId)
+              : undefined
+          }
         />
       )}
 

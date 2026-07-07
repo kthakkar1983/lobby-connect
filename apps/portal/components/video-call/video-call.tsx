@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2 } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
@@ -16,7 +16,19 @@ import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 
-export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
+export function VideoCall({
+  callId,
+  onClose,
+  propertyName,
+  propertyId,
+}: {
+  callId: string;
+  onClose: () => void;
+  propertyName: string;
+  /** Phase E (Task 19b): drives the control bar's Connect button. Nullable —
+   *  a video ring can carry a null propertyId same as audio's TwiML Parameter. */
+  propertyId: string | null;
+}) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<"camera" | "mic" | "both" | null>(null);
@@ -379,6 +391,16 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
         >
           Swap
+        </button>
+        <button
+          type="button"
+          disabled={!propertyId || !surface}
+          onClick={() => {
+            if (propertyId) void surface?.connectToProperty(propertyId);
+          }}
+          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm disabled:opacity-50"
+        >
+          <Monitor size={16} /> Connect
         </button>
         <button
           type="button"
