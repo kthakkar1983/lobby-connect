@@ -106,11 +106,18 @@ export async function GET(): Promise<NextResponse> {
   const actor = actorOrResponse;
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("status, last_seen_at")
     .eq("id", actor.userId)
     .maybeSingle();
+
+  // Surface a read error as 500 so the client's !res.ok path FAILS OPEN
+  // (spec §3.4: a blip must never hydrate a live agent off duty). A clean
+  // null row (profile deleted mid-request) still reads as off duty below.
+  if (error) {
+    return NextResponse.json({ error: "Could not read duty state" }, { status: 500 });
+  }
 
   const status = data?.status ?? "OFFLINE";
   return NextResponse.json({

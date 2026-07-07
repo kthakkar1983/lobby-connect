@@ -36,6 +36,7 @@ let dutyRow: { status: string; last_seen_at: string | null } | null = {
   status: "AVAILABLE",
   last_seen_at: new Date().toISOString(),
 };
+let dutyReadError: { message: string } | null = null;
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -56,7 +57,7 @@ vi.mock("@/lib/supabase/admin", () => ({
                 Promise.resolve(
                   cols.includes("role")
                     ? { data: { id: "u1", operator_id: "op-1", role: "AGENT" } }
-                    : { data: dutyRow },
+                    : { data: dutyReadError ? null : dutyRow, error: dutyReadError },
                 ),
             }),
           }),
@@ -87,6 +88,7 @@ beforeEach(() => {
   refreshedRows = [{ id: "u1" }];
   refreshError = null;
   dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
+  dutyReadError = null;
 });
 
 describe("POST /api/presence", () => {
@@ -270,5 +272,10 @@ describe("GET /api/presence (D13 hydration)", () => {
   it("missing row → off duty, accepting true", async () => {
     dutyRow = null;
     expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+  });
+
+  it("a DB error on the duty read surfaces as 500 (client fails open on !res.ok)", async () => {
+    dutyReadError = { message: "boom" };
+    expect((await GET()).status).toBe(500);
   });
 });
