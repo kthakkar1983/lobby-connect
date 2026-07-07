@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
 import { PropertyForm } from "../property-form";
 import { AssignmentCard, type AgentOption } from "./assignment-card";
 import { KioskLinkCard } from "./kiosk-link-card";
+import { RemoteAccessCard } from "./remote-access-card";
 
 export default async function PropertyDetailPage({
   params,
@@ -68,6 +70,27 @@ export default async function PropertyDetailPage({
     currentAgentName = agent?.full_name ?? null;
   }
 
+  // Write-only credential rule: never fetch unattended_password to any
+  // client. This table has zero client RLS policies (migration 0020), so the
+  // read must go through the service-role admin client.
+  const admin = createAdminClient();
+  const { data: remoteAccess } = await admin
+    .from("property_remote_access")
+    .select("peer_id, updated_at")
+    .eq("property_id", id)
+    .maybeSingle();
+
+  // 2-query house pattern: the admin has a SELECT policy on audit_logs, so
+  // the "last issued" timestamp is read via the user-scoped client.
+  const { data: lastIssued } = await supabase
+    .from("audit_logs")
+    .select("created_at")
+    .eq("entity_id", id)
+    .eq("action", "remote_access.credentials_issued")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -93,6 +116,13 @@ export default async function PropertyDetailPage({
       />
 
       <KioskLinkCard propertyId={property.id} />
+
+      <RemoteAccessCard
+        propertyId={property.id}
+        peerId={remoteAccess?.peer_id ?? null}
+        hasCredentials={!!remoteAccess}
+        lastIssuedAt={lastIssued?.created_at ?? null}
+      />
     </div>
   );
 }
