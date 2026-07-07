@@ -772,4 +772,28 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     // refresh re-stamps last_seen well inside the 90s stale window.
     await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
   });
+
+  it("an OFF-duty tab resyncs to ON duty via focus when the shift resumed elsewhere", async () => {
+    // Smoke finding (2026-07-06): tab B sat off duty forever after tab A clicked
+    // Go on duty — off-duty tabs beat nothing, so they need a read-only resync.
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+    // Tab A (elsewhere) went on duty with Accepting OFF — server truth changed.
+    hydration = { onDuty: true, accepting: false };
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); // resync tick
+    });
+    // The tab flips on duty AND applies accepting BEFORE its follow-up beat, so
+    // the beat posts AWAY (never the pre-resync accepting default).
+    await waitFor(() => screen.getByText("Not accepting calls"));
+    await waitFor(() => {
+      const posts = presencePosts();
+      expect(posts.length).toBe(1);
+      const body = JSON.parse((posts[0]?.[1] as RequestInit).body as string) as {
+        status: string;
+      };
+      expect(body.status).toBe("AWAY");
+    });
+  });
 });

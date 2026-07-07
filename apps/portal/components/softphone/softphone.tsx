@@ -188,6 +188,47 @@ export function Softphone({ role }: SoftphoneProps) {
   const beatRef = useRef(beat);
   beatRef.current = beat;
 
+  // Shared hydration applier (mount hydration + off-duty resync): only literal
+  // booleans are applied — anything shapeless is fail-open (defaults stand).
+  // Stable ([]) — writes refs + setState only.
+  const applyDutyHydration = useCallback(
+    (body: { onDuty?: boolean; accepting?: boolean } | null) => {
+      if (typeof body?.onDuty === "boolean") {
+        onDutyRef.current = body.onDuty;
+        setOnDuty(body.onDuty);
+      }
+      if (typeof body?.accepting === "boolean") {
+        readyRef.current = body.accepting;
+        setReady(body.accepting);
+      }
+    },
+    [],
+  );
+
+  // D13 follow-up (2026-07-06 smoke finding): an OFF-duty tab beats nothing, so
+  // it would never learn the shift resumed from another tab's Go on duty. Resync
+  // by re-reading the hydration GET on the beat cadence (interval + focus) —
+  // READ-ONLY, so it can never resurrect a shift; the server gate stays the
+  // enforcement. Applies `accepting` BEFORE the follow-up beat so that beat
+  // can't post a stale default over a real AWAY. Self-gates: no-op while on
+  // duty or pre-hydration (mirror image of beat()).
+  const resyncDuty = useCallback(async () => {
+    if (!dutyHydratedRef.current || onDutyRef.current) return;
+    try {
+      const res = await fetch("/api/presence");
+      if (!res.ok) return; // fail-open: stay as-is, retry next tick
+      const body = (await res.json().catch(() => null)) as
+        | { onDuty?: boolean; accepting?: boolean }
+        | null;
+      applyDutyHydration(body);
+      // Shift is live again: stamp last_seen right away (mirrors hydration's
+      // immediate first beat) with the just-applied accepting state.
+      if (onDutyRef.current) void beatRef.current();
+    } catch {
+      /* next tick retries */
+    }
+  }, [applyDutyHydration]);
+
   // Beacon: report line phase to the LineStatusContext so the greeting widget
   // can reflect live status. The default context is a no-op, so this is safe
   // in layouts that don't mount a provider (admin layout).
@@ -437,18 +478,23 @@ export function Softphone({ role }: SoftphoneProps) {
     };
   }, [connect]);
 
-  // Heartbeat: keep last_seen + status fresh while ON duty (hydration-gated —
-  // see beat()). Refs are read inside the interval so a duty flip never tears
-  // the interval down; deps [beat] rebuild exactly when [intendedStatus] did.
+  // Heartbeat + off-duty resync, one cadence: each tick fires both paths and
+  // each self-gates on the opposite duty state (beat() while on duty, resync
+  // while off). Refs are read inside the interval so a duty flip never tears
+  // the interval down; deps rebuild exactly when [intendedStatus] did
+  // (resyncDuty is []-stable).
   useEffect(() => {
-    const id = setInterval(() => void beat(), HEARTBEAT_MS);
-    const onFocus = () => void beat();
-    window.addEventListener("focus", onFocus);
+    const tick = () => {
+      void beat();
+      void resyncDuty();
+    };
+    const id = setInterval(tick, HEARTBEAT_MS);
+    window.addEventListener("focus", tick);
     return () => {
       clearInterval(id);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", tick);
     };
-  }, [beat]);
+  }, [beat, resyncDuty]);
 
   // D13 hydration: init duty + Accepting from the SERVER instead of assuming
   // true on mount (the pre-D13 leak: any refresh silently re-entered the shift
@@ -465,14 +511,7 @@ export function Softphone({ role }: SoftphoneProps) {
           const body = (await res.json().catch(() => null)) as
             | { onDuty?: boolean; accepting?: boolean }
             | null;
-          if (!cancelled && typeof body?.onDuty === "boolean") {
-            onDutyRef.current = body.onDuty;
-            setOnDuty(body.onDuty);
-          }
-          if (!cancelled && typeof body?.accepting === "boolean") {
-            readyRef.current = body.accepting;
-            setReady(body.accepting);
-          }
+          if (!cancelled) applyDutyHydration(body);
         }
       } catch {
         /* fail-open: defaults stand */
@@ -487,7 +526,8 @@ export function Softphone({ role }: SoftphoneProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // applyDutyHydration is []-stable, so this still runs exactly once.
+  }, [applyDutyHydration]);
 
   // Clean up the caption-grab poll if the component unmounts mid-call.
   useEffect(() => () => {
