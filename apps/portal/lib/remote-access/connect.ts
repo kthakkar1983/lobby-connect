@@ -35,7 +35,24 @@ export async function fetchRemoteCredentials(
   return data ? { ok: true, creds: data } : { ok: false, notConfigured: false };
 }
 
-/** Launch the native client. location.assign on a custom scheme never unloads the page. */
+/**
+ * Launch the native RustDesk client via its `rustdesk://` deep link WITHOUT
+ * navigating the top window. A top-level navigation to an external scheme
+ * (window.location.assign, or an anchor without target) fires the page's
+ * pagehide/unload — which tears down any live LiveKit WebRTC PeerConnections,
+ * killing an in-progress video call the instant Connect is pressed (root-caused
+ * on staging 2026-07-07: call survives backgrounding, dies only on the launch).
+ * A transient hidden iframe navigates a throwaway SUBFRAME instead, so the top
+ * document and its media connections are never unloaded. Created synchronously
+ * within the click so the OS handoff keeps the user activation.
+ */
 export function launchRustdesk(creds: RemoteCredentials): void {
-  window.location.assign(buildRustdeskUrl(creds.peerId, creds.password));
+  if (typeof document === "undefined") return;
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.display = "none";
+  iframe.src = buildRustdeskUrl(creds.peerId, creds.password);
+  document.body.appendChild(iframe);
+  // Remove once the OS has picked up the scheme; harmless if already gone.
+  window.setTimeout(() => iframe.remove(), 2000);
 }
