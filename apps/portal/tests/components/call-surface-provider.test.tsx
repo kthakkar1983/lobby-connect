@@ -332,6 +332,23 @@ describe("CallSurfaceProvider", () => {
             republish call-1 (tz set)
           </button>
           <button onClick={() => publishActive("AUDIO", null)}>clear active</button>
+          {/* A genuinely new call (new callId) for a DIFFERENT property — the
+              call-B-overwrites-call-A transition with no intervening null. */}
+          <button
+            onClick={() =>
+              publishActive("VIDEO", {
+                callId: "call-2",
+                channel: "VIDEO",
+                propertyId: "prop-2",
+                propertyName: "Hotel B",
+                onHold: false,
+                answeredAt: 3_000,
+                timeZone: null,
+              })
+            }
+          >
+            publish call-2 (prop-2)
+          </button>
           <button
             onClick={async () => {
               const r = await connectToProperty("prop-1");
@@ -492,6 +509,74 @@ describe("CallSurfaceProvider", () => {
       });
       expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
       expect(launchRustdesk).not.toHaveBeenCalled();
+    });
+
+    it("a transport-failure pre-warm writes NOTHING → a later connect re-fetches", async () => {
+      // Pre-warm resolves as a transport failure (not a 404): the cache must stay
+      // empty so the next Connect click re-fetches rather than serving a stale miss.
+      fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: false });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Nothing cached → Connect re-fetches via the click path.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p", password: "w" },
+      });
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+      expect(launchRustdesk).toHaveBeenCalledTimes(1);
+    });
+
+    it("a new-call transition to a DIFFERENT property drops the prior entry (no stale hit)", async () => {
+      // Pre-warm prop-1 (resolves ok, cached), then a genuine new call (call-2)
+      // for prop-2 overwrites the active slot with NO intervening null. The cache
+      // must clear on the callId change, so a Connect to prop-1 re-fetches (and
+      // re-audits) rather than serving prop-1's now-stale creds.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p1", password: "w1" },
+      });
+      render(
+        <CallSurfaceProvider>
+          <PrewarmHarness />
+        </CallSurfaceProvider>,
+      );
+
+      await act(async () => {
+        screen.getByText("publish call-1 (tz null)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(1));
+
+      // Call B (new callId, prop-2) directly overwrites call A — pre-warms prop-2.
+      fetchRemoteCredentials.mockResolvedValueOnce({
+        ok: true,
+        creds: { peerId: "p2", password: "w2" },
+      });
+      await act(async () => {
+        screen.getByText("publish call-2 (prop-2)").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(2));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-2", "prewarm");
+
+      // prop-1 is no longer cached → Connect to prop-1 re-fetches (via click).
+      fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: true });
+      await act(async () => {
+        screen.getByText("connect prop-1").click();
+      });
+      await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(3));
+      expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
     });
   });
 });

@@ -38,3 +38,16 @@ describe("scrubPii — recording PII", () => {
     expect(scrubPii({ note: `logo at ${url}` })).toEqual({ note: `logo at ${url}` });
   });
 });
+
+describe("scrubPii — password runs (RustDesk deep link)", () => {
+  it("redacts a password= run in a rustdesk:// deep link, keeping the rest intact", () => {
+    expect(scrubPii("launching rustdesk://connection/new/123456?password=hunter2 now")).toBe(
+      "launching rustdesk://connection/new/123456?password=[REDACTED] now",
+    );
+  });
+  it("redacts a password= run in any URL/query string", () => {
+    expect(scrubPii("https://x.example.com/login?user=a&password=s3cr3t&next=/home")).toBe(
+      "https://x.example.com/login?user=a&password=[REDACTED]&next=/home",
+    );
+  });
+});

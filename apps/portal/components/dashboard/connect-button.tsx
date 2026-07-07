@@ -13,9 +13,11 @@ export function ConnectButton({ propertyId }: { propertyId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   if (!surface) return null;
+  // Captured after the guard so `connectToProperty` is non-null here (no `!`).
+  const { connectToProperty } = surface;
 
   async function handleClick() {
-    const r = await surface!.connectToProperty(propertyId);
+    const r = await connectToProperty(propertyId);
     if (r.launched) {
       setError(null);
       return;

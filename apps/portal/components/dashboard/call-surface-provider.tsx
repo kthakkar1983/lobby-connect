@@ -161,10 +161,13 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
 
   // Pre-warmed RustDesk credentials for the CURRENT call's property (spec §3.5).
   // Refs only — NEVER context state: writing the cache into the memoized `value`
-  // would churn it every fetch and loop the whole tree. The map holds only the
-  // active call's property; `prewarmedCallIdRef` dedups the softphone's mid-call
-  // ActiveCallInfo republish (it re-publishes when callTimeZone arrives) and
-  // React StrictMode's double-invoke, so we fetch/audit exactly once per call.
+  // would churn it every fetch and loop the whole tree. The map holds ONLY the
+  // current call's property — it's cleared on EVERY callId transition (call end
+  // OR a direct call-B-overwrites-call-A change), so a Connect during call B can
+  // never hit call A's stale creds and skip the issuance audit. `prewarmedCallIdRef`
+  // dedups the softphone's mid-call ActiveCallInfo republish (it re-publishes when
+  // callTimeZone arrives) and React StrictMode's double-invoke, so we fetch/audit
+  // exactly once per call.
   const prewarmRef = useRef<Map<string, RemoteCredentials | "not-configured">>(new Map());
   const prewarmedCallIdRef = useRef<string | null>(null);
 
@@ -258,7 +261,12 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       prewarmedCallIdRef.current = null;
       return;
     }
-    if (active.callId === prewarmedCallIdRef.current) return; // republish / StrictMode dedup
+    if (active.callId === prewarmedCallIdRef.current) return; // republish / StrictMode dedup — keep current creds
+    // A genuinely new call (callId changed): drop any prior property's creds so
+    // a Connect during THIS call can only ever serve — or audit-miss on — the
+    // current property. Runs AFTER the same-callId early-return, so a republish
+    // never clears the current call's pre-warmed creds.
+    prewarmRef.current.clear();
     prewarmedCallIdRef.current = active.callId;
     if (active.propertyId == null) return; // nothing to key on
     const callId = active.callId;

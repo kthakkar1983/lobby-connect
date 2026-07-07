@@ -21,10 +21,18 @@ const PHONE_RE = /\+?\d[\d\s().-]{8,}\d/g;
 // under a recording-named key. Redact the whole URL (run before PHONE_RE so the
 // entire URL is dropped, not just digit runs inside it).
 const RECORDING_URL_RE = /https?:\/\/\S*\/Recordings\/\S*/gi;
+// Redact any `password=<value>` run in free text (breadcrumbs, messages). Covers
+// the RustDesk deep link (rustdesk://…?password=<unattended pw>) and any other
+// URL/string that accidentally carries a password. Only the secret value is
+// dropped — the `password=` marker is kept so the redaction is legible.
+const PASSWORD_RE = /password=[^&\s"']+/gi;
 
 export function scrubPii(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(RECORDING_URL_RE, "[redacted]").replace(PHONE_RE, "[redacted]");
+    return value
+      .replace(RECORDING_URL_RE, "[redacted]")
+      .replace(PASSWORD_RE, "password=[REDACTED]")
+      .replace(PHONE_RE, "[redacted]");
   }
   if (Array.isArray(value)) {
     return value.map(scrubPii);
