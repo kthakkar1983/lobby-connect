@@ -735,4 +735,41 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
       ).toBe(true),
     );
   });
+
+  it("hydration failure FAILS OPEN — defaults stand and beats still flow", async () => {
+    // GET /api/presence → 500 (e.g. the route's DB-error path). The client must
+    // keep its fail-open defaults (on duty, accepting) and keep beating — the
+    // server-side gate is the enforcement, not the hydration read.
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ token: "test-token" }),
+        });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      }
+      if (url === "/api/presence") {
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    });
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i)); // defaults stand
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+  });
+
+  it("an on-duty hydration fires the first beat immediately (mid-shift refresh re-stamps)", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+    // No focus event, no timer advance: the post-hydration beat (or the
+    // gate-riding registration stamp) must already have POSTed so a mid-shift
+    // refresh re-stamps last_seen well inside the 90s stale window.
+    await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+  });
 });
