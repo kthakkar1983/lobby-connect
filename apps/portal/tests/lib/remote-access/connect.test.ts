@@ -85,5 +85,6 @@ describe("fetchRemoteCredentials", () => {
   });
 });
 
-// launchRustdesk exercises window.location.assign; it's covered in the jsdom
-// call-surface-provider tests (cache-hit connect path), not here (node env).
+// launchRustdesk touches the DOM (a transient iframe), so it's covered in the
+// jsdom launch-rustdesk.test.ts (and via the call-surface-provider cache-hit
+// path), not here (node env).

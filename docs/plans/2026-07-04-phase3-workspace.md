@@ -2428,6 +2428,8 @@ Phase-D staging/prod smoke (HUMAN) — duty (D13) first, then tile:
 
 # PHASE E — remote access + Connect everywhere (D10, D11, D12)
 
+> **STATUS — BUILT + STAGING-SMOKED + MERGED to `main` (2026-07-07).** Tasks 18 / 19a / 19b code-complete, each two-stage reviewed + a whole-branch review = SHIP. Live staging smoke PASSED: route (`no-store`, operator-scoped 404) · admin CRUD + write-only UI + `updated`/`removed` audits (password never in details) · card Connect → real RustDesk connection + `credentials_issued trigger=connect` · pre-warm at Answer (`trigger=prewarm`, one per call) · in-call Connect from overlay + tile with **no-double-audit** confirmed (cache hits emit no row). **Bug found + fixed live (`13acedb`, post-whole-branch-review):** `launchRustdesk` used `window.location.assign` on the main window → the `rustdesk://` nav fired the page unload → tore down the live LiveKit WebRTC → killed the video call on Connect. Fixed to launch via a transient **hidden iframe** (subframe nav can't unload the top doc); regression test pins it; Kumar re-tested live (video survives + RustDesk launches). **Task 20 (human smoke): PASSED.** **Task 21 (close-out) REMAINS (next chat):** retire `/duty-tile-prototype`, `security-posture.md` D14 addendum, CLAUDE.md/MEMORY sync (after reconciling the open PR #33 which owns CLAUDE.md), tag `plan-phase3-workspace-complete` on Kumar's final nod. Prod 0020 + real pilot creds = Phase-5 step 5. Handoff: `docs/handoffs/2026-07-07-phase-e-built-smoked-merged-handoff.md`.
+
 ## Task 18: migration 0020 + admin CRUD + audit actions *(rewritten 2026-07-07 — D14 + as-built trunk; see spec §3.5/D14)*
 
 **Files:**

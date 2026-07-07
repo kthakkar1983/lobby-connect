@@ -7,7 +7,7 @@ import { launchRustdesk } from "@/lib/remote-access/connect";
 // page's unload and tore down the live LiveKit PeerConnections, killing the
 // in-progress video call the instant Connect was pressed. The launch MUST go
 // through a transient subframe so the top document is never unloaded. (A revert
-// to location.assign would also throw "Not implemented: navigation" here.)
+// to location.assign creates no iframe, so the not.toBeNull() assertion fails.)
 describe("launchRustdesk", () => {
   afterEach(() => {
     document.body.innerHTML = "";
