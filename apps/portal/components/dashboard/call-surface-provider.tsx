@@ -105,6 +105,20 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   const [audioRings, setAudioRings] = useState<IncomingRing[]>([]);
   const [videoRings, setVideoRings] = useState<IncomingRing[]>([]);
   const [active, setActive] = useState<ActiveCallInfo | null>(null);
+  // ── TEMP tile-debug strip (2026-07-07 reopen-affordance diagnosis) ─────────
+  // DevTools can't be used on the real machine (opening it interferes with the
+  // DocPiP window — observed by Kumar), so the probes render ON-PAGE, Gate-3.0
+  // prototype style. Raw colors are deliberate throwaway chrome. REMOVE this
+  // whole block (state + tileLog + probe calls + the strip JSX) after diagnosis.
+  const [tileDebugLines, setTileDebugLines] = useState<string[]>([]);
+  const tileLog = useCallback((line: string) => {
+    console.log("[tile-debug]", line);
+    setTileDebugLines((prev) => [
+      ...prev.slice(-7),
+      `${new Date().toLocaleTimeString()} ${line}`,
+    ]);
+  }, []);
+  // ── end TEMP block header (probe call sites + strip JSX below) ─────────────
   // Handlers live in state, not refs: a ref write doesn't trigger a re-render,
   // so the `value` memo below would keep returning a stale `actions` snapshot
   // from before a late Softphone/video-host registration. State makes the
@@ -181,32 +195,34 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // — openCallTile() calls requestWindow() before returning, satisfying the
   // "must run inside the click, before any await" constraint.
   const openTileForCall = useCallback(() => {
-    if (tileHandleRef.current) return; // already open — no-op
+    if (tileHandleRef.current) {
+      tileLog("openTileForCall: no-op (already open)"); // TEMP tile-debug
+      return; // already open — no-op
+    }
+    tileLog("openTileForCall: requestWindow…"); // TEMP tile-debug
     openCallTile(
       (handle) => {
         tileHandleRef.current = handle;
         setTileMount(handle.mount);
         setTileClosedByUser(false);
-        // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
-        console.log("[tile-debug] onReady — tile open");
+        tileLog("onReady — tile open"); // TEMP tile-debug
       },
       () => {
         const wasProgrammatic = programmaticCloseRef.current;
         programmaticCloseRef.current = false;
         tileHandleRef.current = null;
         setTileMount(null);
-        // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
-        console.log("[tile-debug] onClosed", {
-          wasProgrammatic,
-          hasActive: !!activeRef.current,
-          activeChannel: activeRef.current?.channel ?? null,
-        });
+        // TEMP tile-debug — `programmatic:true` = OUR closeTile (auto-close on
+        // active→null); `false` = Chrome/user closed it.
+        tileLog(
+          `onClosed programmatic:${String(wasProgrammatic)} active:${activeRef.current?.channel ?? "null"}`,
+        );
         if (!wasProgrammatic && activeRef.current) {
           setTileClosedByUser(true);
         }
       },
     );
-  }, []);
+  }, [tileLog]);
 
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
   // changes, drop any silenced key that is no longer ringing. A brand-new call
@@ -233,13 +249,17 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // left to reopen into. closeTile is []-stable, so this effect only reruns
   // on real `active` transitions, not on every render.
   useEffect(() => {
-    // TEMP tile-debug (2026-07-07 reopen-affordance diagnosis) — remove after.
-    console.log("[tile-debug] active →", active ? active.channel : "null");
+    tileLog(`active → ${active ? active.channel : "null"}`); // TEMP tile-debug
     if (active === null) {
       closeTile();
       setTileClosedByUser(false);
     }
-  }, [active, closeTile]);
+  }, [active, closeTile, tileLog]);
+
+  // TEMP tile-debug: the value every overlay's "Reopen tile" gate reads.
+  useEffect(() => {
+    tileLog(`tileClosedByUser → ${String(tileClosedByUser)}`);
+  }, [tileClosedByUser, tileLog]);
 
   const value = useMemo<CallSurfaceValue>(
     () => ({
@@ -288,6 +308,20 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     <CallSurfaceContext.Provider value={value}>
       {children}
       {tileMount ? createPortal(<CallTile />, tileMount) : null}
+      {/* TEMP tile-debug strip — on-page probe output (raw colors deliberate,
+          throwaway diagnostic chrome). REMOVE with the rest of the TEMP block. */}
+      {tileDebugLines.length > 0 && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed bottom-2 left-2 z-[9999] max-w-sm rounded-md p-2 font-mono text-[10px] leading-tight"
+          style={{ background: "rgba(0,0,0,0.72)", color: "#fff" }}
+        >
+          <div style={{ opacity: 0.7 }}>tile-debug</div>
+          {tileDebugLines.map((l, i) => (
+            <div key={i}>{l}</div>
+          ))}
+        </div>
+      )}
     </CallSurfaceContext.Provider>
   );
 }
