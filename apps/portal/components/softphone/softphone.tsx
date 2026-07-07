@@ -288,6 +288,10 @@ export function Softphone({ role }: SoftphoneProps) {
   // Publish active-call info while in-call.
   useEffect(() => {
     if (!publishActive) return;
+    // TEMP tile-debug (2026-07-07): name this publisher in the strip. Remove after.
+    (window as unknown as { __tileLog?: (l: string) => void }).__tileLog?.(
+      `softphone publishes ${phase === "in-call" && callIdRef.current ? "AUDIO" : "null"} (phase:${phase})`,
+    );
     publishActive(
       phase === "in-call" && callIdRef.current
         ? {
