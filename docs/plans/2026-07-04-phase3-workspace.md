@@ -1655,11 +1655,13 @@ Then Phase-C staging + prod smoke (HUMAN, record here): fresh browser → Go on 
 
 ---
 
-# PHASE D — D13 duty persistence, then the call tile (D13, D4, D2)
+# PHASE D — D13 duty persistence, then the call tile (D13, D4, D2) — ✅ CODE-COMPLETE (2026-07-06)
+
+**Phase D built subagent-driven on `phase3d-duty-tile` (fresh implementer + two-stage review per task; final whole-branch review = SHIP). 11 commits `0cd5185`→`65f3782`. Full gate GREEN: node 606 + jsdom 115 · typecheck · lint · check:routes · portal build. Reviews caught 4 real defects pre-merge: 15b heartbeat gate failed CLOSED on a DB error (→ `3b01e88`), 15c GET hydration leaked a valid off-duty 200 on a read error (→ `0fe6b4a`), 16 video calls never published `active` so tile auto-close/reopen no-op'd for the primary channel (I-1 → fixed in 17), 17 shipped a wall-clock-flaky timer assertion (→ `65f3782`). Build also closed a plan-missed leak: `connect()`'s hardcoded-AVAILABLE registration stamp (in `c7357fc`). Divergences of record: tile 911 is AUDIO-face-only (`triggerEmergency` optional — video has no 911 machinery anywhere; inventing one was out of scope); no `tileRequested` boolean (`tileMount !== null` is the open-signal). Remaining: the Phase-D HUMAN smoke below.**
 
 **D13 (spec §3.4, rewritten 2026-07-06, Kumar-approved):** the Phase-5 re-smoke found duty was per-tab client state — `onDuty` inits `true` on every mount, so any refresh re-entered the shift and the next heartbeat overwrote End-shift's OFFLINE; a second tab resurrected an ended shift the same way; the Accepting toggle reset to accepting on refresh. Tasks 15b–15d make `profiles.status` the enforced duty truth (zero migrations — dial/push/fleet already read it) BEFORE the tile tasks, so one Phase-D smoke covers both. Build discipline unchanged: fresh implementer + spec review + quality review per task; final whole-branch review before merge. ⚠ DEP-HYGIENE remains the standing risk (two prior render-loop OOMs): effects depend on stable dispatchers, one-shot effects read changing callbacks through refs — Task 15d is explicit about both.
 
-## Task 15b: D13 — `isLiveShift` + the heartbeat duty gate (TDD)
+## Task 15b: D13 — `isLiveShift` + the heartbeat duty gate (TDD) — ✅ DONE (`013a664` + fail-open fix `3b01e88`)
 
 **Files:**
 - Modify: `apps/portal/lib/voice/presence.ts` (add `isLiveShift`; delete `DEFAULT_LOGIN_STATUS`)
@@ -1843,7 +1845,7 @@ Run the file — the new describe FAILS (route still writes unconditionally), th
 
 - [ ] **Step 7: Gate + commit** — `pnpm -F @lc/portal typecheck && pnpm -F @lc/portal test`; commit `feat(presence): D13 heartbeat duty gate — beats only refresh a live shift`.
 
-## Task 15c: D13 — go-on-duty route + GET hydration endpoint (TDD)
+## Task 15c: D13 — go-on-duty route + GET hydration endpoint (TDD) — ✅ DONE (`1648728` + GET-500 fix `0fe6b4a`)
 
 **Files:**
 - Create: `apps/portal/app/api/presence/go-on-duty/route.ts`
@@ -2050,7 +2052,7 @@ export async function GET(): Promise<NextResponse> {
 
 - [ ] **Step 6: Gate + commit** — typecheck + portal tests; commit `feat(presence): D13 go-on-duty route + GET duty hydration`.
 
-## Task 15d: D13 — softphone hydration + gated-beat handling (client)
+## Task 15d: D13 — softphone hydration + gated-beat handling (client) — ✅ DONE (`c7357fc` + hardening tests `1c374f4`; includes the connect() stamp fix)
 
 **Files:**
 - Modify: `apps/portal/components/softphone/softphone.tsx`
@@ -2305,7 +2307,7 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
 
 - [ ] **Step 9: Full gate + commit** — typecheck · portal tests (node + jsdom) · lint · check:routes; commit `feat(softphone): D13 duty hydration + gated-beat handling — refresh can no longer re-enter a shift`.
 
-## Task 16: call-tile manager — synchronous open inside the Answer gesture
+## Task 16: call-tile manager — synchronous open inside the Answer gesture — ✅ DONE (`6557906`; I-1 video-active gap found in review, fixed in Task 17)
 
 **Files:**
 - Create: `apps/portal/lib/duty-tile/call-tile-manager.tsx`
@@ -2366,7 +2368,7 @@ export function openCallTile(onReady: (h: CallTileHandle) => void, onClosed: () 
 
 - [ ] **Step 5: Gate + commit** (`feat(tile): call-scoped DocPiP manager, opened inside the Answer gesture`).
 
-## Task 17: tile faces + overlay integration (guest-video-first)
+## Task 17: tile faces + overlay integration (guest-video-first) — ✅ DONE (`726da8f` + regex fix `65f3782`; incl. I-1 + M-1 fold-ins)
 
 **Files:**
 - Create: `apps/portal/components/call-tile/call-tile.tsx`
