@@ -80,7 +80,7 @@ export function PodCardGrid({
   properties: PropertyCardData[];
   /** Admins: gated by covering (D11), keyed by property id. Omitted => canAnswer defaults true (agents). */
   canAnswerByProperty?: Record<string, boolean>;
-  /** Phase E injects the per-property Connect button here; omitted until then. */
+  /** Optional per-property Connect override; defaults to <ConnectButton> (Phase E). */
   connectFor?: (propertyId: string) => React.ReactNode;
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerFor?: (propertyId: string) => React.ReactNode;
