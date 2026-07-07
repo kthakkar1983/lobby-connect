@@ -7,6 +7,7 @@ import * as Sentry from "@sentry/nextjs";
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
 import { DutyControls } from "@/components/dashboard/duty-controls";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
+import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
 import { useLineStatus } from "@/lib/dashboard/line-status";
@@ -211,6 +212,13 @@ export function Softphone({ role }: SoftphoneProps) {
   // below re-runs and stops our own ringtone element. With no provider it's
   // undefined, so nothing is ever silenced (the ring always plays).
   const silencedKeys = surface?.silencedKeys;
+  // Task 17: register this call's controls with the tile + surface the "Reopen
+  // tile" affordance. registerCallControls is []-stable (mirrors the pattern
+  // above); tileClosedByUser/openTileForCall are read as plain values/functions,
+  // never depended on inside a publisher-style effect.
+  const registerCallControls = surface?.registerCallControls;
+  const tileClosedByUser = surface?.tileClosedByUser ?? false;
+  const openTileForCall = surface?.openTileForCall;
   const ringtoneRef = useRef<Ringtone | null>(null);
   // The raw ring audio element, so "Go on duty" can prime the REAL element the
   // ring plays (not a throwaway) inside its own user gesture.
@@ -638,6 +646,38 @@ export function Softphone({ role }: SoftphoneProps) {
     }
   }, []);
 
+  // Task 17: register this call's controls with the CallSurfaceProvider so the
+  // tile can drive mute/hang-up/911/notes. Reuses the EXISTING handlers verbatim
+  // — toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
+  // the real 911 POST trigger (the same function the AudioCallOverlay's confirm
+  // dialog invokes), not a re-implementation. saveNote syncs roomNumber/notes
+  // state so the tab overlay and the tile agree, then reuses the real saveNotes
+  // notes-durability path (no new save path).
+  const registerSaveNote = useCallback(
+    (room: string, note: string) => {
+      setRoomNumber(room);
+      setNotes(note);
+      const id = callIdRef.current;
+      return saveNotes({ callId: id, roomNumber: room, notes: note });
+    },
+    [saveNotes],
+  );
+  useEffect(() => {
+    if (!registerCallControls) return;
+    if (phase !== "in-call") {
+      registerCallControls(null);
+      return;
+    }
+    registerCallControls({
+      toggleMute,
+      muted,
+      hangUp: () => void endCall(),
+      triggerEmergency: () => void triggerEmergency(),
+      saveNote: registerSaveNote,
+    });
+    return () => registerCallControls(null);
+  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency, registerSaveNote]);
+
   const toggleReady = useCallback(() => {
     const next = !ready;
     setReady(next);
@@ -786,6 +826,8 @@ export function Softphone({ role }: SoftphoneProps) {
           captionPartial={captions.partial}
           captionsEnabled={captionsEnabled}
           onToggleCaptions={toggleCaptions}
+          showReopenTile={tileClosedByUser && docPipSupported()}
+          onReopenTile={() => openTileForCall?.()}
         />
       )}
 

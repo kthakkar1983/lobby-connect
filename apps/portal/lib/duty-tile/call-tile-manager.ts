@@ -29,9 +29,18 @@ export function openCallTile(onReady: (h: CallTileHandle) => void, onClosed: () 
   void docPip
     .requestWindow({ width: TILE_WIDTH, height: TILE_HEIGHT })
     .then((pip) => {
-      const mount = preparePipDocument(pip.document);
-      pip.addEventListener("pagehide", onClosed);
-      onReady({ mount, window: pip, close: () => pip.close() });
+      // Review fold-in M-1: if preparing the PiP document throws (e.g. a
+      // stylesheet CSSOM access explodes in a way preparePipDocument's own
+      // try/catch didn't anticipate), close the just-opened window instead of
+      // leaving an orphaned, handle-less PiP tile the agent can never reach —
+      // the call must continue normally in the tab either way.
+      try {
+        const mount = preparePipDocument(pip.document);
+        pip.addEventListener("pagehide", onClosed);
+        onReady({ mount, window: pip, close: () => pip.close() });
+      } catch {
+        pip.close();
+      }
     })
     .catch(() => {
       /* no tile — call continues in the tab */

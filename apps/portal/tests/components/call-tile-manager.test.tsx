@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, act, cleanup } from "@testing-library/react";
+import { render, screen, act, cleanup, waitFor } from "@testing-library/react";
 
 import {
   CallSurfaceProvider,
@@ -7,6 +7,38 @@ import {
   type ActiveCallInfo,
 } from "@/components/dashboard/call-surface-provider";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
+import { VideoCallHost } from "@/components/video-call/video-call-host";
+
+// Real-video-flow test deps (pins review fold-in I-1: VideoCallHost publishes
+// `active`, not just rings). VideoCallHost's own detection hook needs a fake
+// realtime channel + ringtone (mirrors use-incoming-video-calls.test.tsx /
+// softphone.test.tsx's loop-guard test); its downstream full-screen VideoCall
+// is stubbed out entirely — I-1 is about the HOST's publish, not the LiveKit
+// join machinery, which has its own dedicated coverage elsewhere.
+const videoChannel = vi.hoisted(() => ({
+  on: vi.fn(function (this: unknown) {
+    return this;
+  }),
+  subscribe: vi.fn(function (this: unknown, cb: (status: string) => void) {
+    cb("SUBSCRIBED");
+    return this;
+  }),
+}));
+vi.mock("@/lib/supabase/browser", () => ({
+  createBrowserSupabaseClient: () => ({
+    realtime: { setAuth: () => {} },
+    channel: () => videoChannel,
+    removeChannel: () => {},
+  }),
+}));
+vi.mock("@/lib/video/ringtone", () => ({
+  createRingtone: () => ({ start: vi.fn(), stop: vi.fn() }),
+}));
+vi.mock("@/components/video-call/video-call", () => ({
+  VideoCall: ({ onClose }: { onClose: () => void }) => (
+    <button onClick={onClose}>close video call (host onClose)</button>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -276,5 +308,128 @@ describe("call-tile-manager", () => {
 
     expect(callOrder).toEqual(["acceptVideo"]);
     expect(screen.getByTestId("tile-open").textContent).toBe("no");
+  });
+
+  /**
+   * Review fold-in M-1: if preparing the just-opened PiP document throws (e.g.
+   * a hostile/unexpected document shape), the window must be closed rather
+   * than left orphaned with no handle anywhere in the app (unreachable by the
+   * agent, and by our own tileHandleRef). A `pip.document` whose `.head` is
+   * missing makes preparePipDocument's `target.head.appendChild(...)` throw.
+   */
+  it("M-1: closes the pip window if preparing the document throws (no orphaned window)", async () => {
+    acceptVideoSpy = () => {};
+    const closeSpy = vi.fn();
+    // A document-shaped object with NO .head — preparePipDocument's very first
+    // stylesheet-copy loop appending into target.head throws a TypeError.
+    const brokenDoc = { title: "", documentElement: { className: "" }, body: {} };
+    const win = {
+      document: brokenDoc,
+      addEventListener: vi.fn(),
+      close: closeSpy,
+    };
+    (window as unknown as { documentPictureInPicture: unknown }).documentPictureInPicture = {
+      requestWindow: vi.fn(() => Promise.resolve(win)),
+    };
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+        <TileProbe />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptVideo").click();
+    });
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+    // The throw happens INSIDE the .then() — must not escape as an unhandled
+    // rejection or crash the click handler.
+    await act(async () => {
+      screen.getByRole("button", { name: "Answer" }).click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    // No orphan: the tile never reports itself open (onReady never ran).
+    expect(screen.getByTestId("tile-open").textContent).toBe("no");
+  });
+
+  /**
+   * Review fold-in I-1: before Task 17, only the audio softphone published
+   * `active` into the CallSurfaceProvider, so the tile's auto-close/reopen
+   * (which keys off `active`) silently no-op'd for VIDEO — a video tile that
+   * outlived its call. This drives the REAL VideoCallHost (not the Publisher
+   * probe's synthetic "publish active" button) end-to-end: a real incoming
+   * ring from /api/calls/incoming-video, a real Answer click (which opens the
+   * tile AND calls the host's registered acceptVideo), and the host's own
+   * onClose (stubbed VideoCall's close button) — proving publishActive(VIDEO)
+   * fires on answer and publishActive(null) fires on hang-up, closing the tile.
+   */
+  it("a REAL video answer/hang-up flow (VideoCallHost) drives the tile's auto-close via publishActive", async () => {
+    const { win } = makeFakePip();
+    (window as unknown as { documentPictureInPicture: unknown }).documentPictureInPicture = {
+      requestWindow: vi.fn(() => Promise.resolve(win)),
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/calls/incoming-video") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              calls: [
+                {
+                  id: "call-1",
+                  channelName: "ch-1",
+                  propertyName: p1.name,
+                  propertyId: p1.id,
+                  ringStartedAt: new Date().toISOString(),
+                },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <CallSurfaceProvider>
+        <VideoCallHost operatorId="op-1" />
+        <PropertyCard property={p1} />
+        <TileProbe />
+      </CallSurfaceProvider>,
+    );
+
+    // The real ring surfaces the card's Answer button (no Publisher involved).
+    await waitFor(() => screen.getByRole("button", { name: "Answer" }));
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Answer" }).click();
+    });
+    // Tile open (requestWindow) resolves asynchronously.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("tile-open").textContent).toBe("yes");
+
+    // The host mounted its (stubbed) VideoCall and published VIDEO `active` —
+    // proven by the auto-close reacting when the call ends below. Hang up via
+    // the host's real onClose path (the stubbed VideoCall's close button).
+    await act(async () => {
+      screen.getByText("close video call (host onClose)").click();
+    });
+
+    // publishActive(null) fired from the host → the provider's auto-close
+    // effect closed the tile — the exact behavior I-1 was missing.
+    expect(screen.getByTestId("tile-open").textContent).toBe("no");
+    expect(screen.getByTestId("tile-closed-by-user").textContent).toBe("no");
+
+    vi.unstubAllGlobals();
   });
 });

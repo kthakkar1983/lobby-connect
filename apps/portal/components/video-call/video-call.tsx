@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2 } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
@@ -13,6 +13,8 @@ import { CaptionToggle } from "@/components/call/caption-toggle";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
+import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
+import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 
 export function VideoCall({ callId, onClose, propertyName }: { callId: string; onClose: () => void; propertyName: string }) {
   const [muted, setMuted] = useState(false);
@@ -40,6 +42,18 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
   notesRef.current = notes;
+
+  // Task 17: mirror the guest video track + register call controls into the
+  // CallSurfaceProvider so the call-scoped tile can render its own face and
+  // drive mute/hang-up/notes. `useCallSurfaceOptional` keeps this component
+  // renderable outside the provider (video-call.test.tsx mounts it standalone).
+  // ⚠ DEP-HYGIENE: read the STABLE dispatchers off `surface`, never depend on
+  // `surface` itself in an effect (mirrors softphone.tsx / video-call-host.tsx).
+  const surface = useCallSurfaceOptional();
+  const publishGuestVideoTrack = surface?.publishGuestVideoTrack;
+  const registerCallControls = surface?.registerCallControls;
+  const tileClosedByUser = surface?.tileClosedByUser ?? false;
+  const openTileForCall = surface?.openTileForCall;
 
   const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
   // Gating the track (not just hiding the band) tears down the STT stream when
@@ -77,6 +91,9 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           token: tok.token,
           onRemoteVideo: (h) => {
             if (!cancelled && remoteRef.current) h.attach(remoteRef.current);
+            // Task 17: share the guest's remote track with the tile (its own
+            // muted <video> face) — additive; the in-tab attach above is unchanged.
+            if (!cancelled) publishGuestVideoTrack?.(h.mediaStreamTrack());
           },
           onRemoteAudioTrack: (t) => {
             if (!cancelled) setGuestAudioTrack(t);
@@ -166,6 +183,8 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
       await lkSessionRef.current?.leave();
       lkSessionRef.current = null;
       setGuestAudioTrack(null);
+      // Task 17: clear the tile's mirrored track alongside the in-tab one.
+      publishGuestVideoTrack?.(null);
     }
     const ok = await saveNotes();
     if (ok) onClose();
@@ -183,6 +202,44 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
     setCameraOff(n);
   }
 
+  // Task 17: register this call's controls with the CallSurfaceProvider so the
+  // tile can drive mute/hang-up/notes. handleEnd/saveNotes/toggleMute above are
+  // untouched — these are ADDITIVE stable wrappers around them, defined ONCE
+  // per render (not memoized: this file doesn't useCallback its handlers) and
+  // held in refs so the registration effect below can stay identity-stable.
+  //   - hangUp / toggleMute delegate straight to the existing handlers.
+  //   - saveNote syncs the in-tab roomNumber/notes state (so tab + tile agree),
+  //     then reuses the real saveNotes() — no new save path.
+  //   - VIDEO has no 911 mechanism anywhere in the codebase, so triggerEmergency
+  //     is simply omitted (it's optional on RegisteredCallControls); the tile
+  //     hides its 911 control when absent.
+  const hangUpForTile = () => void handleEnd();
+  const saveNoteForTile = async (room: string, note: string) => {
+    setRoomNumber(room);
+    setNotes(note);
+    roomNumberRef.current = room;
+    notesRef.current = note;
+    return saveNotes();
+  };
+  const registeredHangUpRef = useRef(hangUpForTile);
+  registeredHangUpRef.current = hangUpForTile;
+  const registeredSaveNoteRef = useRef(saveNoteForTile);
+  registeredSaveNoteRef.current = saveNoteForTile;
+  useEffect(() => {
+    if (!registerCallControls) return;
+    registerCallControls({
+      toggleMute,
+      muted,
+      hangUp: () => registeredHangUpRef.current(),
+      saveNote: (room, note) => registeredSaveNoteRef.current(room, note),
+    });
+    return () => registerCallControls(null);
+    // Only re-register on a real mute-state change (the tile must reflect it);
+    // hangUp/saveNote read through refs above so they always call the CURRENT
+    // handleEnd/saveNotes without needing to be dep-array members themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerCallControls, muted]);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Header strip */}
@@ -191,6 +248,17 @@ export function VideoCall({ callId, onClose, propertyName }: { callId: string; o
           <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
           On video · {propertyName}
         </span>
+        {/* Task 17: reopen the call tile if the agent closed it mid-call. Only
+            shown when there's actually something to reopen into. */}
+        {tileClosedByUser && docPipSupported() && (
+          <button
+            type="button"
+            onClick={() => openTileForCall?.()}
+            className="flex items-center gap-1.5 rounded-button border border-border px-3 py-1.5 text-sm text-foreground"
+          >
+            <PictureInPicture2 size={15} /> Reopen tile
+          </button>
+        )}
       </div>
 
       {audioBlocked && (
