@@ -62,7 +62,12 @@ export interface RegisteredCallControls {
 interface CallSurfaceValue extends CallSurfaceSnapshot {
   actions: CallSurfaceActions;
   publishRings: (source: "audio" | "video", rings: IncomingRing[]) => void;
-  publishActive: (active: ActiveCallInfo | null) => void;
+  /**
+   * Publish/clear the active call FOR ONE CHANNEL. A non-null always takes the
+   * slot; a null only clears the caller's own channel (an AUDIO publisher's
+   * phase flap must never wipe a live VIDEO call's state — see the dispatcher).
+   */
+  publishActive: (channel: "AUDIO" | "VIDEO", active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
   /**
@@ -165,7 +170,24 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
   }, []);
-  const publishActive = useCallback((a: ActiveCallInfo | null) => setActive(a), []);
+  // Two components write this one slot — the audio softphone and the video
+  // host — and each may only CLEAR what it owns: publishing a call always takes
+  // the slot, but a null from channel X is ignored while channel Y's call holds
+  // it. Root cause this encodes (2026-07-07 staging): closing the tile focuses
+  // the tab → the softphone's error-phase reconnect self-heal flapped `phase` →
+  // its publisher re-ran and published an AUDIO null mid-VIDEO-call → the slot
+  // cleared → the auto-close effect wiped the just-set reopen flag. Functional
+  // update = atomic (no read-then-write race between the two publishers).
+  const publishActive = useCallback(
+    (channel: "AUDIO" | "VIDEO", a: ActiveCallInfo | null) => {
+      setActive((prev) => {
+        if (a) return a;
+        if (prev && prev.channel !== channel) return prev; // not yours to clear
+        return null;
+      });
+    },
+    [],
+  );
   const registerAcceptAudio = useCallback((fn: (() => void) | null) => {
     // Functional updates can't hold a plain function value (React would call
     // it as an updater), so wrap it in an updater that returns the function.

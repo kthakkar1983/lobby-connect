@@ -288,11 +288,12 @@ export function Softphone({ role }: SoftphoneProps) {
   // Publish active-call info while in-call.
   useEffect(() => {
     if (!publishActive) return;
-    // TEMP tile-debug (2026-07-07): name this publisher in the strip. Remove after.
-    (window as unknown as { __tileLog?: (l: string) => void }).__tileLog?.(
-      `softphone publishes ${phase === "in-call" && callIdRef.current ? "AUDIO" : "null"} (phase:${phase})`,
-    );
+    // Channel-tagged (post-smoke fix): this AUDIO publisher re-runs on every
+    // phase change — incl. the error-phase reconnect self-heal firing on tab
+    // focus — so its null must never clear a live VIDEO call's slot. The
+    // provider enforces the ownership; the tag says who's asking.
     publishActive(
+      "AUDIO",
       phase === "in-call" && callIdRef.current
         ? {
             callId: callIdRef.current,

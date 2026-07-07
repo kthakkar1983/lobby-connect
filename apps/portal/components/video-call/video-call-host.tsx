@@ -93,11 +93,8 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
   // the whole `surface` object (mirrors the rings-publisher effect above).
   useEffect(() => {
     if (!publishActive) return;
-    // TEMP tile-debug (2026-07-07): name this publisher in the strip. Remove after.
-    (window as unknown as { __tileLog?: (l: string) => void }).__tileLog?.(
-      `host publishes ${active ? "VIDEO" : "null"}`,
-    );
     publishActive(
+      "VIDEO",
       active
         ? {
             callId: active.id,
