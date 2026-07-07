@@ -108,8 +108,13 @@ vi.mock("@twilio/voice-sdk", () => ({
 
 // attachTokenAutoRefresh only sets up a tokenWillExpire listener — safe to
 // let through, but mocking avoids any indirect fetch calls in tests.
+// shouldReconnectDevice: stubbed false (matches the real function whenever
+// phase !== "error", which is every phase these tests dispatch a real
+// window "focus" event in) so the self-heal effect's listener — also on
+// "focus" — doesn't try to re-run connect() and add unrelated fetch calls.
 vi.mock("@/lib/voice/device-resilience", () => ({
   attachTokenAutoRefresh: vi.fn(),
+  shouldReconnectDevice: vi.fn(() => false),
 }));
 
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
@@ -636,5 +641,98 @@ describe("Softphone — End shift disarms the heartbeat (D6)", () => {
     vi.useRealTimers();
     await user.click(screen.getByRole("button", { name: /go on duty to resume/i }));
     await waitFor(() => expect(presenceCalls().length).toBeGreaterThan(atEnd));
+  });
+});
+
+describe("Softphone — D13 duty hydration + gated beats", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let hydration: { onDuty: boolean; accepting: boolean };
+  let beatResponse: { status: number; body: unknown };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hydration = { onDuty: true, accepting: true };
+    beatResponse = { status: 204, body: {} };
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ token: "test-token" }),
+        });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(hydration),
+        });
+      }
+      if (url === "/api/presence") {
+        return Promise.resolve({
+          ok: true,
+          status: beatResponse.status,
+          json: () => Promise.resolve(beatResponse.body),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  function presencePosts() {
+    return fetchMock.mock.calls.filter(
+      (args) =>
+        args[0] === "/api/presence" &&
+        (args[1] as RequestInit | undefined)?.method === "POST",
+    );
+  }
+
+  it("hydrates OFF duty from the server and suppresses ALL beats (incl. the registration stamp)", async () => {
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+    // Zero POSTs total: the Device-registration stamp inside connect() rides
+    // the duty gate too (it used to post a hardcoded AVAILABLE — the last
+    // client path that could re-enter a shift on mount), and the focus beat
+    // is suppressed while off duty.
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); // would beat if on duty
+    });
+    expect(presencePosts()).toHaveLength(0);
+  });
+
+  it("hydrates the Accepting toggle from accepting:false (AWAY survives refresh)", async () => {
+    hydration = { onDuty: true, accepting: false };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Not accepting calls"));
+  });
+
+  it("a gated beat ({onDuty:false}) flips the tab off duty", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i)); // hydrated on duty
+    beatResponse = { status: 200, body: { onDuty: false } };
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); // force a beat
+    });
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+  });
+
+  it("Go on duty calls the dedicated route, not a bare beat", async () => {
+    hydration = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText("Go on duty to resume"));
+    await user.click(screen.getByText("Go on duty to resume"));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+      ).toBe(true),
+    );
   });
 });
