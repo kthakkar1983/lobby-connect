@@ -118,6 +118,14 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       `${new Date().toLocaleTimeString()} ${line}`,
     ]);
   }, []);
+  // TEMP: bridge so the two publisher components (softphone / video host) can
+  // write into the strip without a context-type change. Removed with the block.
+  useEffect(() => {
+    (window as unknown as { __tileLog?: (l: string) => void }).__tileLog = tileLog;
+    return () => {
+      delete (window as unknown as { __tileLog?: (l: string) => void }).__tileLog;
+    };
+  }, [tileLog]);
   // ── end TEMP block header (probe call sites + strip JSX below) ─────────────
   // Handlers live in state, not refs: a ref write doesn't trigger a re-render,
   // so the `value` memo below would keep returning a stale `actions` snapshot
