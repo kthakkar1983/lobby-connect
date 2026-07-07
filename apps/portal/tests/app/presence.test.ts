@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase/server", () => ({
 const updateSpy = vi.fn();
 let updateFilters: string[][] = [];
 let refreshedRows: unknown[] = [{ id: "u1" }]; // what the D13 conditional update matches
+let refreshError: { message: string } | null = null;
 function profilesUpdate(v: unknown) {
   updateSpy(v);
   const filters: string[] = [];
@@ -18,7 +19,7 @@ function profilesUpdate(v: unknown) {
     neq: () => { filters.push("neq"); return chain; },
     gte: () => { filters.push("gte"); return chain; },
     lt: () => { filters.push("lt"); return chain; },
-    select: () => Promise.resolve({ data: refreshedRows, error: null }),
+    select: () => Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
     // Unconditional writes (ON_CALL bypass, lapse-persist) are awaited directly.
     then: (onFulfilled: (v: { error: null }) => unknown) =>
       Promise.resolve({ error: null }).then(onFulfilled),
@@ -76,6 +77,7 @@ beforeEach(() => {
   videoCallRows = [];
   updateFilters = [];
   refreshedRows = [{ id: "u1" }];
+  refreshError = null;
 });
 
 describe("POST /api/presence", () => {
@@ -214,5 +216,12 @@ describe("D13 duty gate (spec §3.4)", () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+
+  it("a DB error on the refresh FAILS OPEN — 204, no gate verdict, no lapse-persist", async () => {
+    refreshError = { message: "boom" };
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1); // no second (lapse-persist) update
   });
 });

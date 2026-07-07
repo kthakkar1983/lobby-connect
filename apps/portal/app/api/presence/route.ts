@@ -44,7 +44,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
 
   // D13 ON_CALL exception (spec §3.4): a live call outranks the duty gate —
   // raw OFFLINE included (the accepted two-tab edge) — so a >90s network blip
@@ -62,14 +63,20 @@ export async function POST(request: Request): Promise<NextResponse> {
   // read-then-write race): match only a row that isn't explicitly OFFLINE and
   // whose heartbeat is still fresh. Zero rows = the shift is over — only
   // /api/presence/go-on-duty starts one.
-  const staleCutoffIso = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
-  const { data: refreshed } = await admin
+  const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
+  const { data: refreshed, error: refreshError } = await admin
     .from("profiles")
     .update({ status, last_seen_at: nowIso })
     .eq("id", actor.userId)
     .neq("status", "OFFLINE")
     .gte("last_seen_at", staleCutoffIso)
     .select("id");
+
+  // FAIL OPEN on a real DB error (spec §3.4 + the lib/push/targets.ts rule: a
+  // blip must never end a live shift): behave like the pre-D13 fire-and-forget
+  // beat — 204, no gate verdict, no lapse-persist. Only a clean zero-row match
+  // means the shift is actually over.
+  if (refreshError) return new NextResponse(null, { status: 204 });
 
   if (refreshed && refreshed.length > 0) return new NextResponse(null, { status: 204 });
 
