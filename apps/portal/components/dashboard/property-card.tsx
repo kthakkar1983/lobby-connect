@@ -41,7 +41,7 @@ export function PropertyCard({
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerSlot?: React.ReactNode;
 }): React.JSX.Element {
-  const { rings, active, actions, silencedKeys, silenceRing } = useCallSurface();
+  const { rings, active, actions, silencedKeys, silenceRing, openTileForCall } = useCallSurface();
   const ring = rings.find((r) => r.propertyId === property.id) ?? null;
   const silenced = ring ? silencedKeys.has(ring.key) : false;
   const onCallHere = active?.propertyId === property.id;
@@ -62,6 +62,7 @@ export function PropertyCard({
 
   const answer = () => {
     if (!ring) return;
+    openTileForCall(); // must run synchronously inside the click gesture (Document-PiP)
     if (ring.channel === "AUDIO") actions.acceptAudio?.();
     else if (ring.callId) actions.acceptVideo?.(ring.callId);
   };

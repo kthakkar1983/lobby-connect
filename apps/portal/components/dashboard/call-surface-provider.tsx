@@ -5,7 +5,8 @@
 // stays inside its existing owners — this is state mirroring + dispatch,
 // never a second call engine.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { openCallTile, type CallTileHandle } from "@/lib/duty-tile/call-tile-manager";
 
 export interface IncomingRing {
   key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
@@ -55,6 +56,18 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   silencedKeys: ReadonlySet<string>;
   /** Silence the local audio ringer for one ring key (idempotent). */
   silenceRing: (key: string) => void;
+  /**
+   * Call-scoped Document-PiP tile (spec §3.3). `tileMount` is the element
+   * consumers portal into — null while no tile is open. `tileClosedByUser` is
+   * true when the agent closed the tile mid-call (drives the Task-17 "Reopen
+   * tile" affordance) and resets to false once the call ends or a new tile opens.
+   */
+  tileMount: HTMLElement | null;
+  tileClosedByUser: boolean;
+  /** Open the tile. Must be called synchronously inside the Answer click. */
+  openTileForCall: () => void;
+  /** Close the tile programmatically (e.g. on hang-up). No-op if none is open. */
+  closeTile: () => void;
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -75,6 +88,22 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // effects that read it don't churn.
   const [silencedKeys, setSilencedKeys] = useState<ReadonlySet<string>>(() => new Set());
 
+  // Call-scoped Document-PiP tile. The handle (window/close fn) is a REF — it's
+  // an imperative object, not render-relevant; only the mount element and the
+  // reopen-affordance boolean are state (consumers must re-render on them).
+  const [tileMount, setTileMount] = useState<HTMLElement | null>(null);
+  const [tileClosedByUser, setTileClosedByUser] = useState(false);
+  const tileHandleRef = useRef<CallTileHandle | null>(null);
+  // pagehide fires on BOTH user-close and our own programmatic close() — this
+  // ref disambiguates so a hang-up-driven close never flips the reopen flag.
+  const programmaticCloseRef = useRef(false);
+  // Mirrors `active` for the onClosed callback, which must stay []-stable (no
+  // `active` in its deps) yet still needs to know if a call is still live.
+  const activeRef = useRef<ActiveCallInfo | null>(null);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
   const publishRings = useCallback((source: "audio" | "video", rings: IncomingRing[]) => {
     (source === "audio" ? setAudioRings : setVideoRings)(rings);
   }, []);
@@ -92,6 +121,38 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // the key is already present so a double-silence doesn't churn identity.
   const silenceRing = useCallback((key: string) => {
     setSilencedKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  }, []);
+
+  // Close the tile programmatically — sets the flag BEFORE calling close() so
+  // the pagehide it triggers is recognized as ours, not a user close.
+  const closeTile = useCallback(() => {
+    const handle = tileHandleRef.current;
+    if (!handle) return;
+    programmaticCloseRef.current = true;
+    handle.close();
+  }, []);
+
+  // Open the tile for the active call. Synchronous entry point for the gesture
+  // — openCallTile() calls requestWindow() before returning, satisfying the
+  // "must run inside the click, before any await" constraint.
+  const openTileForCall = useCallback(() => {
+    if (tileHandleRef.current) return; // already open — no-op
+    openCallTile(
+      (handle) => {
+        tileHandleRef.current = handle;
+        setTileMount(handle.mount);
+        setTileClosedByUser(false);
+      },
+      () => {
+        const wasProgrammatic = programmaticCloseRef.current;
+        programmaticCloseRef.current = false;
+        tileHandleRef.current = null;
+        setTileMount(null);
+        if (!wasProgrammatic && activeRef.current) {
+          setTileClosedByUser(true);
+        }
+      },
+    );
   }, []);
 
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
@@ -114,6 +175,17 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     });
   }, [ringKeys]);
 
+  // Auto-close: when the call ends (active → null), any open tile closes with
+  // it and the reopen affordance resets — the call is over, there's nothing
+  // left to reopen into. closeTile is []-stable, so this effect only reruns
+  // on real `active` transitions, not on every render.
+  useEffect(() => {
+    if (active === null) {
+      closeTile();
+      setTileClosedByUser(false);
+    }
+  }, [active, closeTile]);
+
   const value = useMemo<CallSurfaceValue>(
     () => ({
       rings: [...audioRings, ...videoRings],
@@ -125,6 +197,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       silencedKeys,
       silenceRing,
+      tileMount,
+      tileClosedByUser,
+      openTileForCall,
+      closeTile,
     }),
     [
       audioRings,
@@ -138,6 +214,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       silencedKeys,
       silenceRing,
+      tileMount,
+      tileClosedByUser,
+      openTileForCall,
+      closeTile,
     ],
   );
 
