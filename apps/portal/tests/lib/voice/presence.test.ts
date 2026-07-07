@@ -6,9 +6,8 @@ import {
   effectivePresence,
   isReachableForDial,
   roleHasPresence,
-  DEFAULT_LOGIN_STATUS,
   isLiveStatus,
-  type PresenceStatus,
+  isLiveShift,
 } from "@/lib/voice/presence";
 
 describe("isStale", () => {
@@ -78,10 +77,6 @@ describe("isReachableForDial", () => {
 });
 
 describe("constants + guards", () => {
-  it("defaults a fresh login to AVAILABLE", () => {
-    expect(DEFAULT_LOGIN_STATUS).toBe<PresenceStatus>("AVAILABLE");
-  });
-
   it("isLiveStatus accepts agent-settable statuses only", () => {
     expect(isLiveStatus("AVAILABLE")).toBe(true);
     expect(isLiveStatus("AWAY")).toBe(true);
@@ -99,5 +94,26 @@ describe("roleHasPresence", () => {
 
   it("is false for OWNER — no softphone, never heartbeats", () => {
     expect(roleHasPresence("OWNER")).toBe(false);
+  });
+});
+
+describe("isLiveShift (D13)", () => {
+  const now = Date.parse("2026-07-06T12:00:00Z");
+  const fresh = new Date(now - 30_000).toISOString();
+  const stale = new Date(now - 120_000).toISOString();
+
+  it("live for any fresh non-OFFLINE status", () => {
+    expect(isLiveShift("AVAILABLE", fresh, now)).toBe(true);
+    expect(isLiveShift("AWAY", fresh, now)).toBe(true);
+    expect(isLiveShift("ON_CALL", fresh, now)).toBe(true);
+  });
+
+  it("over when explicitly OFFLINE, even with a fresh heartbeat", () => {
+    expect(isLiveShift("OFFLINE", fresh, now)).toBe(false);
+  });
+
+  it("over when the heartbeat lapsed or never happened, whatever the raw status", () => {
+    expect(isLiveShift("AVAILABLE", stale, now)).toBe(false);
+    expect(isLiveShift("AVAILABLE", null, now)).toBe(false);
   });
 });
