@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { PropertyForm } from "../property-form";
 import { AssignmentCard, type AgentOption } from "./assignment-card";
 import { KioskLinkCard } from "./kiosk-link-card";
@@ -86,7 +87,7 @@ export default async function PropertyDetailPage({
     .from("audit_logs")
     .select("created_at")
     .eq("entity_id", id)
-    .eq("action", "remote_access.credentials_issued")
+    .eq("action", AUDIT_ACTIONS.REMOTE_ACCESS_CREDENTIALS_ISSUED)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
