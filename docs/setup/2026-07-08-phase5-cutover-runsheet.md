@@ -2,6 +2,7 @@
 
 **Written:** 2026-07-08 · **Owns:** the executable cutover from the frozen Vercel/Agora standby to the owned box (Coolify + self-hosted LiveKit) — migration-plan Phase 5, steps 5–10.
 **Master plan:** `docs/plans/2026-07-01-stack-consolidation-migration.md` (Phase 5) · **Box ops:** `docs/setup/2026-07-02-box-ops-runbook.md` · **Accounts:** `docs/setup/2026-07-03-accounts-credentials-inventory.md`.
+**→ Do-this operator playbook (click-by-click companion): `docs/setup/2026-07-08-phase5-cutover-operator-playbook.md`.** This runsheet is the *why/reference*; the playbook is the *hands-on checklist*.
 
 > **Sourcing:** every value below is either **source-backed** (quoted from a repo doc / verified by a live tool call — marked inline) or flagged **⟨CONFIRM⟩** = the literal value lives only in a live console (Twilio / Supabase / Sentry / Vercel / Coolify) and MUST be read there before go-live, not guessed. Nothing here is invented.
 
