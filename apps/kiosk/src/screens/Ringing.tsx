@@ -55,6 +55,10 @@ export function Ringing({
         onMute={onMute}
         onCamera={onCamera}
         primary={{ label: "Cancel", onClick: onCancel }}
+        // Mic/camera are inert until their tracks exist (assigned with localVideo
+        // after joinLiveKit resolves) — greyed while still dialing, live the moment
+        // the tracks are ready (still during ringing, before the agent answers).
+        disabled={!localVideo}
       />
     </div>
   );
