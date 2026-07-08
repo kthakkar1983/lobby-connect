@@ -1,21 +1,25 @@
 // LiveKit video-publish tuning (spec: docs/specs/2026-07-07-livekit-video-quality-tuning-design.md).
-// The SINGLE source of the tunables so the portal + kiosk adapters can never
-// drift. Retune here; both apps and the one test follow.
+// The SINGLE source of the tunables so the portal + kiosk adapters can never drift.
+// Retune here; both apps and the one test follow.
 //
-// Round 2 (2026-07-07, from staging webrtc-internals): SINGLE LAYER, no simulcast.
-// This is a 1:1 call (exactly one subscriber), so simulcast buys nothing — it only
-// splits the uplink AND forces Chrome into software H.264 (a HW encoder can't do
-// H.264 simulcast). One layer puts the whole uplink into a single stream that BWE
-// scales smoothly, and unlocks the hardware H.264 encoder. (The spec's pre-planned
-// "single-layer H.264" branch.) @lc/shared stays dependency-free — no livekit-client
-// import; the builder needs no VideoPreset now that there are no simulcast layers.
+// Round 3 (2026-07-08): H.264, 1080p, 3.5 Mbps, single layer, "balanced" degradation.
+// - Codec H.264 (NOT VP9): the hotel kiosk is an iPad, and iOS/WebKit reliably encodes
+//   only H.264 — in HARDWARE (VideoToolbox). VP9 encode on Safari is experimental. The
+//   soft Mac+Chrome staging test used SOFTWARE OpenH264; the real iPad uses hardware
+//   H.264, much sharper at the same bitrate. (Validate on an actual iPad.)
+// - Single layer: a 1:1 call has exactly one subscriber, so simulcast is pure uplink
+//   overhead (and it forced Chrome into software H.264 — see round 2 in git history).
+// - "balanced" degradation: under a constrained link the single stream steps RESOLUTION
+//   down gracefully (1080 -> 720 -> 480 -> ...) instead of freezing framerate at 1080p.
+// @lc/shared stays dependency-free (no livekit-client import); the builder needs no
+// VideoPreset now that there are no simulcast layers to construct.
 
-/** Tuning knobs. See the spec's decision table + the round-2 note above. */
+/** Tuning knobs. See the spec's decision table + the round-3 note above. */
 export const LIVEKIT_VIDEO_TUNING = {
   videoCodec: "h264",
-  /** The single published layer — the sharpness lever. */
-  primary: { width: 1280, height: 720, maxBitrate: 2_500_000, maxFramerate: 30 },
-  degradationPreference: "maintain-resolution",
+  /** The single published layer. */
+  primary: { width: 1920, height: 1080, maxBitrate: 3_500_000, maxFramerate: 30 },
+  degradationPreference: "balanced",
 } as const;
 
 export interface LiveKitVideoOptions {
@@ -25,7 +29,7 @@ export interface LiveKitVideoOptions {
       videoCodec: "h264";
       videoEncoding: { maxBitrate: number; maxFramerate: number };
       simulcast: false;
-      degradationPreference: "maintain-resolution";
+      degradationPreference: "balanced";
     };
   };
   captureOptions: { resolution: { width: number; height: number } };

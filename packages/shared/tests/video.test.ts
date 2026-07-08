@@ -6,10 +6,10 @@ describe("buildLiveKitVideoOptions", () => {
     const { roomOptions } = buildLiveKitVideoOptions();
     expect(roomOptions.publishDefaults.videoCodec).toBe("h264");
     expect(roomOptions.publishDefaults.videoEncoding).toEqual({
-      maxBitrate: 2_500_000,
+      maxBitrate: 3_500_000,
       maxFramerate: 30,
     });
-    expect(roomOptions.publishDefaults.degradationPreference).toBe("maintain-resolution");
+    expect(roomOptions.publishDefaults.degradationPreference).toBe("balanced");
   });
 
   it("publishes a single layer (simulcast disabled) — no simulcast layers", () => {
@@ -20,14 +20,14 @@ describe("buildLiveKitVideoOptions", () => {
     ).toBeUndefined();
   });
 
-  it("pins 720p capture on both the room defaults and the standalone track options", () => {
+  it("pins 1080p capture on both the room defaults and the standalone track options", () => {
     const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
-    expect(captureOptions.resolution).toEqual({ width: 1280, height: 720 });
-    expect(roomOptions.videoCaptureDefaults.resolution).toEqual({ width: 1280, height: 720 });
+    expect(captureOptions.resolution).toEqual({ width: 1920, height: 1080 });
+    expect(roomOptions.videoCaptureDefaults.resolution).toEqual({ width: 1920, height: 1080 });
   });
 
   it("keeps the tuning constant as the single retune point", () => {
     expect(LIVEKIT_VIDEO_TUNING.videoCodec).toBe("h264");
-    expect(LIVEKIT_VIDEO_TUNING.primary.maxBitrate).toBe(2_500_000);
+    expect(LIVEKIT_VIDEO_TUNING.primary.maxBitrate).toBe(3_500_000);
   });
 });

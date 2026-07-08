@@ -157,7 +157,7 @@ describe("joinLiveKitCall", () => {
       }),
     );
     expect(lk.createLocalVideoTrack).toHaveBeenCalledWith({
-      resolution: { width: 1280, height: 720 },
+      resolution: { width: 1920, height: 1080 },
     });
   });
 });
