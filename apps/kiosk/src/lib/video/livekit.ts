@@ -48,10 +48,10 @@ function liveKitHandle(track: AttachableTrack, opts?: { mirror?: boolean }): Vid
 export async function joinLiveKit(
   opts: { url: string; token: string } & JoinCallbacks,
 ): Promise<KioskVideoSession> {
-  const { Room, RoomEvent, Track, DisconnectReason, VideoPreset, createLocalAudioTrack, createLocalVideoTrack } =
+  const { Room, RoomEvent, Track, DisconnectReason, createLocalAudioTrack, createLocalVideoTrack } =
     await import("livekit-client");
 
-  const { roomOptions, captureOptions } = buildLiveKitVideoOptions(VideoPreset);
+  const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
   const room = new Room(roomOptions);
   let agentJoinedFired = false;
   // Agent-audio playback elements (never in the DOM — audio needs no layout);
