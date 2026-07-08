@@ -65,10 +65,10 @@ function handleFor(track: AttachableTrack, opts?: { mirror?: boolean }): PortalV
 export async function joinLiveKitCall(
   opts: { url: string; token: string } & LiveKitCallCallbacks,
 ): Promise<LiveKitCallSession> {
-  const { Room, RoomEvent, Track, VideoPreset, createLocalAudioTrack, createLocalVideoTrack } =
+  const { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } =
     await import("livekit-client");
 
-  const { roomOptions, captureOptions } = buildLiveKitVideoOptions(VideoPreset);
+  const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
   const room = new Room(roomOptions);
   const remoteAudioEls: HTMLMediaElement[] = [];
 
