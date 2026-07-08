@@ -20,13 +20,13 @@ Three things merged to `main`, all pre-cutover work:
 - **`main` = `b04bbf5`** — LiveKit-only trunk with the three merges above. No open PRs.
 - **Prod pilot:** frozen Vercel standby (still Agora), serving normally, **untouched** all session.
 - **Staging (box):** `staging` branch carries the video tuning + mute fix (last push `91daacf`) for verification. Coolify redeploys on push; portal build may hit the transient "Collecting build traces" OOM → manual Redeploy clears it (bump swap 2→4 GB if it recurs).
-- **Phase-1 soak:** checkpoint ~2026-07-10 → stamp DONE + tag `plan-phase1-box-staging-complete`.
+- **Phase-1 soak:** ~5 clean days banked; **no longer a pre-cutover gate (Kumar 2026-07-08)** — the full-week validation moves to the post-cutover box-prod window; stamp Phase-1 DONE + tag `plan-phase1-box-staging-complete` once that post-cutover week is clean.
 - **Phase 2 (RustDesk relay):** built + verified; waits only on Dilnoza's clean real night → stamp DONE + tag `plan-phase2-relay-complete`.
 - **White-bar tile bug (open, low-confidence):** on staging the call tile's bottom control dock sometimes renders as a dead white bar, correlated with **switching tabs between kiosk and dashboard**. Best hypothesis: the known **staging softphone focus-flap** (no Twilio on staging → softphone sits in error → focus change flaps its phase → blanks the tile dock) — i.e. a **staging-env artifact** that wouldn't happen on prod (real Twilio). NOT DevTools (ruled out). **Confirm on prod before investigating** — if it never shows on prod, it's staging-only.
 
 ## What's next — the Phase-5 cutover (migration plan steps 5–10)
 
-Gated on: **Phase-1 soak** (~07-10) + **Dilnoza's night-1** (which is now BOTH the Phase-2 relay gate AND the video-quality gate). Sequence:
+Gated on **Dilnoza's night-1** (BOTH the Phase-2 relay gate AND the video-quality gate) + the cutover-prep being ready. **⚠ RESEQUENCED 2026-07-08 (Kumar): the pre-cutover 1-week soak is NO LONGER a gate** — the box already banked ~5 clean days (staging + relay + LiveKit since 07-03), so the full-week validation **moves to POST-cutover**, run on the box as *prod* during the warm-standby window with the frozen Vercel standby as instant rollback. Sequence:
 
 1. **Stand up box prod apps** (`lc-portal-prod` + `lc-kiosk-prod` on Coolify, prod Supabase env, `lc_prod` LiveKit key, `SPEECHMATICS_API_KEY` + the FULL Vercel prod env checklist-style); apply migrations 0019/0020 to prod Supabase; enter the pilot's RustDesk peer id + unattended password via box-prod admin (as-is — the hardening is now post-cutover); box crons take over (reaper `*/15`).
 2. **Custom domains → Vercel first** (`app.`/`kiosk.lobby-connect.com`), repoint the pilot tablet once while behavior is unchanged.
