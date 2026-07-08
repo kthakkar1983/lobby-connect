@@ -28,6 +28,17 @@ const lk = vi.hoisted(() => {
     attach: vi.fn(() => document.createElement("video")),
     detach: vi.fn(() => [] as HTMLMediaElement[]),
   };
+  const RoomCtor = vi.fn(function () {
+    return room;
+  });
+  class VideoPreset {
+    constructor(
+      public width: number,
+      public height: number,
+      public maxBitrate: number,
+      public maxFramerate: number,
+    ) {}
+  }
   return {
     room,
     emit,
@@ -42,13 +53,16 @@ const lk = vi.hoisted(() => {
       AudioPlaybackStatusChanged: "audioPlaybackChanged",
     },
     Track: { Kind: { Video: "video", Audio: "audio" } },
+    RoomCtor,
+    VideoPreset,
   };
 });
 
 vi.mock("livekit-client", () => ({
-  Room: vi.fn(function () { return lk.room; }),
+  Room: lk.RoomCtor,
   RoomEvent: lk.RoomEvent,
   Track: lk.Track,
+  VideoPreset: lk.VideoPreset,
   createLocalAudioTrack: lk.createLocalAudioTrack,
   createLocalVideoTrack: lk.createLocalVideoTrack,
 }));
@@ -133,5 +147,17 @@ describe("joinLiveKitCall", () => {
     expect(lk.localAudio.unmute).toHaveBeenCalled();
     await s.leave();
     expect(lk.room.disconnect).toHaveBeenCalled();
+  });
+
+  it("applies the shared H.264 tuning to the room + capture", async () => {
+    await joinLiveKitCall({ url: "u", token: "t", ...callbacks() });
+    expect(lk.RoomCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publishDefaults: expect.objectContaining({ videoCodec: "h264" }),
+      }),
+    );
+    expect(lk.createLocalVideoTrack).toHaveBeenCalledWith({
+      resolution: { width: 1920, height: 1080 },
+    });
   });
 });

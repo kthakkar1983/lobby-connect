@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 import type { RemoteTrack } from "livekit-client";
+import { buildLiveKitVideoOptions } from "@lc/shared";
 import { recoverAudioOnNextGesture } from "../audio-unlock";
 import type { JoinCallbacks, KioskVideoSession, VideoTrackHandle } from "./types";
 
@@ -50,7 +51,8 @@ export async function joinLiveKit(
   const { Room, RoomEvent, Track, DisconnectReason, createLocalAudioTrack, createLocalVideoTrack } =
     await import("livekit-client");
 
-  const room = new Room();
+  const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
+  const room = new Room(roomOptions);
   let agentJoinedFired = false;
   // Agent-audio playback elements (never in the DOM — audio needs no layout);
   // kept ONLY so leave() can stop playback + drop srcObject refs.
@@ -99,7 +101,7 @@ export async function joinLiveKit(
   // REQUIRES a camera; it is the guest's face).
   const localAudio = await createLocalAudioTrack();
   await room.localParticipant.publishTrack(localAudio);
-  const localVideo = await createLocalVideoTrack();
+  const localVideo = await createLocalVideoTrack(captureOptions);
   await room.localParticipant.publishTrack(localVideo);
 
   return {

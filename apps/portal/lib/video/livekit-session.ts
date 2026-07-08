@@ -1,6 +1,7 @@
 "use client";
 
 import type { RemoteTrack } from "livekit-client";
+import { buildLiveKitVideoOptions } from "@lc/shared";
 
 export interface PortalVideoHandle {
   attach(container: HTMLElement): void;
@@ -67,7 +68,8 @@ export async function joinLiveKitCall(
   const { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } =
     await import("livekit-client");
 
-  const room = new Room();
+  const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
+  const room = new Room(roomOptions);
   const remoteAudioEls: HTMLMediaElement[] = [];
 
   room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
@@ -97,7 +99,7 @@ export async function joinLiveKitCall(
     audio = null;
   }
   try {
-    video = await createLocalVideoTrack();
+    video = await createLocalVideoTrack(captureOptions);
     await room.localParticipant.publishTrack(video);
   } catch {
     video = null;
