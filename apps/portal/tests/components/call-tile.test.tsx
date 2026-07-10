@@ -429,4 +429,36 @@ describe("CallTile", () => {
     });
     expect(remoteAccess.fetchRemoteCredentials).not.toHaveBeenCalled();
   });
+
+  // Batch-1 polish (2026-07-10): 911 was 6px from Hang up in the control row —
+  // the opposite of the full-screen overlay, which isolates it. It must NOT be a
+  // sibling of Hang up anymore (moved to the tile-face corner).
+  it("keeps 911 out of the Hang up control row (accidental end→911 tap guard)", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    const btn911 = tile.getByText("911").closest("button");
+    const hangUp = tile.getByText("Hang up").closest("button");
+    expect(btn911).toBeTruthy();
+    expect(hangUp).toBeTruthy();
+    // Different parent element => not adjacent in the same control row.
+    expect(btn911!.parentElement).not.toBe(hangUp!.parentElement);
+  });
+
+  // Batch-1 polish (2026-07-10): the tile Connect was a near-invisible navy
+  // outline. It gains the Monitor icon (like the overlays) + the teal accent
+  // fill so it reads as "remote in".
+  it("Connect carries a monitor icon and the teal accent so it reads as the remote-in action", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const connectBtn = within(pipDoc.body).getByText("Connect").closest("button") as HTMLButtonElement;
+    expect(connectBtn.querySelector("svg")).toBeTruthy();
+    expect(connectBtn.className).toContain("bg-accent");
+  });
 });
