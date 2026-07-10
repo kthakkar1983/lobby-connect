@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 import { MAX_CALL_DURATION_MS } from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
@@ -54,6 +54,11 @@ export function VideoCall({
   roomNumberRef.current = roomNumber;
   const notesRef = useRef(notes);
   notesRef.current = notes;
+  // Explicit in-call notes save (Enter/Tab) with in-field feedback — parity with
+  // the audio overlay. The saveFailed banner below remains the teardown backstop.
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current); }, []);
 
   // Task 17: mirror the guest video track + register call controls into the
   // CallSurfaceProvider so the call-scoped tile can render its own face and
@@ -175,9 +180,30 @@ export function VideoCall({
       { label: "calls.notes" },
     );
     setSaving(false);
-    const ok = !!res && res.ok;
-    setSaveFailed(!ok);
-    return ok;
+    return !!res && res.ok;
+  }
+
+  // Explicit in-call save (Enter/Tab). Drives only the in-field indicator — NOT
+  // the teardown saveFailed banner (whose Retry ends the call), so a mid-call
+  // save failure never offers a call-ending Retry.
+  async function handleSave() {
+    if (saveState === "saving") return;
+    setSaveState("saving");
+    const ok = await saveNotes();
+    setSaveState(ok ? "saved" : "failed");
+    if (ok) {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaveState("idle"), 1500);
+    }
+  }
+  function onKeyDownSave(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void handleSave();
+    } else if (e.key === "Tab") {
+      // Tab saves too; no preventDefault so focus still moves normally.
+      void handleSave();
+    }
   }
 
   async function handleEnd() {
@@ -200,6 +226,7 @@ export function VideoCall({
     }
     const ok = await saveNotes();
     if (ok) onClose();
+    else setSaveFailed(true);
   }
 
   function toggleMute() {
@@ -260,17 +287,6 @@ export function VideoCall({
           <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
           On video · {propertyName}
         </span>
-        {/* Task 17: reopen the call tile if the agent closed it mid-call. Only
-            shown when there's actually something to reopen into. */}
-        {tileClosedByUser && docPipSupported() && (
-          <button
-            type="button"
-            onClick={() => openTileForCall?.()}
-            className="flex items-center gap-1.5 rounded-button border border-border px-3 py-1.5 text-sm text-foreground"
-          >
-            <PictureInPicture2 size={15} /> Reopen tile
-          </button>
-        )}
       </div>
 
       {audioBlocked && (
@@ -317,6 +333,19 @@ export function VideoCall({
             partial={captions.partial}
             className="absolute inset-x-3 bottom-3"
           />
+          {/* Task 17 (repositioned 2026-07-09): reopen the call tile if the agent
+              closed it mid-call. A small teal pill floating at the bottom-right of
+              the guest stage, seated above the caption band — replaces the flat
+              grey header pill that read as easy to miss. */}
+          {tileClosedByUser && docPipSupported() && (
+            <button
+              type="button"
+              onClick={() => openTileForCall?.()}
+              className="absolute bottom-16 right-3 z-10 flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground shadow-md"
+            >
+              <PictureInPicture2 size={14} /> Reopen tile
+            </button>
+          )}
         </div>
         <PlaybookPanel callId={callId} />
       </div>
@@ -350,15 +379,42 @@ export function VideoCall({
         <input
           value={roomNumber}
           onChange={(e) => setRoomNumber(e.target.value)}
+          onKeyDown={onKeyDownSave}
           placeholder="Room #"
           className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
         />
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes…"
-          className="flex-1 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
-        />
+        <div className="relative flex flex-1 items-center">
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onKeyDown={onKeyDownSave}
+            placeholder="Notes…"
+            className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-2.5 flex items-center"
+          >
+            {saveState === "saving" ? (
+              <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
+            ) : saveState === "saved" ? (
+              <Check size={16} className="text-live-foreground" />
+            ) : saveState === "failed" ? (
+              <AlertTriangle size={15} className="text-destructive" />
+            ) : (
+              <CornerDownLeft size={16} className="text-text-muted" />
+            )}
+          </span>
+          <span role="status" aria-live="polite" className="sr-only">
+            {saveState === "saving"
+              ? "Saving notes"
+              : saveState === "saved"
+                ? "Notes saved"
+                : saveState === "failed"
+                  ? "Notes save failed — retries after the call"
+                  : ""}
+          </span>
+        </div>
         <button
           type="button"
           onClick={toggleMute}

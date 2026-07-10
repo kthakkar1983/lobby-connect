@@ -244,4 +244,29 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
   });
+
+  // Parity with the audio overlay: an explicit in-call notes save on Enter (and
+  // Tab) with in-field feedback — not just the teardown-time save.
+  it("saves notes on Enter mid-call and shows a saved indicator", async () => {
+    const user = userEvent.setup();
+    render(<VideoCall callId="call-notes" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    await user.type(screen.getByPlaceholderText("Notes…"), "extra towels{Enter}");
+
+    const notesCalls = fetchMock.mock.calls.filter((a) => (a[0] as string) === "/api/calls/notes");
+    expect(notesCalls).toHaveLength(1);
+    await waitFor(() => expect(screen.getByText(/notes saved/i)).toBeTruthy());
+  });
+
+  it("saves notes on Tab mid-call", async () => {
+    const user = userEvent.setup();
+    render(<VideoCall callId="call-notes2" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    await user.type(screen.getByPlaceholderText("Room #"), "204{Tab}");
+
+    const notesCalls = fetchMock.mock.calls.filter((a) => (a[0] as string) === "/api/calls/notes");
+    expect(notesCalls.length).toBeGreaterThanOrEqual(1);
+  });
 });
