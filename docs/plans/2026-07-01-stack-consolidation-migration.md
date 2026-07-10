@@ -1,6 +1,6 @@
 # Stack consolidation — phased migration plan
 
-**Date:** 2026-07-01 · **Spec:** `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` · **Status:** order LOCKED; each phase gets its own detailed spec/plan/smoke at build time (house workflow).
+**Date:** 2026-07-01 · **Spec:** `docs/specs/2026-07-01-stack-consolidation-target-architecture-design.md` · **Status:** **✅ MIGRATION COMPLETE — CUTOVER EXECUTED 2026-07-09; the pilot is LIVE on the box.** Phases 0–4 + 3A–E built/merged; Phase-5 cutover ran end-to-end (0019+0020 to prod, DNS→box, prod Coolify apps, prod crons, RustDesk cred, Twilio→box, tablet→box, Supabase redirect; R1 cleared; two-way audio + video + push all verified live). Remaining: the ~2-week Vercel warm-standby window → decommission (§8), then cut milestone tags + the credential-hardening item. Post-cutover START HERE: `docs/handoffs/2026-07-09-cutover-executed-live-handoff.md`. *(History below is the as-planned record.)*
 
 ## Principles
 

@@ -123,6 +123,10 @@ export function AudioCallOverlay({
     if (e.key === "Enter") {
       e.preventDefault();
       void handleSave();
+    } else if (e.key === "Tab") {
+      // Tab saves too (parity with Enter), but does NOT preventDefault — focus
+      // still moves normally, so saving is a side effect of tabbing out.
+      void handleSave();
     }
   }
 
@@ -139,18 +143,6 @@ export function AudioCallOverlay({
           On call{propertyName ? ` · ${propertyName}` : ""}
         </span>
         <span className="flex items-center gap-2">
-          {/* Task 17: reopen the call tile if the agent closed it mid-call. Kept
-              to the LEFT of 911 so 911 stays the rightmost, alone-at-the-corner
-              control per the comment above. */}
-          {showReopenTile && (
-            <button
-              type="button"
-              onClick={onReopenTile}
-              className="flex items-center gap-1.5 rounded-button border border-border px-3 py-1.5 text-sm text-foreground"
-            >
-              <PictureInPicture2 size={15} /> Reopen tile
-            </button>
-          )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
@@ -201,7 +193,7 @@ export function AudioCallOverlay({
 
       {/* Body — call card (~37%) + playbook (~63%). */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex basis-[37%] flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white">
+        <div className="relative flex basis-[37%] flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
             On call · <span className="font-mono tracking-normal">{formatElapsed(elapsed)}</span>
           </div>
@@ -219,6 +211,19 @@ export function AudioCallOverlay({
               </div>
             )}
           </div>
+          {/* Task 17 (repositioned 2026-07-09): reopen the call tile if the agent
+              closed it mid-call. A small teal pill floating at the bottom-right of
+              the call card — was a flat grey pill in the header that read as easy
+              to miss. Mirrors the video overlay's placement over the guest stage. */}
+          {showReopenTile && (
+            <button
+              type="button"
+              onClick={onReopenTile}
+              className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground shadow-md"
+            >
+              <PictureInPicture2 size={14} /> Reopen tile
+            </button>
+          )}
         </div>
         <PlaybookPanel callId={callId} basis="basis-[63%]" />
       </div>

@@ -114,4 +114,20 @@ describe("AudioCallOverlay", () => {
     render(<AudioCallOverlay {...baseProps} />);
     expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
   });
+
+  it("saves notes on Tab as well as Enter (audio↔video parity)", async () => {
+    const user = userEvent.setup();
+    const onSaveNotes = vi.fn().mockResolvedValue(true);
+    render(<AudioCallOverlay {...baseProps} notes="towels" onSaveNotes={onSaveNotes} />);
+    await user.type(screen.getByPlaceholderText("Call notes"), "{Tab}");
+    expect(onSaveNotes).toHaveBeenCalledOnce();
+  });
+
+  it("renders the Reopen tile control and fires onReopenTile when the tile was closed", async () => {
+    const user = userEvent.setup();
+    const onReopenTile = vi.fn();
+    render(<AudioCallOverlay {...baseProps} showReopenTile onReopenTile={onReopenTile} />);
+    await user.click(screen.getByRole("button", { name: /reopen tile/i }));
+    expect(onReopenTile).toHaveBeenCalledOnce();
+  });
 });

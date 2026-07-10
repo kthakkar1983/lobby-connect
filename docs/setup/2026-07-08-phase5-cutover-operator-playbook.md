@@ -1,5 +1,7 @@
 # Phase-5 cutover — operator playbook (do-this, step-by-step)
 
+> **✅ EXECUTED 2026-07-09 — the pilot is LIVE on the box.** This playbook ran end-to-end (Parts 0–11); R1 cleared; two-way audio + video + push verified live. Post-cutover status, the login-fix lesson, tracked bug, and next-session agenda: **`docs/handoffs/2026-07-09-cutover-executed-live-handoff.md`.**
+
 **Written:** 2026-07-08 · **This is the "how + where" companion to the runsheet.** The runsheet (`docs/setup/2026-07-08-phase5-cutover-runsheet.md`) is the *why/reference*; **this doc is the click-by-click checklist you execute.** Do the parts in order. Every console/command is spelled out. `⟨CONFIRM⟩` = a value you read from a console in Part 0.
 
 **Golden rule for the app config (Part 4–5):** the box already runs a **working staging** portal + kiosk on Coolify. **Mirror the staging apps and prod-ify the values** — don't rebuild config from scratch. Staging proves CORS + push + captions + video already work with this exact wiring; copying it (same variable names, same "Build Variable" flags) is what guarantees prod behaves.
@@ -27,17 +29,17 @@ Fill these in before touching anything. They're the `⟨CONFIRM⟩` values the r
 ### 0.1 — Twilio (the pilot number + its current webhooks)
 1. Twilio console → **Phone Numbers → Manage → Active numbers** → click the pilot number.
 2. Record:
-   - [ ] **Pilot DID (E.164):** `______________`
-   - [ ] **Voice — "A CALL COMES IN"** URL + method (should be `POST https://lobby-connect-portal.vercel.app/api/twilio/voice/incoming`): `______________`
-   - [ ] **Call status changes** (statusCallback) URL + method (should be `POST …/api/twilio/voice/status`): `______________`
-   - [ ] Any Messaging webhook set? (expected: none): `______________`
-3. Also grab the **Auth Token** (Account → API keys & tokens) — you'll confirm it matches the box env. Keep it in PM, don't paste it anywhere.
+   - [ ] **Pilot DID (E.164):** `+14058750410`
+   - [ ] **Voice — "A CALL COMES IN"** URL + method (should be `POST https://lobby-connect-portal.vercel.app/api/twilio/voice/incoming`): `______YES________`
+   - [ ] **Call status changes** (statusCallback) URL + method (should be `POST …/api/twilio/voice/status`): `_______YES_______`
+   - [ ] Any Messaging webhook set? (expected: none): `______NONE________`
+3. Also grab the **Auth Token** (Account → API keys & tokens) — you'll confirm it matches the box env. Keep it in PM, don't paste it anywhere. - Done
 
 ### 0.2 — Supabase Auth (current URLs)
 1. Supabase prod → **Authentication → URL Configuration**.
 2. Record:
-   - [ ] **Site URL** (expected `https://lobby-connect-portal.vercel.app`): `______________`
-   - [ ] **Redirect URLs** allowlist (all entries): `______________`
+   - [ ] **Site URL** (expected `https://lobby-connect-portal.vercel.app`): `______YES________`
+   - [ ] **Redirect URLs** allowlist (all entries): `_______NO SUCH OPTION - BUT .DOMAIN.COM ALLOWED_______`
 
 ### 0.3 — The LiveKit `lc_prod` secret (from the box, not Vercel)
 The `lc_prod` LiveKit key/secret is **NOT on Vercel** (the standby froze before Phase 4). Read it from the box:
@@ -52,7 +54,7 @@ Pull them to `.env.production.local` in each app dir — that filename matches t
 cd "/Users/kumarthakkar/Documents/Claude/Projects/Lobby Connect/apps/portal" && vercel env pull .env.production.local --environment=production
 cd "/Users/kumarthakkar/Documents/Claude/Projects/Lobby Connect/apps/kiosk"   && vercel env pull .env.production.local --environment=production
 ```
-- [ ] Both files written and hold every prod value. Sanity-check they're ignored: `git status --short` shows nothing for them.
+- [ ] Both files written and hold every prod value. Sanity-check they're ignored: `git status --short` shows nothing for them. - RAN BOTH COMMANDS FILES DOWNLOADED
 
 > **⚠ Delete both after Part 5** — they contain live secrets. See the delete command at the end of Part 5.
 
@@ -61,7 +63,7 @@ cd "/Users/kumarthakkar/Documents/Claude/Projects/Lobby Connect/apps/kiosk"   &&
 ## PART 1 — Snapshot the box (2 min)
 
 So you can restore if anything goes sideways during stand-up.
-- **DO console:** Droplets → `lc-box-1` → **Snapshots → Take snapshot** → name `pre-phase5-cutover`.
+- **DO console:** Droplets → `lc-box-1` → **Snapshots → Take snapshot** → name `pre-phase5-cutover`. - DONE
 - Or CLI: `doctl compute droplet-action snapshot 581936683 --snapshot-name pre-phase5-cutover`
 - [ ] Snapshot started (takes a few min in the background; you can proceed).
 
@@ -80,7 +82,7 @@ Prod is at **0018**; you're adding two strictly-additive tables (safe — the Ve
    *(Note: the SQL-editor path creates the tables but doesn't register the version in the migrations ledger — the MCP path is cleaner. Either way the tables exist, which is what the app needs.)*
 
 **Verify:**
-- [ ] Supabase → **Database → Migrations** (or ask Claude to run `list_migrations`) shows `0020` present. Both tables exist: `push_subscriptions`, `property_remote_access`.
+- [x] Applied via Supabase MCP 2026-07-09. Ledger now ends `20260709013030_push_subscriptions` + `20260709013048_property_remote_access` (= prod at 0020). Both tables exist with correct RLS/FKs; security advisor clean (only the intentional D14 no-policy INFO + pre-existing WARNs).
 
 ---
 
@@ -132,7 +134,11 @@ Same flow:
 
 ## PART 5 — Set the prod env vars (20 min) — MIRROR STAGING
 
+> **Code-grounded evidence for every var below (build vs runtime, `file:line`, R1):** `docs/setup/2026-07-09-part5-env-codegrounded.md`. Read it if any value is ambiguous.
+
 **Method:** open the **staging** app's env as a reference, replicate every variable on the prod app with the **same "Build Variable" flags**, substituting prod values. This guarantees the build-time vs runtime split is right (CORS/`KIOSK_ORIGIN`, VAPID, etc.) without you having to reason about it.
+
+> **⚠ Coolify UI note (2026-07-09):** the current UI replaced the single **"Build Variable"** checkbox with **two** — **"Available at Buildtime"** and **"Available at Runtime."** **"Build Variable" = check "Available at Buildtime."** A `NEXT_PUBLIC_*`/`KIOSK_ORIGIN`/VAPID-public var that's *also* read server-side needs **both** checked (the run stage is a fresh image that doesn't inherit build ENV, so server-side `process.env` reads need Runtime too). Pure runtime secrets = **Runtime only**. The explicit per-var Buildtime/Runtime grid is in the portal table below.
 
 ### 5.1 — Portal env
 1. Coolify → `lc-portal-staging` → **Environment Variables** — leave this open as the template (note which vars are flagged **Build Variable**).
@@ -149,13 +155,19 @@ Same flow:
 | `SPEECHMATICS_API_KEY` | **same as Vercel** (captions — must be present) | runtime |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_READ_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | **same as Vercel** | `NEXT_PUBLIC_SENTRY_DSN` = build |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | **same as Vercel** (already on Coolify staging — reuse) | match the staging flags |
-| `CRON_SECRET` | **same as Vercel** | runtime |
+| `CRON_SECRET` | **copy from `lc-portal-staging` (= the `lc-ops` value), NOT Vercel** — the Vercel pull returns it EMPTY, and the box crons are driven by `lc-ops` (Part 7), which must match. | runtime |
 | `KIOSK_CONFIG_SECRET` | **same as Vercel — byte-identical** (signed kiosk links) | runtime |
 | `NEXT_PUBLIC_APP_URL` | **`https://app.lobby-connect.com`** (RETARGET) | **build** |
 | `KIOSK_ORIGIN` | **`https://kiosk.lobby-connect.com`** (RETARGET) | **⚠ must be right at build** — bakes the `/api/kiosk` + `/api/video` CORS header; wrong = kiosk + video break |
 | *(Anything else present on staging that's not listed here)* | copy from staging with its flag | — |
 
 > `VIDEO_PROVIDER` — **do not add.** It was removed with Agora; it's a dead env now.
+
+> **⚠ The two silent-failure build vars (code-verified 2026-07-09).** `apps/portal/Dockerfile` threads `ARG` lines only for `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY/APP_URL/SENTRY_DSN`. It does **NOT** `ARG` **`KIOSK_ORIGIN`** or **`NEXT_PUBLIC_VAPID_PUBLIC_KEY`** — those two reach `next build` *solely* because Coolify injects Build-Variable-flagged env into the build step (proven: the `main`-identical staging build bakes the correct CORS origin with the same ARG-less Dockerfile). **So both MUST carry the Coolify "Build Variable" flag** — if either is set runtime-only the build is clean but the browser is broken, with **no error in any log**:
+> - `KIOSK_ORIGIN` runtime-only → CORS bakes as `http://localhost:5173` → **kiosk pairing + all video CORS-blocked** (Part 9 step 4 curl catches this).
+> - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` runtime-only → `armPush()` returns false → **web-push OS alerting silently dead**, and *no smoke step catches it unless you actively arm push* (Part 9 step 5 now does).
+>
+> **Do NOT set `BUILD_STANDALONE`** — it's hardcoded `ENV BUILD_STANDALONE=1` in `apps/portal/Dockerfile:26` (do not confuse with the per-agent note; the Dockerfile owns it).
 
 ### 5.2 — Kiosk env
 On `lc-kiosk-prod` → Environment Variables (mirror `lc-kiosk-staging`):
@@ -221,7 +233,7 @@ Nobody's pointed at the box yet — prove it works directly.
    curl -sI "https://app.lobby-connect.com/api/kiosk/config" | grep -i access-control-allow-origin
    ```
    - [ ] Returns `access-control-allow-origin: https://kiosk.lobby-connect.com` (NOT `localhost:5173`). If wrong → `KIOSK_ORIGIN` was wrong at build → fix it and **redeploy** the portal (a restart won't fix it).
-5. **Migrations live (0019/0020):** from the signed-in portal, confirm push registration works (no 500) and the admin Remote-access card loads (no 500).
+5. **Migrations live (0019/0020) + VAPID baked right:** from the signed-in portal, **actually arm push** — grant the browser notification permission and confirm it takes (a `push_subscriptions` row appears for your user; ideally a test notification fires). This is the ONLY check that `NEXT_PUBLIC_VAPID_PUBLIC_KEY` was baked at build — a runtime-only misflag makes `armPush()` return false with no error. Also confirm the admin **Remote-access card** loads (no 500 → 0020 live).
 6. **Video path:** if feasible, do a test kiosk→agent video call over the box.
 7. **Crons:** `/admin/status` shows heartbeats; the `*/15` reaper heartbeat appears within 15 min.
 - [ ] All green → the box is a proven prod stack with no live traffic. Go-live is now just the pointer flips.
@@ -233,7 +245,7 @@ Nobody's pointed at the box yet — prove it works directly.
 Prove the Twilio pointer flips **both** ways before the real cutover (this also de-risks the HMAC host-match — the box's first-ever Twilio call).
 1. Twilio console → pilot number → set **both** Voice URLs → `https://app.lobby-connect.com/api/twilio/voice/{incoming,status}`. Save.
 2. Call the pilot number yourself → confirm it **answers on the box** (agent on duty there).
-   - If it fails (silent/apology/no route): check box logs/Sentry for the reconstructed URL — a wrong port (`:3000`) or proto 403s just like a bad token. Don't panic; step 3 reverts.
+   - If it fails (silent/apology/no route): a wrong `Host` (internal name / `:3000`) or missing `X-Forwarded-Proto: https` 403s **identically** to a bad token. **⚠ The app does NOT log the reconstructed URL** — `parseVerifiedTwilioWebhook` returns a bare `"Invalid signature"` 403 (`lib/twilio/client.ts:55`), no Sentry, no URL. So debug from **Traefik's access log** (what `Host`/proto it forwards) or temporarily log `publicUrlFromRequest()` — don't expect the app to print it, and don't jump to blaming `TWILIO_AUTH_TOKEN`. Don't panic; step 3 reverts.
 3. Twilio → set both Voice URLs **back to Vercel** (`lobby-connect-portal.vercel.app`). Save. Call again → answers on Vercel.
 - [ ] Both directions proven. You now trust the go-live flip + its instant revert.
 
