@@ -43,9 +43,9 @@ Today the tile Connect is a navy-on-navy **outline** button with no icon — nea
 - **Fix 3 (CSS layout inside a real PiP window):** **not** jsdom-testable — the repo's own lesson is *"jsdom can't catch CSS-stacking bugs — only real-browser smoke can."* Verified by Kumar on prod after redeploy.
 - Then: `pnpm typecheck` · `pnpm lint` · full portal suite · `next build`.
 
-## Deploy note (blue-green)
+## Deploy note
 
-Merging to `main` **deploys nothing** — Vercel is the frozen Agora standby and the box prod apps don't auto-deploy from `main`. Seeing these fixes live requires a **Coolify redeploy of `lc-portal-prod`**. Flag at merge time.
+Merging to `main` **auto-deploys prod**: the Coolify `lc-coolify` GitHub App builds `lc-portal-prod` (+ `lc-kiosk-prod`) from `main` on merge. Vercel remains the frozen Agora standby (unaffected). Smoke on prod once the Coolify deploy is healthy.
 
 ## Deferred (tracked, not built here)
 

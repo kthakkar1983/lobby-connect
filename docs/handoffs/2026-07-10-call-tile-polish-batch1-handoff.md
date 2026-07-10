@@ -13,9 +13,9 @@
 
 Test-first (3 new tests), full portal suite + typecheck + lint + build green, **adversarial 3-lens review = SHIP** (911-safety + PiP-fill both 0 findings). CSS placement/fill are **not jsdom-verifiable** → smoke on prod.
 
-## Deploy + smoke (needs a manual step)
+## Deploy + smoke
 
-Blue-green freeze: **merging to `main` does NOT auto-deploy prod.** The `lc-coolify` GitHub App auto-deploys only the `staging` branch; **`main` → `lc-portal-prod` is a manual Deploy** in the Coolify UI (`https://coolify.lobby-connect.com` → `lc-portal-prod` → **Deploy**), or `POST /api/v1/deploy?uuid=<app>` with the `lc-claude` API token. No env changed here, so a plain rebuild is safe (don't touch the Readonly-labels checkbox — runbook §Traefik).
+Merging to `main` **auto-deploys prod** — the Coolify `lc-coolify` GitHub App builds `lc-portal-prod` (+ `lc-kiosk-prod`) from `main` on every merge (confirmed live, 4+ deploys since the 2026-07-09 cutover; this batch deployed on the PR merge). The Vercel projects are the frozen Agora standby and are unaffected. No env changed here, so just hard-refresh once the Coolify deploy is healthy. (Only build-time vars — `NEXT_PUBLIC_*`, `KIOSK_ORIGIN`, VAPID public — would need attention, and none changed.)
 
 **Prod smoke checklist** (only exercisable on prod): 911 sits in the tile corner, not beside Hang up · no white block (navy fills, audio + video) · guest video fills the tile on a video call · Connect is teal on the tile + audio overlay + video overlay · Connect still launches RustDesk · 911 two-tap still fires.
 
