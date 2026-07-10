@@ -283,7 +283,7 @@ export function AudioCallOverlay({
             type="button"
             disabled={!onConnect}
             onClick={onConnect}
-            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50"
+            className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
           >
             <Monitor size={16} /> Connect
           </button>

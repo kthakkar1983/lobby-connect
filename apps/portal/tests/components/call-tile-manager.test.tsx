@@ -8,6 +8,7 @@ import {
 } from "@/components/dashboard/call-surface-provider";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
+import { preparePipDocument } from "@/lib/duty-tile/pip-document";
 
 // Real-video-flow test deps (pins review fold-in I-1: VideoCallHost publishes
 // `active`, not just rings). VideoCallHost's own detection hook needs a fake
@@ -477,5 +478,22 @@ describe("call-tile-manager", () => {
     expect(screen.getByTestId("tile-closed-by-user").textContent).toBe("no");
 
     vi.unstubAllGlobals();
+  });
+});
+
+describe("preparePipDocument", () => {
+  // Batch-1 polish (2026-07-10): the PiP html/body/mount chain had no height, so
+  // the tile's `h-full` root collapsed to content height and the browser's white
+  // canvas showed below it (the "white block"). The prep must fill the window
+  // height so the navy body (and, on video, `object-cover` guest video) fills it.
+  it("fills the window height (html/body/mount = 100%) so no white gap shows below the tile", () => {
+    const doc = document.implementation.createHTMLDocument("pip");
+    const mount = preparePipDocument(doc);
+
+    expect(doc.documentElement.style.height).toBe("100%");
+    expect(doc.body.style.height).toBe("100%");
+    expect(mount.style.height).toBe("100%");
+    // Body still carries the navy fill (unchanged) so the filled area is navy.
+    expect(doc.body.className).toContain("bg-primary");
   });
 });

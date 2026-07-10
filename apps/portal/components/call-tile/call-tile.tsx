@@ -6,7 +6,7 @@
 // component owns the live call (Softphone for AUDIO, VideoCall for VIDEO).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff, PhoneOff, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, PhoneOff, AlertTriangle, Monitor } from "lucide-react";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 
 // How long the armed "Confirm 911" state stays live before auto-reverting.
@@ -127,7 +127,19 @@ export function CallTile(): React.JSX.Element | null {
   return (
     <div className="flex h-full w-full flex-col bg-primary text-primary-foreground">
       {/* Face */}
-      <div className="flex flex-1 flex-col overflow-hidden p-2">
+      <div className="relative flex flex-1 flex-col overflow-hidden p-2">
+        {/* 911 lives in the face corner (audio-only), isolated from Hang up in
+            the control bar — mirrors the full-screen overlay so a hang-up tap
+            can never land on 911. Two-tap arm/confirm logic is unchanged. */}
+        {controls?.triggerEmergency && (
+          <button
+            type="button"
+            onClick={handle911Tap}
+            className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-button bg-destructive px-2 py-1 text-xs font-semibold text-destructive-foreground shadow-md"
+          >
+            <AlertTriangle size={13} /> {armed ? "Confirm 911" : "911"}
+          </button>
+        )}
         {active.channel === "VIDEO" ? (
           <div className="relative flex-1 overflow-hidden rounded-md bg-[var(--color-call)]">
             {guestVideoTrack ? (
@@ -203,24 +215,18 @@ export function CallTile(): React.JSX.Element | null {
             >
               <PhoneOff size={13} /> Hang up
             </button>
-            {controls.triggerEmergency && (
-              <button
-                type="button"
-                onClick={handle911Tap}
-                className="flex items-center gap-1 rounded-button bg-destructive px-2 py-1 text-xs font-semibold text-destructive-foreground"
-              >
-                <AlertTriangle size={13} /> {armed ? "Confirm 911" : "911"}
-              </button>
-            )}
+            {/* Connect = the remote-in action: teal accent + monitor icon,
+                matching the in-tab overlays. 911 is NOT here — it's pinned to
+                the face corner above. */}
             <button
               type="button"
               disabled={!active.propertyId}
               onClick={() => {
                 if (active.propertyId) void surface?.connectToProperty(active.propertyId);
               }}
-              className="ml-auto rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+              className="ml-auto flex items-center gap-1 rounded-button bg-accent px-2 py-1 text-xs font-semibold text-accent-foreground disabled:opacity-50"
             >
-              Connect
+              <Monitor size={13} /> Connect
             </button>
           </div>
         </div>

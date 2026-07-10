@@ -31,7 +31,16 @@ export function preparePipDocument(target: Document): HTMLElement {
   target.body.className = "bg-primary";
   target.body.style.margin = "0";
 
+  // Fill the window height so the tile's `h-full` root stretches to the whole
+  // PiP window instead of collapsing to its content height — which left the
+  // browser's white canvas showing below it (the "white block"). With the chain
+  // at 100%, the navy body fills the window and, on video, the object-cover
+  // guest feed grows to fill the face above the controls.
+  target.documentElement.style.height = "100%";
+  target.body.style.height = "100%";
+
   const mount = target.createElement("div");
+  mount.style.height = "100%";
   target.body.appendChild(mount);
   return mount;
 }
