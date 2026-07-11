@@ -239,10 +239,13 @@ export function AudioCallOverlay({
         <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-[63%]"} />
       </div>
 
+      {/* Captions hide while the tile is up (symmetric with the video overlay,
+          whose band sits inside the collapsing guest stage) — when the tile owns
+          the call surface, live captions belong ONLY in the tile, never doubled. */}
       <CaptionBand
         finals={captionFinals}
         partial={captionPartial}
-        className="mx-3 mb-2"
+        className={cn("mx-3 mb-2", collapsed && "hidden")}
       />
       {/* Control bar — Room#/Notes (left, Enter-to-save) · Mute/Hang up (right). */}
       <div className="flex items-center justify-between gap-3 border-t border-border bg-card p-3">

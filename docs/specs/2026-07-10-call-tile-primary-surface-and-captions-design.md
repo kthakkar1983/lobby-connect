@@ -90,7 +90,7 @@ Additive:
 
 ### `audio-call-overlay.tsx` (collapse)
 
-- Add a `collapsed?: boolean` prop (default `false`, so existing callers/tests render unchanged). When `true`, add `hidden` to the navy call card and give `PlaybookPanel` a full-width basis; when `false`, the existing `basis-[37%]` / `basis-[63%]`. The header (911 + property), caption band, and control bar are unchanged.
+- Add a `collapsed?: boolean` prop (default `false`, so existing callers/tests render unchanged). When `true`, add `hidden` to the navy call card, give `PlaybookPanel` a full-width basis, **and add `hidden` to the caption band** (symmetric with the video overlay, whose band sits inside the collapsing guest stage — while the tile owns the call surface, captions belong ONLY in the tile, never doubled); when `false`, the existing `basis-[37%]` / `basis-[63%]` and a visible band. The header (911 + property) and control bar are unchanged.
 
 ### `video-call-host.tsx` + `incoming-video` (hotel-timezone plumb, D10; + video `collapsed`)
 
@@ -136,7 +136,7 @@ jsdom-testable (extend the existing suites):
 
 - **Provider** (`call-surface-provider.test.tsx`): `captionsEnabled` defaults `false`; `toggleCaptions` flips it; it resets to `false` when `active.callId` changes and when `active` → null; `publishCaptions` → `subscribeCaptions` listeners fire and `getCaptionSnapshot` returns the new (stable-until-changed) value.
 - **`video-call.tsx`** (`video-call.test.tsx`): with the `collapsed` prop true, the guest-video stage (`data-testid="guest-video-stage"`) carries `hidden`; false → visible. (`video-call-host` maps `surface?.tileMount != null` → `collapsed`.)
-- **`audio-call-overlay.tsx`**: with `collapsed`, the call card carries `hidden` and `PlaybookPanel` gets the full-width basis; without, the `37%` / `63%` split.
+- **`audio-call-overlay.tsx`**: with `collapsed`, the call card **and the caption band** carry `hidden` and `PlaybookPanel` gets the full-width basis; without, the `37%` / `63%` split and a visible band.
 - **`CallTile`** (`call-tile.test.tsx`): notes inputs are gone; the CC toggle is present and calls `toggleCaptions`; the caption band renders only when `captionsEnabled` and there is text, and is absent otherwise; Mute/Hang up/Connect and the audio-only 911 chip are intact; `connectToProperty` still fires; the **video face renders `localTime`** when `active.timeZone` is set and omits it when null (D10).
 - **`incoming-video` route** (`incoming-video.test.ts`): the response carries `timezone` per call from the property join (D10).
 

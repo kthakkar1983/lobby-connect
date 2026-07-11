@@ -143,4 +143,16 @@ describe("AudioCallOverlay", () => {
     const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
     expect(card.className).not.toContain("hidden");
   });
+
+  it("hides the caption band while the tile is up (collapsed) so captions aren't doubled with the tile", () => {
+    render(<AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} collapsed />);
+    const band = screen.getByText(/I need extra towels/i).closest("div") as HTMLElement;
+    expect(band.className).toContain("hidden");
+  });
+
+  it("shows the caption band when not collapsed", () => {
+    render(<AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} />);
+    const band = screen.getByText(/I need extra towels/i).closest("div") as HTMLElement;
+    expect(band.className).not.toContain("hidden");
+  });
 });
