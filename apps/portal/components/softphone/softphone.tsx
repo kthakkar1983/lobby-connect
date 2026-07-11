@@ -17,7 +17,6 @@ import { primeRingtone } from "@/lib/video/prime";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
-import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -158,11 +157,6 @@ export function Softphone({ role }: SoftphoneProps) {
     return saveNotes({ callId: id, roomNumber: room, notes: note });
   }, [saveNotes]);
 
-  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
-  // Gating the track (not just hiding the band) tears down the STT stream when
-  // captions are off — stops the upstream audio + the per-minute billing.
-  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
-
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
     if (phase === "in-call") return "ON_CALL";
@@ -263,6 +257,21 @@ export function Softphone({ role }: SoftphoneProps) {
   // Spec D2: while the call tile is mounted it owns the controls, so the overlay
   // collapses its call card to full-width playbook. Read as a plain value.
   const tileMount = surface?.tileMount ?? null;
+
+  // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
+  // overlay + tile toggles, default OFF, reset per call). No provider → OFF + no-op.
+  const captionsEnabled = surface?.captionsEnabled ?? false;
+  const toggleCaptions = surface?.toggleCaptions ?? (() => {});
+  const publishCaptions = surface?.publishCaptions;
+  // Gating the track (not just hiding the band) tears down the STT stream when
+  // captions are off — stops the upstream audio + the per-minute billing.
+  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
+  // Feed the tile's caption band (spec D8). Local band render is unchanged.
+  // DEP-HYGIENE: depend on the STABLE dispatcher + caption text, never `surface`.
+  useEffect(() => {
+    publishCaptions?.(captions.finals, captions.partial);
+  }, [publishCaptions, captions.finals, captions.partial]);
+
   const ringtoneRef = useRef<Ringtone | null>(null);
   // The raw ring audio element, so "Go on duty" can prime the REAL element the
   // ring plays (not a throwaway) inside its own user gesture.

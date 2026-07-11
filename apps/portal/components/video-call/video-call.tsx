@@ -11,7 +11,6 @@ import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { useCaptions } from "@/lib/captions/use-captions";
-import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
@@ -75,10 +74,21 @@ export function VideoCall({
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
 
-  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
+  // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
+  // overlay + tile toggles, default OFF, reset per call). No provider (standalone
+  // render) → OFF + no-op toggle.
+  const captionsEnabled = surface?.captionsEnabled ?? false;
+  const toggleCaptions = surface?.toggleCaptions ?? (() => {});
+  const publishCaptions = surface?.publishCaptions;
   // Gating the track (not just hiding the band) tears down the STT stream when
   // captions are off — stops the upstream audio + the per-minute billing.
   const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
+  // Feed the tile's caption band (spec D8). Local band render is unchanged.
+  // DEP-HYGIENE: depend on the STABLE dispatcher + the caption text, never on
+  // `surface` itself (mirrors the other publisher effects in this file).
+  useEffect(() => {
+    publishCaptions?.(captions.finals, captions.partial);
+  }, [publishCaptions, captions.finals, captions.partial]);
 
   // Accept the call, then join LiveKit.
   // NOTE: the cleanup must tear down the session, and we must bail on
