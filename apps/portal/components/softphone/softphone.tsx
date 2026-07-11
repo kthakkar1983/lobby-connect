@@ -704,21 +704,10 @@ export function Softphone({ role }: SoftphoneProps) {
   }, []);
 
   // Task 17: register this call's controls with the CallSurfaceProvider so the
-  // tile can drive mute/hang-up/911/notes. Reuses the EXISTING handlers verbatim
-  // — toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
+  // tile can drive mute/hang-up/911. Reuses the EXISTING handlers verbatim —
+  // toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
   // the real 911 POST trigger (the same function the AudioCallOverlay's confirm
-  // dialog invokes), not a re-implementation. saveNote syncs roomNumber/notes
-  // state so the tab overlay and the tile agree, then reuses the real saveNotes
-  // notes-durability path (no new save path).
-  const registerSaveNote = useCallback(
-    (room: string, note: string) => {
-      setRoomNumber(room);
-      setNotes(note);
-      const id = callIdRef.current;
-      return saveNotes({ callId: id, roomNumber: room, notes: note });
-    },
-    [saveNotes],
-  );
+  // dialog invokes), not a re-implementation.
   useEffect(() => {
     if (!registerCallControls) return;
     if (phase !== "in-call") {
@@ -730,10 +719,9 @@ export function Softphone({ role }: SoftphoneProps) {
       muted,
       hangUp: () => void endCall(),
       triggerEmergency: () => void triggerEmergency(),
-      saveNote: registerSaveNote,
     });
     return () => registerCallControls(null);
-  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency, registerSaveNote]);
+  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency]);
 
   const toggleReady = useCallback(() => {
     const next = !ready;

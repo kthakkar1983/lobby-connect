@@ -255,40 +255,28 @@ export function VideoCall({
   }
 
   // Task 17: register this call's controls with the CallSurfaceProvider so the
-  // tile can drive mute/hang-up/notes. handleEnd/saveNotes/toggleMute above are
-  // untouched — these are ADDITIVE stable wrappers around them, defined ONCE
-  // per render (not memoized: this file doesn't useCallback its handlers) and
-  // held in refs so the registration effect below can stay identity-stable.
+  // tile can drive mute/hang-up. handleEnd/toggleMute above are untouched — this
+  // is an ADDITIVE stable wrapper around handleEnd, defined ONCE per render (not
+  // memoized: this file doesn't useCallback its handlers) and held in a ref so
+  // the registration effect below can stay identity-stable.
   //   - hangUp / toggleMute delegate straight to the existing handlers.
-  //   - saveNote syncs the in-tab roomNumber/notes state (so tab + tile agree),
-  //     then reuses the real saveNotes() — no new save path.
   //   - VIDEO has no 911 mechanism anywhere in the codebase, so triggerEmergency
   //     is simply omitted (it's optional on RegisteredCallControls); the tile
   //     hides its 911 control when absent.
   const hangUpForTile = () => void handleEnd();
-  const saveNoteForTile = async (room: string, note: string) => {
-    setRoomNumber(room);
-    setNotes(note);
-    roomNumberRef.current = room;
-    notesRef.current = note;
-    return saveNotes();
-  };
   const registeredHangUpRef = useRef(hangUpForTile);
   registeredHangUpRef.current = hangUpForTile;
-  const registeredSaveNoteRef = useRef(saveNoteForTile);
-  registeredSaveNoteRef.current = saveNoteForTile;
   useEffect(() => {
     if (!registerCallControls) return;
     registerCallControls({
       toggleMute,
       muted,
       hangUp: () => registeredHangUpRef.current(),
-      saveNote: (room, note) => registeredSaveNoteRef.current(room, note),
     });
     return () => registerCallControls(null);
     // Only re-register on a real mute-state change (the tile must reflect it);
-    // hangUp/saveNote read through refs above so they always call the CURRENT
-    // handleEnd/saveNotes without needing to be dep-array members themselves.
+    // hangUp reads through the ref above so it always calls the CURRENT handleEnd
+    // without needing to be a dep-array member itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerCallControls, muted]);
 

@@ -101,7 +101,6 @@ function makeControls(overrides: Partial<RegisteredCallControls> = {}): Register
     muted: false,
     hangUp: vi.fn(),
     triggerEmergency: vi.fn(),
-    saveNote: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
 }

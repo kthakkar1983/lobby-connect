@@ -61,7 +61,6 @@ export interface RegisteredCallControls {
   muted: boolean;
   hangUp: () => void;
   triggerEmergency?: () => void;
-  saveNote: (room: string, note: string) => Promise<boolean>;
 }
 
 interface CallSurfaceValue extends CallSurfaceSnapshot {
