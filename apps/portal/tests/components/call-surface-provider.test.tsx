@@ -645,4 +645,54 @@ describe("CallSurfaceProvider", () => {
       expect(screen.getByTestId("cap-partial").textContent).toBe("there");
     });
   });
+
+  describe("Connect reopens the tile (tile follows her into RustDesk)", () => {
+    // requestWindow never resolves — we only assert whether it was CALLED, so the
+    // tile never actually mounts into the fake window (keeps the test focused).
+    function stubDocPip() {
+      const requestWindow = vi.fn(() => new Promise<Window>(() => {}));
+      (window as unknown as { documentPictureInPicture: unknown }).documentPictureInPicture = {
+        requestWindow,
+      };
+      return requestWindow;
+    }
+
+    function ConnectHarness() {
+      const { publishActive, connectToProperty } = useCallSurface();
+      return (
+        <div>
+          <button onClick={() => publishActive("VIDEO", activeCall)}>publish active</button>
+          <button onClick={() => void connectToProperty("prop-1")}>connect</button>
+        </div>
+      );
+    }
+
+    it("reopens the tile when a call is live and the tile was closed", async () => {
+      const requestWindow = stubDocPip();
+      render(
+        <CallSurfaceProvider>
+          <ConnectHarness />
+        </CallSurfaceProvider>,
+      );
+      await act(async () => screen.getByText("publish active").click());
+      await act(async () => screen.getByText("connect").click());
+
+      expect(requestWindow).toHaveBeenCalledTimes(1);
+      delete (window as { documentPictureInPicture?: unknown }).documentPictureInPicture;
+    });
+
+    it("does NOT open a tile from Connect when there is no active call", async () => {
+      const requestWindow = stubDocPip();
+      render(
+        <CallSurfaceProvider>
+          <ConnectHarness />
+        </CallSurfaceProvider>,
+      );
+      // No active call published → a dashboard-card Connect must not spawn a tile.
+      await act(async () => screen.getByText("connect").click());
+
+      expect(requestWindow).not.toHaveBeenCalled();
+      delete (window as { documentPictureInPicture?: unknown }).documentPictureInPicture;
+    });
+  });
 });

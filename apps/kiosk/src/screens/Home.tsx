@@ -21,11 +21,22 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
     config.wifiPassword || config.breakfastHours;
 
   return (
-    <button
-      type="button"
+    // Tap-anywhere target. A <div role="button"> (not a real <button>): iOS
+    // Safari does NOT reliably stretch a <button> used as a full-height flex
+    // container to height:100% — it collapsed to ~half the iPad screen. A <div>
+    // flex container fills the viewport like the other kiosk screens do.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onCall}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onCall();
+        }
+      }}
       aria-label="Tap to connect with the front desk"
-      className="relative flex h-full w-full text-left transition-transform active:scale-[0.997]"
+      className="relative flex h-full w-full cursor-pointer text-left transition-transform active:scale-[0.997]"
     >
       {/* LEFT — navy, animated invitation (50%) */}
       <div
@@ -98,6 +109,6 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
           </div>
         ) : null}
       </div>
-    </button>
+    </div>
   );
 }
