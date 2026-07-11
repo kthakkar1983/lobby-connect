@@ -324,6 +324,14 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // back into prewarmRef (no long-lived plaintext parked in tab memory).
   const connectToProperty = useCallback(
     async (propertyId: string): Promise<{ launched: boolean; notConfigured?: boolean }> => {
+      // The tile follows her into RustDesk (2026-07-11): if a call is live and the
+      // tile was closed ("Back to tab"), reopen it in THIS click — DocPiP needs the
+      // gesture — BEFORE launching RustDesk, so her call surface isn't stranded in
+      // the now-backgrounded tab. openTileForCall no-ops if the tile is already
+      // open or DocPiP is unsupported. It runs FIRST because requestWindow strictly
+      // requires the fresh activation, whereas the rustdesk:// launch tolerates a
+      // spent one (the cache-miss path below already launches after an await).
+      if (activeRef.current) openTileForCall();
       const hit = prewarmRef.current.get(propertyId);
       if (hit && hit !== "not-configured") {
         launchRustdesk(hit); // synchronous — preserves the click's activation
@@ -336,7 +344,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       }
       return { launched: false, notConfigured: r.notConfigured };
     },
-    [],
+    [openTileForCall],
   );
 
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
