@@ -21,6 +21,7 @@ export function VideoCall({
   onClose,
   propertyName,
   propertyId,
+  collapsed = false,
 }: {
   callId: string;
   onClose: () => void;
@@ -28,6 +29,8 @@ export function VideoCall({
   /** Phase E (Task 19b): drives the control bar's Connect button. Nullable —
    *  a video ring can carry a null propertyId same as audio's TwiML Parameter. */
   propertyId: string | null;
+  /** Spec D2: hide the guest-video stage (playbook fills it) while the tile is up. */
+  collapsed?: boolean;
 }) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
@@ -320,7 +323,10 @@ export function VideoCall({
           two drift, extract a shared <CallShell> consumed by both. */}
       <div className="flex flex-1 overflow-hidden">
         {/* 40% guest video (left) — deep-navy video stage */}
-        <div className="relative basis-2/5 bg-[var(--color-call)]">
+        <div
+          data-testid="guest-video-stage"
+          className={`relative basis-2/5 bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
+        >
           <div ref={remoteRef} className="absolute inset-0" />
           {/* Self-view sits top-right (matches the kiosk) so the bottom-anchored
               caption band below never covers it. */}
@@ -347,7 +353,7 @@ export function VideoCall({
             </button>
           )}
         </div>
-        <PlaybookPanel callId={callId} />
+        <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-3/5"} />
       </div>
 
       {saveFailed && (

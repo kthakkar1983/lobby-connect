@@ -115,6 +115,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
       propertyName={active.propertyName}
       propertyId={active.propertyId}
       onClose={() => setActive(null)}
+      collapsed={surface?.tileMount != null}
     />
   ) : null;
 }

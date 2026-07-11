@@ -260,6 +260,9 @@ export function Softphone({ role }: SoftphoneProps) {
   const registerCallControls = surface?.registerCallControls;
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
+  // Spec D2: while the call tile is mounted it owns the controls, so the overlay
+  // collapses its call card to full-width playbook. Read as a plain value.
+  const tileMount = surface?.tileMount ?? null;
   const ringtoneRef = useRef<Ringtone | null>(null);
   // The raw ring audio element, so "Go on duty" can prime the REAL element the
   // ring plays (not a throwaway) inside its own user gesture.
@@ -875,6 +878,7 @@ export function Softphone({ role }: SoftphoneProps) {
           captionPartial={captions.partial}
           captionsEnabled={captionsEnabled}
           onToggleCaptions={toggleCaptions}
+          collapsed={tileMount != null}
           showReopenTile={tileClosedByUser && docPipSupported()}
           onReopenTile={() => openTileForCall?.()}
           onConnect={

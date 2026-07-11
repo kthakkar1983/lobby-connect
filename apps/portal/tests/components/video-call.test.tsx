@@ -269,4 +269,23 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const notesCalls = fetchMock.mock.calls.filter((a) => (a[0] as string) === "/api/calls/notes");
     expect(notesCalls.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("collapses the guest-video stage (hidden) when the tile is up (collapsed prop)", async () => {
+    const { container } = render(
+      <VideoCall callId="call-collapse" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" collapsed />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(stage).toBeTruthy();
+    expect(stage.className).toContain("hidden");
+  });
+
+  it("shows the guest-video stage when not collapsed (default)", async () => {
+    const { container } = render(
+      <VideoCall callId="call-expand" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(stage.className).not.toContain("hidden");
+  });
 });

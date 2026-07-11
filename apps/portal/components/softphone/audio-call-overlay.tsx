@@ -26,6 +26,7 @@ import {
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
+import { cn } from "@/lib/utils";
 
 function formatElapsed(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -55,6 +56,7 @@ export function AudioCallOverlay({
   showReopenTile = false,
   onReopenTile,
   onConnect,
+  collapsed = false,
 }: {
   readonly propertyName: string;
   readonly callId: string;
@@ -83,6 +85,9 @@ export function AudioCallOverlay({
    *  call's property. Absent (undefined) when the ringing property is unknown
    *  (nullable propertyId) — the control renders disabled in that case. */
   readonly onConnect?: () => void;
+  /** Spec D2: when the call tile is up it owns the controls; the overlay hides
+   *  its call card so the playbook fills the width. */
+  readonly collapsed?: boolean;
 }) {
   // Call duration — self-tracked from mount (≈ answer time; not server-authoritative).
   const startRef = useRef(Date.now());
@@ -193,7 +198,13 @@ export function AudioCallOverlay({
 
       {/* Body — call card (~37%) + playbook (~63%). */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex basis-[37%] flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white">
+        <div
+          data-testid="audio-call-card"
+          className={cn(
+            "relative flex basis-[37%] flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white",
+            collapsed && "hidden",
+          )}
+        >
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
             On call · <span className="font-mono tracking-normal">{formatElapsed(elapsed)}</span>
           </div>
@@ -225,7 +236,7 @@ export function AudioCallOverlay({
             </button>
           )}
         </div>
-        <PlaybookPanel callId={callId} basis="basis-[63%]" />
+        <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-[63%]"} />
       </div>
 
       <CaptionBand
