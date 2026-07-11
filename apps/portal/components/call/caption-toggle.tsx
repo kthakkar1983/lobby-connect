@@ -3,8 +3,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * In-call captions on/off control. Shared by the audio + video overlays so the
- * affordance reads identically on both. Presentational — the enabled state and
- * persistence live in lib/captions/use-captions-enabled.ts.
+ * affordance reads identically on both. Presentational — the enabled state lives
+ * on CallSurfaceProvider (captionsEnabled / toggleCaptions), per-call and default
+ * OFF; there is no persistence.
  */
 export function CaptionToggle({
   enabled,
