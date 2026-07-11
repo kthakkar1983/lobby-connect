@@ -11,10 +11,12 @@ export function CaptionToggle({
   enabled,
   onToggle,
   className,
+  compact = false,
 }: {
   readonly enabled: boolean;
   readonly onToggle: () => void;
   readonly className?: string;
+  readonly compact?: boolean;
 }) {
   return (
     <button
@@ -23,7 +25,8 @@ export function CaptionToggle({
       aria-pressed={enabled}
       title={enabled ? "Turn captions off" : "Turn captions on"}
       className={cn(
-        "flex items-center gap-1 rounded-button border px-3 py-2 text-sm",
+        "flex items-center gap-1 rounded-button border text-sm",
+        compact ? "px-2 py-2" : "px-3 py-2",
         enabled
           ? "border-accent bg-accent/10 text-accent-text"
           : "border-border text-text-muted",
@@ -31,7 +34,7 @@ export function CaptionToggle({
       )}
     >
       {enabled ? <Captions size={16} /> : <CaptionsOff size={16} />}
-      {enabled ? "Captions" : "Captions off"}
+      {!compact && (enabled ? "Captions" : "Captions off")}
     </button>
   );
 }

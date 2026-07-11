@@ -93,6 +93,8 @@ const videoActive: ActiveCallInfo = {
   timeZone: null,
 };
 
+const videoActiveTz: ActiveCallInfo = { ...videoActive, timeZone: "America/Chicago" };
+
 function makeControls(overrides: Partial<RegisteredCallControls> = {}): RegisteredCallControls {
   return {
     toggleMute: vi.fn(),
@@ -115,8 +117,13 @@ function Harness({
   controls: RegisteredCallControls | null;
   track?: MediaStreamTrack | null;
 }) {
-  const { publishActive, registerCallControls, publishGuestVideoTrack, openTileForCall } =
-    useCallSurface();
+  const {
+    publishActive,
+    registerCallControls,
+    publishGuestVideoTrack,
+    openTileForCall,
+    publishCaptions,
+  } = useCallSurface();
   return (
     <div>
       <button onClick={() => publishActive(active?.channel ?? "AUDIO", active)}>
@@ -125,6 +132,7 @@ function Harness({
       <button onClick={() => registerCallControls(controls)}>register controls</button>
       <button onClick={() => publishGuestVideoTrack(track ?? null)}>publish track</button>
       <button onClick={() => openTileForCall()}>open tile</button>
+      <button onClick={() => publishCaptions(["Extra towels to 204"], "")}>publish captions</button>
     </div>
   );
 }
@@ -172,22 +180,6 @@ async function openTile() {
   await act(async () => {
     await Promise.resolve(); // flush the requestWindow promise
   });
-}
-
-/**
- * Every @testing-library/dom event helper (fireEvent, userEvent) resolves
- * `ownerDocument.defaultView` internally and throws against the fake pip
- * document (jsdom's `createHTMLDocument()` has no attached window — the real
- * Document-PiP contract IS a genuine separate Document, so this is a jsdom test
- * artifact, not a bug in the tile). Set a React-controlled input's value with
- * the framework's own native-value setter (bypassing the instance setter React
- * shadows), then dispatch a plain, window-agnostic native Event so React's
- * root-level listener picks it up as a change.
- */
-function setNativeInputValue(el: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
-  setter.call(el, value);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 describe("CallTile", () => {
@@ -342,30 +334,6 @@ describe("CallTile", () => {
     expect(within(pipDoc.body).queryByText("911")).toBeNull();
   });
 
-  it("Enter in the note field calls saveNote with the typed room + note", async () => {
-    const saveNote = vi.fn().mockResolvedValue(true);
-    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls({ saveNote }) });
-    await act(async () => screen.getByText("publish active").click());
-    await act(async () => screen.getByText("register controls").click());
-    await openTile();
-
-    // userEvent/fireEvent both hang or throw against the window-less pip
-    // document (see setNativeInputValue's doc comment) — drive the inputs with
-    // plain native events instead.
-    const roomInput = pipDoc.body.querySelector('[aria-label="Room number"]') as HTMLInputElement;
-    const noteInput = pipDoc.body.querySelector('[aria-label="Call note"]') as HTMLInputElement;
-    expect(roomInput).toBeTruthy();
-    expect(noteInput).toBeTruthy();
-
-    await act(async () => {
-      setNativeInputValue(roomInput, "204");
-      setNativeInputValue(noteInput, "VIP");
-      noteInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-
-    expect(saveNote).toHaveBeenCalledWith("204", "VIP");
-  });
-
   it("renders nothing when there is no active call (defensive)", () => {
     render(
       <CallSurfaceProvider>
@@ -460,5 +428,56 @@ describe("CallTile", () => {
     const connectBtn = within(pipDoc.body).getByText("Connect").closest("button") as HTMLButtonElement;
     expect(connectBtn.querySelector("svg")).toBeTruthy();
     expect(connectBtn.className).toContain("bg-accent");
+  });
+
+  it("renders the hotel-clock chip on the video face when a timezone is present", async () => {
+    const track = { kind: "video" } as unknown as MediaStreamTrack;
+    const { pipDoc } = renderTile({ active: videoActiveTz, controls: makeControls(), track });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("publish track").click());
+    await openTile();
+    expect(pipDoc.body.querySelector('[data-testid="hotel-clock-chip"]')).toBeTruthy();
+  });
+
+  it("omits the hotel-clock chip on video when there is no timezone", async () => {
+    const track = { kind: "video" } as unknown as MediaStreamTrack;
+    const { pipDoc } = renderTile({ active: videoActive, controls: makeControls(), track });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("publish track").click());
+    await openTile();
+    expect(pipDoc.body.querySelector('[data-testid="hotel-clock-chip"]')).toBeNull();
+  });
+
+  it("shows the caption band in the tile only after captions are turned on (default OFF)", async () => {
+    const track = { kind: "video" } as unknown as MediaStreamTrack;
+    const { pipDoc } = renderTile({ active: videoActive, controls: makeControls(), track });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("publish track").click());
+    // The compact CC toggle lives in the control bar, which renders only once
+    // controls are registered (as they always are while the tile is open during
+    // a live call — the softphone/video-host register them on answer).
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    const tile = within(pipDoc.body);
+
+    // Default OFF: publishing text does not surface a band.
+    await act(async () => screen.getByText("publish captions").click());
+    expect(tile.queryByText(/Extra towels to 204/)).toBeNull();
+
+    // Turn captions ON via the tile's compact CC toggle (icon-only → query by title).
+    const cc = pipDoc.body.querySelector('[title="Turn captions on"]') as HTMLButtonElement;
+    expect(cc).toBeTruthy();
+    await act(async () => cc.click());
+    await act(async () => screen.getByText("publish captions").click());
+    await waitFor(() => expect(tile.getByText(/Extra towels to 204/)).toBeTruthy());
+  });
+
+  it("has no Room #/Note inputs anymore", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    expect(pipDoc.body.querySelector('[aria-label="Room number"]')).toBeNull();
+    expect(pipDoc.body.querySelector('[aria-label="Call note"]')).toBeNull();
   });
 });
