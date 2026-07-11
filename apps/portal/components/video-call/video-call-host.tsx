@@ -103,7 +103,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
             propertyName: active.propertyName,
             onHold: false,
             answeredAt: answeredAtRef.current,
-            timeZone: null,
+            timeZone: active.timezone ?? null,
           }
         : null,
     );
@@ -115,6 +115,7 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
       propertyName={active.propertyName}
       propertyId={active.propertyId}
       onClose={() => setActive(null)}
+      collapsed={surface?.tileMount != null}
     />
   ) : null;
 }

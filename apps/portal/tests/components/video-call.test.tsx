@@ -64,6 +64,13 @@ vi.mock("@/lib/captions/use-captions", () => ({
 }));
 
 import { VideoCall } from "@/components/video-call/video-call";
+import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
+
+// Captions default OFF (spec D7) — this harness turns them on via the surface.
+function EnableCaptions() {
+  const { toggleCaptions } = useCallSurface();
+  return <button onClick={toggleCaptions}>enable captions</button>;
+}
 
 describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -163,9 +170,16 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await waitFor(() => expect(screen.getByText(/camera is unavailable/i)).toBeTruthy());
   });
 
-  it("captions the guest audio: captures the remote track and renders the band", async () => {
-    render(<VideoCall callId="call-cap" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+  it("captions the guest audio when captions are ON: captures the remote track and renders the band", async () => {
+    render(
+      <CallSurfaceProvider>
+        <EnableCaptions />
+        <VideoCall callId="call-cap" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
     await waitFor(() => expect(lk.joined.opts).not.toBeNull());
+    // Captions default OFF — turn them on, then the guest track flows to useCaptions.
+    await act(async () => screen.getByText("enable captions").click());
 
     const guestTrack = { kind: "audio" } as unknown as MediaStreamTrack;
     await act(async () => {
@@ -268,5 +282,24 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
 
     const notesCalls = fetchMock.mock.calls.filter((a) => (a[0] as string) === "/api/calls/notes");
     expect(notesCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("collapses the guest-video stage (hidden) when the tile is up (collapsed prop)", async () => {
+    const { container } = render(
+      <VideoCall callId="call-collapse" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" collapsed />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(stage).toBeTruthy();
+    expect(stage.className).toContain("hidden");
+  });
+
+  it("shows the guest-video stage when not collapsed (default)", async () => {
+    const { container } = render(
+      <VideoCall callId="call-expand" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(stage.className).not.toContain("hidden");
   });
 });

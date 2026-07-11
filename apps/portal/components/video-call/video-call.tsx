@@ -11,7 +11,6 @@ import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { useCaptions } from "@/lib/captions/use-captions";
-import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
@@ -21,6 +20,7 @@ export function VideoCall({
   onClose,
   propertyName,
   propertyId,
+  collapsed = false,
 }: {
   callId: string;
   onClose: () => void;
@@ -28,6 +28,8 @@ export function VideoCall({
   /** Phase E (Task 19b): drives the control bar's Connect button. Nullable —
    *  a video ring can carry a null propertyId same as audio's TwiML Parameter. */
   propertyId: string | null;
+  /** Spec D2: hide the guest-video stage (playbook fills it) while the tile is up. */
+  collapsed?: boolean;
 }) {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
@@ -72,10 +74,21 @@ export function VideoCall({
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
 
-  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
+  // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
+  // overlay + tile toggles, default OFF, reset per call). No provider (standalone
+  // render) → OFF + no-op toggle.
+  const captionsEnabled = surface?.captionsEnabled ?? false;
+  const toggleCaptions = surface?.toggleCaptions ?? (() => {});
+  const publishCaptions = surface?.publishCaptions;
   // Gating the track (not just hiding the band) tears down the STT stream when
   // captions are off — stops the upstream audio + the per-minute billing.
   const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
+  // Feed the tile's caption band (spec D8). Local band render is unchanged.
+  // DEP-HYGIENE: depend on the STABLE dispatcher + the caption text, never on
+  // `surface` itself (mirrors the other publisher effects in this file).
+  useEffect(() => {
+    publishCaptions?.(captions.finals, captions.partial);
+  }, [publishCaptions, captions.finals, captions.partial]);
 
   // Accept the call, then join LiveKit.
   // NOTE: the cleanup must tear down the session, and we must bail on
@@ -242,40 +255,28 @@ export function VideoCall({
   }
 
   // Task 17: register this call's controls with the CallSurfaceProvider so the
-  // tile can drive mute/hang-up/notes. handleEnd/saveNotes/toggleMute above are
-  // untouched — these are ADDITIVE stable wrappers around them, defined ONCE
-  // per render (not memoized: this file doesn't useCallback its handlers) and
-  // held in refs so the registration effect below can stay identity-stable.
+  // tile can drive mute/hang-up. handleEnd/toggleMute above are untouched — this
+  // is an ADDITIVE stable wrapper around handleEnd, defined ONCE per render (not
+  // memoized: this file doesn't useCallback its handlers) and held in a ref so
+  // the registration effect below can stay identity-stable.
   //   - hangUp / toggleMute delegate straight to the existing handlers.
-  //   - saveNote syncs the in-tab roomNumber/notes state (so tab + tile agree),
-  //     then reuses the real saveNotes() — no new save path.
   //   - VIDEO has no 911 mechanism anywhere in the codebase, so triggerEmergency
   //     is simply omitted (it's optional on RegisteredCallControls); the tile
   //     hides its 911 control when absent.
   const hangUpForTile = () => void handleEnd();
-  const saveNoteForTile = async (room: string, note: string) => {
-    setRoomNumber(room);
-    setNotes(note);
-    roomNumberRef.current = room;
-    notesRef.current = note;
-    return saveNotes();
-  };
   const registeredHangUpRef = useRef(hangUpForTile);
   registeredHangUpRef.current = hangUpForTile;
-  const registeredSaveNoteRef = useRef(saveNoteForTile);
-  registeredSaveNoteRef.current = saveNoteForTile;
   useEffect(() => {
     if (!registerCallControls) return;
     registerCallControls({
       toggleMute,
       muted,
       hangUp: () => registeredHangUpRef.current(),
-      saveNote: (room, note) => registeredSaveNoteRef.current(room, note),
     });
     return () => registerCallControls(null);
     // Only re-register on a real mute-state change (the tile must reflect it);
-    // hangUp/saveNote read through refs above so they always call the CURRENT
-    // handleEnd/saveNotes without needing to be dep-array members themselves.
+    // hangUp reads through the ref above so it always calls the CURRENT handleEnd
+    // without needing to be a dep-array member itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerCallControls, muted]);
 
@@ -320,7 +321,10 @@ export function VideoCall({
           two drift, extract a shared <CallShell> consumed by both. */}
       <div className="flex flex-1 overflow-hidden">
         {/* 40% guest video (left) — deep-navy video stage */}
-        <div className="relative basis-2/5 bg-[var(--color-call)]">
+        <div
+          data-testid="guest-video-stage"
+          className={`relative basis-2/5 bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
+        >
           <div ref={remoteRef} className="absolute inset-0" />
           {/* Self-view sits top-right (matches the kiosk) so the bottom-anchored
               caption band below never covers it. */}
@@ -347,7 +351,7 @@ export function VideoCall({
             </button>
           )}
         </div>
-        <PlaybookPanel callId={callId} />
+        <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-3/5"} />
       </div>
 
       {saveFailed && (

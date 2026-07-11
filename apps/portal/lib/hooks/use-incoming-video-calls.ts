@@ -22,6 +22,7 @@ export interface IncomingVideoCall {
   // The API already returns these; the cards need the id to place the ring and
   // ringStartedAt to seed the on-card elapsed timer.
   propertyId: string | null;
+  timezone: string | null;
   ringStartedAt: string | null;
 }
 

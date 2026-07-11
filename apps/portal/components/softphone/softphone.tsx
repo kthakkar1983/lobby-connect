@@ -17,7 +17,6 @@ import { primeRingtone } from "@/lib/video/prime";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { cn } from "@/lib/utils";
 import { useCaptions } from "@/lib/captions/use-captions";
-import { useCaptionsEnabled } from "@/lib/captions/use-captions-enabled";
 
 type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
@@ -158,11 +157,6 @@ export function Softphone({ role }: SoftphoneProps) {
     return saveNotes({ callId: id, roomNumber: room, notes: note });
   }, [saveNotes]);
 
-  const { enabled: captionsEnabled, toggle: toggleCaptions } = useCaptionsEnabled();
-  // Gating the track (not just hiding the band) tears down the STT stream when
-  // captions are off — stops the upstream audio + the per-minute billing.
-  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
-
   // Current intended presence, derived from local UI state.
   const intendedStatus = useCallback((): PresenceStatus => {
     if (phase === "in-call") return "ON_CALL";
@@ -260,6 +254,24 @@ export function Softphone({ role }: SoftphoneProps) {
   const registerCallControls = surface?.registerCallControls;
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
+  // Spec D2: while the call tile is mounted it owns the controls, so the overlay
+  // collapses its call card to full-width playbook. Read as a plain value.
+  const tileMount = surface?.tileMount ?? null;
+
+  // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
+  // overlay + tile toggles, default OFF, reset per call). No provider → OFF + no-op.
+  const captionsEnabled = surface?.captionsEnabled ?? false;
+  const toggleCaptions = surface?.toggleCaptions ?? (() => {});
+  const publishCaptions = surface?.publishCaptions;
+  // Gating the track (not just hiding the band) tears down the STT stream when
+  // captions are off — stops the upstream audio + the per-minute billing.
+  const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
+  // Feed the tile's caption band (spec D8). Local band render is unchanged.
+  // DEP-HYGIENE: depend on the STABLE dispatcher + caption text, never `surface`.
+  useEffect(() => {
+    publishCaptions?.(captions.finals, captions.partial);
+  }, [publishCaptions, captions.finals, captions.partial]);
+
   const ringtoneRef = useRef<Ringtone | null>(null);
   // The raw ring audio element, so "Go on duty" can prime the REAL element the
   // ring plays (not a throwaway) inside its own user gesture.
@@ -692,21 +704,10 @@ export function Softphone({ role }: SoftphoneProps) {
   }, []);
 
   // Task 17: register this call's controls with the CallSurfaceProvider so the
-  // tile can drive mute/hang-up/911/notes. Reuses the EXISTING handlers verbatim
-  // — toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
+  // tile can drive mute/hang-up/911. Reuses the EXISTING handlers verbatim —
+  // toggleMute/endCall/triggerEmergency are untouched; triggerEmergency here IS
   // the real 911 POST trigger (the same function the AudioCallOverlay's confirm
-  // dialog invokes), not a re-implementation. saveNote syncs roomNumber/notes
-  // state so the tab overlay and the tile agree, then reuses the real saveNotes
-  // notes-durability path (no new save path).
-  const registerSaveNote = useCallback(
-    (room: string, note: string) => {
-      setRoomNumber(room);
-      setNotes(note);
-      const id = callIdRef.current;
-      return saveNotes({ callId: id, roomNumber: room, notes: note });
-    },
-    [saveNotes],
-  );
+  // dialog invokes), not a re-implementation.
   useEffect(() => {
     if (!registerCallControls) return;
     if (phase !== "in-call") {
@@ -718,10 +719,9 @@ export function Softphone({ role }: SoftphoneProps) {
       muted,
       hangUp: () => void endCall(),
       triggerEmergency: () => void triggerEmergency(),
-      saveNote: registerSaveNote,
     });
     return () => registerCallControls(null);
-  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency, registerSaveNote]);
+  }, [registerCallControls, phase, toggleMute, muted, endCall, triggerEmergency]);
 
   const toggleReady = useCallback(() => {
     const next = !ready;
@@ -875,6 +875,7 @@ export function Softphone({ role }: SoftphoneProps) {
           captionPartial={captions.partial}
           captionsEnabled={captionsEnabled}
           onToggleCaptions={toggleCaptions}
+          collapsed={tileMount != null}
           showReopenTile={tileClosedByUser && docPipSupported()}
           onReopenTile={() => openTileForCall?.()}
           onConnect={

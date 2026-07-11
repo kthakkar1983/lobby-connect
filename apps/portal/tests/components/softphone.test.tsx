@@ -182,7 +182,7 @@ import {
  * uses. Answering the softphone in these tests goes through here.
  */
 function CardProbe() {
-  const { rings, actions, silenceRing } = useCallSurface();
+  const { rings, actions, silenceRing, toggleCaptions } = useCallSurface();
   const audioRing = rings.find((r) => r.channel === "AUDIO") ?? null;
   return (
     <div>
@@ -195,6 +195,10 @@ function CardProbe() {
       {/* Silence the audio ring for the fake call (callId "call-42"). */}
       <button type="button" onClick={() => silenceRing("audio:call-42")}>
         Silence on card
+      </button>
+      {/* Captions default OFF (spec D7) — this turns them on via the surface. */}
+      <button type="button" onClick={() => toggleCaptions()}>
+        enable captions
       </button>
     </div>
   );
@@ -343,6 +347,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
     await act(async () => twilio.fireIncoming());
     await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
     await user.click(screen.getByText("Answer on card"));
+    await act(async () => screen.getByText("enable captions").click());
 
     // The remote audio track is captured shortly after accept and captioned.
     await waitFor(() => expect(captionsSpy.fn).toHaveBeenCalledWith(expect.objectContaining({ kind: "audio" })));

@@ -102,12 +102,14 @@ export async function GET(_request: Request): Promise<NextResponse> {
   const propertyIds = [...new Set(calls.map((c) => c.property_id as string))];
 
   let nameById = new Map<string, string>();
+  let tzById = new Map<string, string | null>();
   if (propertyIds.length > 0) {
     const { data: props } = await admin
       .from("properties")
-      .select("id, name")
+      .select("id, name, timezone")
       .in("id", propertyIds);
     nameById = new Map((props ?? []).map((p) => [p.id as string, p.name as string]));
+    tzById = new Map((props ?? []).map((p) => [p.id as string, (p.timezone as string | null) ?? null]));
   }
 
   return NextResponse.json({
@@ -116,6 +118,7 @@ export async function GET(_request: Request): Promise<NextResponse> {
       channelName: c.agora_channel_name,
       propertyId: c.property_id,
       propertyName: nameById.get(c.property_id as string) ?? "Property",
+      timezone: tzById.get(c.property_id as string) ?? null,
       ringStartedAt: c.ring_started_at,
     })),
   });

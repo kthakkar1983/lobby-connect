@@ -7,7 +7,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 let profileRow: Record<string, unknown> | null = null;
 let callRows: Array<Record<string, unknown>> = [];
-let propertyRows: Array<{ id: string; name: string }> = [];
+let propertyRows: Array<{ id: string; name: string; timezone?: string | null }> = [];
 let assignmentRows: Array<{ property_id: string }> = [];
 let availabilityRows: Array<{ property_id: string }> = [];
 const gteSpy = vi.fn();
@@ -71,7 +71,7 @@ beforeEach(() => {
   callRows = [
     { id: "call-1", property_id: "prop-1", agora_channel_name: "call_abc", ring_started_at: "2026-06-01T00:00:00Z" },
   ];
-  propertyRows = [{ id: "prop-1", name: "The Sample Hotel" }];
+  propertyRows = [{ id: "prop-1", name: "The Sample Hotel", timezone: "America/Chicago" }];
 });
 
 describe("GET /api/calls/incoming-video", () => {
@@ -96,6 +96,11 @@ describe("GET /api/calls/incoming-video", () => {
     callRows = [];
     const body = await (await GET(request)).json();
     expect(body.calls).toEqual([]);
+  });
+
+  it("includes the property timezone per call (D10 hotel-clock plumb)", async () => {
+    const body = await (await GET(request)).json();
+    expect(body.calls[0].timezone).toBe("America/Chicago");
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
