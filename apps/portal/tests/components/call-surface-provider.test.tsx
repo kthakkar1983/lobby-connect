@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { useSyncExternalStore } from "react";
 
 const { fetchRemoteCredentials, launchRustdesk } = vi.hoisted(() => ({
   fetchRemoteCredentials: vi.fn(),
@@ -577,6 +578,71 @@ describe("CallSurfaceProvider", () => {
       });
       await waitFor(() => expect(fetchRemoteCredentials).toHaveBeenCalledTimes(3));
       expect(fetchRemoteCredentials).toHaveBeenLastCalledWith("prop-1", "click");
+    });
+  });
+
+  describe("captions", () => {
+    function CaptionHarness() {
+      const s = useCallSurface();
+      const snap = useSyncExternalStore(s.subscribeCaptions, s.getCaptionSnapshot);
+      const publishActiveCall = (callId: string) =>
+        s.publishActive("AUDIO", {
+          callId,
+          channel: "AUDIO",
+          propertyId: "prop-1",
+          propertyName: "Hotel A",
+          onHold: false,
+          answeredAt: 0,
+          timeZone: null,
+        });
+      return (
+        <div>
+          <div data-testid="cap-enabled">{s.captionsEnabled ? "on" : "off"}</div>
+          <div data-testid="cap-finals">{snap.finals.join("|")}</div>
+          <div data-testid="cap-partial">{snap.partial}</div>
+          <button onClick={s.toggleCaptions}>toggle captions</button>
+          <button onClick={() => s.publishCaptions(["hi"], "there")}>publish captions</button>
+          <button onClick={() => publishActiveCall("call-1")}>start call-1</button>
+          <button onClick={() => publishActiveCall("call-2")}>start call-2</button>
+          <button onClick={() => s.publishActive("AUDIO", null)}>end call</button>
+        </div>
+      );
+    }
+
+    it("captions default OFF and toggleCaptions flips them", async () => {
+      render(
+        <CallSurfaceProvider>
+          <CaptionHarness />
+        </CallSurfaceProvider>,
+      );
+      expect(screen.getByTestId("cap-enabled").textContent).toBe("off");
+      await act(async () => screen.getByText("toggle captions").click());
+      expect(screen.getByTestId("cap-enabled").textContent).toBe("on");
+    });
+
+    it("resets captions to OFF on a new call (non-persistent, billing safety)", async () => {
+      render(
+        <CallSurfaceProvider>
+          <CaptionHarness />
+        </CallSurfaceProvider>,
+      );
+      await act(async () => screen.getByText("start call-1").click());
+      await act(async () => screen.getByText("toggle captions").click());
+      expect(screen.getByTestId("cap-enabled").textContent).toBe("on");
+      // A different callId (call-B overwrites call-A) must reset captions OFF.
+      await act(async () => screen.getByText("start call-2").click());
+      expect(screen.getByTestId("cap-enabled").textContent).toBe("off");
+    });
+
+    it("relays published caption text to a useSyncExternalStore subscriber", async () => {
+      render(
+        <CallSurfaceProvider>
+          <CaptionHarness />
+        </CallSurfaceProvider>,
+      );
+      await act(async () => screen.getByText("publish captions").click());
+      expect(screen.getByTestId("cap-finals").textContent).toBe("hi");
+      expect(screen.getByTestId("cap-partial").textContent).toBe("there");
     });
   });
 });

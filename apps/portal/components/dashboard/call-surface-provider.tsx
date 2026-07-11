@@ -116,6 +116,22 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
    * the property simply has no remote access configured.
    */
   connectToProperty: (propertyId: string) => Promise<{ launched: boolean; notConfigured?: boolean }>;
+  /**
+   * Live-caption ENABLED state (spec D6/D7). Shared by the overlay toggle AND
+   * the tile toggle. Default OFF, non-persistent, reset to false on every call
+   * transition — captions bill per audio-minute, so they run only when the
+   * agent deliberately turns them on, and never carry into the next call.
+   */
+  captionsEnabled: boolean;
+  toggleCaptions: () => void;
+  /**
+   * Caption TEXT relay (spec D8). Kept OUT of the memoized value — per-partial
+   * updates would re-render every consumer. The live-call owner publishes; the
+   * tile's band reads via useSyncExternalStore, so only the band re-renders.
+   */
+  publishCaptions: (finals: string[], partial: string) => void;
+  subscribeCaptions: (cb: () => void) => () => void;
+  getCaptionSnapshot: () => { finals: string[]; partial: string };
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -142,6 +158,27 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // the Set's identity stable when nothing actually changes, so publisher
   // effects that read it don't churn.
   const [silencedKeys, setSilencedKeys] = useState<ReadonlySet<string>>(() => new Set());
+
+  // Captions (spec D6–D8). Enabled is shared + default OFF + reset per call.
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const toggleCaptions = useCallback(() => setCaptionsEnabled((p) => !p), []);
+
+  // Caption-text external store: refs + a listener set keep per-partial churn
+  // off the memoized `value`. getCaptionSnapshot returns the ref's CURRENT
+  // object (stable identity between publishes) so useSyncExternalStore is happy.
+  const captionStoreRef = useRef<{ finals: string[]; partial: string }>({ finals: [], partial: "" });
+  const captionListenersRef = useRef<Set<() => void>>(new Set());
+  const publishCaptions = useCallback((finals: string[], partial: string) => {
+    captionStoreRef.current = { finals, partial };
+    for (const cb of captionListenersRef.current) cb();
+  }, []);
+  const subscribeCaptions = useCallback((cb: () => void) => {
+    captionListenersRef.current.add(cb);
+    return () => {
+      captionListenersRef.current.delete(cb);
+    };
+  }, []);
+  const getCaptionSnapshot = useCallback(() => captionStoreRef.current, []);
 
   // Call-scoped Document-PiP tile. The handle (window/close fn) is a REF — it's
   // an imperative object, not render-relevant; only the mount element and the
@@ -323,6 +360,14 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     });
   }, [ringKeys]);
 
+  // Per-call caption reset (spec D7): a new callId — or call end (null) — turns
+  // captions OFF and clears the relay. A forgotten "on" never bills the next call.
+  useEffect(() => {
+    setCaptionsEnabled(false);
+    captionStoreRef.current = { finals: [], partial: "" };
+    for (const cb of captionListenersRef.current) cb();
+  }, [active?.callId]);
+
   // Auto-close: when the call ends (active → null), any open tile closes with
   // it and the reopen affordance resets — the call is over, there's nothing
   // left to reopen into. closeTile is []-stable, so this effect only reruns
@@ -354,6 +399,11 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       callControls,
       registerCallControls,
       connectToProperty,
+      captionsEnabled,
+      toggleCaptions,
+      publishCaptions,
+      subscribeCaptions,
+      getCaptionSnapshot,
     }),
     [
       audioRings,
@@ -376,6 +426,11 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       callControls,
       registerCallControls,
       connectToProperty,
+      captionsEnabled,
+      toggleCaptions,
+      publishCaptions,
+      subscribeCaptions,
+      getCaptionSnapshot,
     ],
   );
 
