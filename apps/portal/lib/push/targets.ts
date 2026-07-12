@@ -9,15 +9,16 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 /**
  * Raw statuses that silence VIDEO for a user. A DENY-LIST on purpose: only these
- * two explicit, agent-set signals silence — OFFLINE (End shift) and AWAY (the
+ * explicit, agent-set signals silence — OFFLINE (End shift), AWAY (the
  * "not accepting calls" toggle; mirrors audio, whose reachable set is
- * AVAILABLE/ON_CALL only). Any other value — AVAILABLE, ON_CALL, or a
- * null/unknown status from a DB blip — is NOT silenced, so the gate FAILS OPEN
- * and never silences a live agent. Do NOT flip this to an allow-list
- * (AVAILABLE/ON_CALL) — that would fail CLOSED on a status-read error.
+ * AVAILABLE/ON_CALL only), and BREAK (on shift but stepped away). Any other
+ * value — AVAILABLE, ON_CALL, or a null/unknown status from a DB blip — is NOT
+ * silenced, so the gate FAILS OPEN and never silences a live agent. Do NOT flip
+ * this to an allow-list (AVAILABLE/ON_CALL) — that would fail CLOSED on a
+ * status-read error.
  */
 export function isVideoSilencedStatus(status: string): boolean {
-  return status === "OFFLINE" || status === "AWAY";
+  return status === "OFFLINE" || status === "AWAY" || status === "BREAK";
 }
 
 export async function resolveTargetUserIds(admin: Admin, propertyId: string): Promise<string[]> {

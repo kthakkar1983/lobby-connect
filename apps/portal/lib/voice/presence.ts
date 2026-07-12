@@ -1,11 +1,12 @@
 import { PRESENCE_STALE_AFTER_MS, type Role } from "@lc/shared";
 
-export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
+export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "BREAK" | "OFFLINE";
 
 const LIVE_STATUSES: ReadonlySet<string> = new Set([
   "AVAILABLE",
   "AWAY",
   "ON_CALL",
+  "BREAK",
 ]);
 
 /** Statuses a browser may set on itself. OFFLINE is cron-only. */

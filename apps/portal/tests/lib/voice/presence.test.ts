@@ -9,6 +9,7 @@ import {
   isLiveStatus,
   isLiveShift,
 } from "@/lib/voice/presence";
+import { isVideoSilencedStatus } from "@/lib/push/targets";
 
 describe("isStale", () => {
   const now = Date.parse("2026-05-31T12:00:00.000Z");
@@ -116,4 +117,14 @@ describe("isLiveShift (D13)", () => {
     expect(isLiveShift("AVAILABLE", stale, now)).toBe(false);
     expect(isLiveShift("AVAILABLE", null, now)).toBe(false);
   });
+});
+
+describe("BREAK status (Task 9)", () => {
+  const now = 1_000_000_000_000;
+  const fresh = new Date(now - 5_000).toISOString();
+
+  it("BREAK is a browser-settable live status", () => expect(isLiveStatus("BREAK")).toBe(true));
+  it("BREAK keeps the shift live", () => expect(isLiveShift("BREAK", fresh, now)).toBe(true));
+  it("BREAK is not dialed", () => expect(isReachableForDial("BREAK", fresh, now)).toBe(false));
+  it("BREAK silences video", () => expect(isVideoSilencedStatus("BREAK")).toBe(true));
 });
