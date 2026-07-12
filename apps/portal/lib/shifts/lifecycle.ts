@@ -1,7 +1,21 @@
 import { PRESENCE_STALE_AFTER_MS, SHIFT_CAP_EPSILON_MS, type ShiftEndedReason } from "@lc/shared";
 import { isLiveShift } from "@/lib/voice/presence";
 
-/** A non-manual close near the session cap is `capped`; otherwise `lapsed`. */
+/**
+ * A non-manual close near the session cap is `capped`; otherwise `lapsed`.
+ *
+ * KNOWN LIMITATION: the real-world trigger this detects (Supabase's 12h "Time-box
+ * user sessions" Auth setting) is anchored to the AUTH SESSION's start, not the
+ * SHIFT's start — but this heuristic only has the shift's own started_at to compare
+ * against. An agent who logs in once and cycles through multiple go-on-duty/
+ * end-shift shifts within that single login (e.g. a short shift taken after an
+ * earlier break) can have a session-expiry close of that later, shorter shift
+ * mislabeled `lapsed` when the true cause was the session cap. Blast radius is
+ * limited to the `ended_reason` label surfaced in admin reporting —
+ * computeClockedSeconds / canDoWork / duty-gating do not depend on this value.
+ * Not fixed here: doing so would require threading the auth session's own start
+ * time (not tracked anywhere in this app's schema) into every caller.
+ */
 export function classifyShiftEnd(
   startedAtIso: string,
   endedAtIso: string,
