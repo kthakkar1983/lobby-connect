@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { DutyControl } from "@/components/dashboard/duty-control";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 import { syncPushSubscription } from "@/lib/push/client";
@@ -70,7 +71,10 @@ export function DashboardWorkspace({
   return (
     <div className="flex flex-col gap-6 p-6">
       <DashboardHeader firstName={firstName}>
-        <AccountMenu fullName={fullName} email={email} role={role} />
+        <div className="flex items-center gap-3">
+          <DutyControl />
+          <AccountMenu fullName={fullName} email={email} role={role} />
+        </div>
       </DashboardHeader>
 
       <div className={onHome ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
