@@ -36,7 +36,15 @@ const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
   async (): Promise<{ data: Record<string, unknown> }> => ({
-    data: { id: "u1", operator_id: "op-1", role: "AGENT" },
+    // requireApiActor reads id/operator_id/role/active; requireOnDuty reads
+    // status/last_seen_at — a live shift keeps the hard gate open by default.
+    data: {
+      id: "u1",
+      operator_id: "op-1",
+      role: "AGENT",
+      status: "AVAILABLE",
+      last_seen_at: new Date(Date.now() - 10_000).toISOString(),
+    },
   }),
 );
 
@@ -147,5 +155,24 @@ describe("POST /api/calls/[id]/answer-video", () => {
         propertyName: "",
       },
     );
+  });
+
+  it("403 (off duty) before any claim — the hard gate", async () => {
+    const off = {
+      data: {
+        id: "u1",
+        operator_id: "op-1",
+        role: "AGENT",
+        status: "OFFLINE",
+        last_seen_at: new Date().toISOString(),
+      },
+    };
+    // requireApiActor reads first (role AGENT passes), requireOnDuty reads
+    // second (OFFLINE) -> 403 before fetchOperatorCall / claimCall.
+    profileFetch.mockResolvedValueOnce(off).mockResolvedValueOnce(off);
+    const res = await call("call-1");
+    expect(res.status).toBe(403);
+    expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 });

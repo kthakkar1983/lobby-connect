@@ -3,6 +3,7 @@ import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAnswer, claimCall } from "@/lib/voice/call-state";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
+import { requireOnDuty } from "@/lib/shifts/gate";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
 import { sendCallPush } from "@/lib/push/send";
 import type { CallState } from "@lc/shared";
@@ -18,6 +19,11 @@ export async function POST(
   const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
   if (actor instanceof NextResponse) return actor;
 
+  // Hard gate (spec §7.1): no answering a call without a live, non-break shift.
+  const admin = createAdminClient();
+  const gate = await requireOnDuty(admin, actor.userId);
+  if (gate) return gate;
+
   const call = await fetchOperatorCall<{
     id: string;
     state: CallState;
@@ -30,8 +36,6 @@ export async function POST(
   if (!canAnswer(call.state)) {
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
   }
-
-  const admin = createAdminClient();
 
   const won = await claimCall(admin, id, actor.userId);
   if (!won) return NextResponse.json({ error: "Already answered" }, { status: 409 });
