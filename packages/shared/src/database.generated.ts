@@ -697,6 +697,96 @@ export type Database = {
           },
         ];
       };
+      shift_breaks: {
+        Row: {
+          created_at: string;
+          ended_at: string | null;
+          id: string;
+          shift_id: string;
+          started_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          ended_at?: string | null;
+          id?: string;
+          shift_id: string;
+          started_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          ended_at?: string | null;
+          id?: string;
+          shift_id?: string;
+          started_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shift_breaks_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "shifts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      shifts: {
+        Row: {
+          created_at: string;
+          edited_at: string | null;
+          edited_by: string | null;
+          ended_at: string | null;
+          ended_reason: string | null;
+          id: string;
+          operator_id: string;
+          started_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          ended_at?: string | null;
+          ended_reason?: string | null;
+          id?: string;
+          operator_id: string;
+          started_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          ended_at?: string | null;
+          ended_reason?: string | null;
+          id?: string;
+          operator_id?: string;
+          started_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shifts_edited_by_fkey";
+            columns: ["edited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shifts_operator_id_fkey";
+            columns: ["operator_id"];
+            isOneToOne: false;
+            referencedRelation: "operators";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shifts_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
