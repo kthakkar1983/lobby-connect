@@ -10,16 +10,27 @@ const updateSpy = vi.fn();
 let updateFilters: string[][] = [];
 let refreshedRows: unknown[] = [{ id: "u1" }]; // what the D13 conditional update matches
 let refreshError: { message: string } | null = null;
+// The BREAK-preservation check (quality-review follow-up to Task 9) is a
+// separate conditional UPDATE from the general refresh above — it writes
+// only `{ last_seen_at }` (no `status` key), which is how this mock tells
+// the two apart, so each can be driven independently in tests. Defaults to
+// "no fresh BREAK row" so every pre-existing test is unaffected.
+let breakPreserveRows: unknown[] = [];
+let breakPreserveError: { message: string } | null = null;
 function profilesUpdate(v: unknown) {
   updateSpy(v);
   const filters: string[] = [];
   updateFilters.push(filters);
+  const isBreakPreserveWrite = typeof v === "object" && v !== null && !("status" in v);
   const chain = {
     eq: () => { filters.push("eq"); return chain; },
     neq: () => { filters.push("neq"); return chain; },
     gte: () => { filters.push("gte"); return chain; },
     lt: () => { filters.push("lt"); return chain; },
-    select: () => Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
+    select: () =>
+      isBreakPreserveWrite
+        ? Promise.resolve({ data: breakPreserveError ? null : breakPreserveRows, error: breakPreserveError })
+        : Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
     // Unconditional writes (ON_CALL bypass, lapse-persist) are awaited directly.
     then: (onFulfilled: (v: { error: null }) => unknown) =>
       Promise.resolve({ error: null }).then(onFulfilled),
@@ -87,6 +98,8 @@ beforeEach(() => {
   updateFilters = [];
   refreshedRows = [{ id: "u1" }];
   refreshError = null;
+  breakPreserveRows = [];
+  breakPreserveError = null;
   dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
   dutyReadError = null;
 });
@@ -192,7 +205,9 @@ describe("D13 duty gate (spec §3.4)", () => {
   it("an allowed beat refreshes via a CONDITIONAL update (neq OFFLINE + gte cutoff)", async () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
-    expect(updateFilters[0]).toEqual(["eq", "neq", "gte"]);
+    // updateFilters[0] is the BREAK-preservation check (runs first, no match by
+    // default — see the "BREAK preservation" describe block below).
+    expect(updateFilters[1]).toEqual(["eq", "neq", "gte"]);
   });
 
   it("a gated beat writes nothing live, persists the lapse, returns onDuty:false", async () => {
@@ -200,10 +215,11 @@ describe("D13 duty gate (spec §3.4)", () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ onDuty: false });
-    // Second update = lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
-    expect(updateSpy).toHaveBeenCalledTimes(2);
-    expect(updateSpy.mock.calls[1]?.[0]).toEqual({ status: "OFFLINE" });
-    expect(updateFilters[1]).toEqual(["eq", "neq", "lt"]);
+    // Calls: [0] BREAK-preservation check (no match), [1] general refresh (0
+    // rows), [2] lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
+    expect(updateSpy).toHaveBeenCalledTimes(3);
+    expect(updateSpy.mock.calls[2]?.[0]).toEqual({ status: "OFFLINE" });
+    expect(updateFilters[2]).toEqual(["eq", "neq", "lt"]);
   });
 
   it("AWAY beats are gated identically", async () => {
@@ -233,7 +249,59 @@ describe("D13 duty gate (spec §3.4)", () => {
     refreshError = { message: "boom" };
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledTimes(1); // no second (lapse-persist) update
+    // [0] BREAK-preservation check (no match) + [1] the refresh itself; no
+    // third (lapse-persist) update.
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("BREAK preservation (quality-review follow-up to Task 9)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("an AVAILABLE beat does not clobber a fresh BREAK row — preserves BREAK, 204", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    // Only the preservation check ran — the general refresh must NOT have
+    // fired, or it would have clobbered BREAK back to AVAILABLE.
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[0]).toEqual(["eq", "eq", "gte"]);
+  });
+
+  it("an AWAY beat does not clobber a fresh BREAK row — preserves BREAK, 204", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "AWAY" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stale BREAK row is not preserved — falls through to the normal gate", async () => {
+    breakPreserveRows = []; // the .gte cutoff excludes a stale BREAK row
+    refreshedRows = []; // the general refresh also gates (shift is over)
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ onDuty: false });
+  });
+
+  it("a live video call still bypasses via ON_CALL, even with a fresh BREAK row", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    videoCallRows = [{ id: "c1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+    // The BREAK-preservation check is scoped to AVAILABLE/AWAY only, so a
+    // video-upgraded ON_CALL beat never reaches it.
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails open on a DB error during the BREAK-preservation check", async () => {
+    breakPreserveError = { message: "boom" };
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1); // no further writes attempted
   });
 });
 

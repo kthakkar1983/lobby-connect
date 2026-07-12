@@ -65,6 +65,33 @@ export async function POST(request: Request): Promise<NextResponse> {
   // whose heartbeat is still fresh. Zero rows = the shift is over — only
   // /api/presence/go-on-duty starts one.
   const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
+
+  // BREAK preservation (quality-review follow-up to Task 9): the softphone
+  // heartbeat only ever intends AVAILABLE/AWAY/ON_CALL — it has no notion of
+  // BREAK yet (a future task wires the take-break/resume UI onto it). Without
+  // this, a beat landing while the row is BREAK would silently overwrite it
+  // back to AVAILABLE/AWAY: the shift_breaks row would leak open forever and
+  // the agent would become dialable/video-reachable again without ever
+  // clicking Resume. Mirrors the ON_CALL exception above with its own atomic
+  // conditional UPDATE that only refreshes last_seen_at (never touches
+  // status) while the row is still (fresh) BREAK. A STALE BREAK row matches
+  // nothing here and falls through to the normal gate below, which lapses it
+  // exactly like any other stale live status (closing the open break too, via
+  // closeOpenShiftForUser).
+  if (status === "AVAILABLE" || status === "AWAY") {
+    const { data: preserved, error: preserveError } = await admin
+      .from("profiles")
+      .update({ last_seen_at: nowIso })
+      .eq("id", actor.userId)
+      .eq("status", "BREAK")
+      .gte("last_seen_at", staleCutoffIso)
+      .select("id");
+    // FAIL OPEN on a real DB error, same posture as the refresh check below:
+    // do nothing further this beat rather than risk clobbering BREAK.
+    if (preserveError) return new NextResponse(null, { status: 204 });
+    if (preserved && preserved.length > 0) return new NextResponse(null, { status: 204 });
+  }
+
   const { data: refreshed, error: refreshError } = await admin
     .from("profiles")
     .update({ status, last_seen_at: nowIso })
