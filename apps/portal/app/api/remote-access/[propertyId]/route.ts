@@ -19,11 +19,16 @@ export async function GET(
   const gate = await requireOnDuty(admin, actor.userId);
   if (gate) return gate;
   // Connect acts as a heartbeat so a long remote session doesn't lapse the shift.
-  await admin
+  // Log a failure: this write is the backstop for the throttled-heartbeat bug
+  // (task_71d65b0a), so a silent failure defeats its whole purpose.
+  const { error: keepAliveError } = await admin
     .from("profiles")
     .update({ last_seen_at: new Date().toISOString() })
     .eq("id", actor.userId)
     .neq("status", "OFFLINE");
+  if (keepAliveError) {
+    console.error("[remote-access] keep-alive last_seen_at refresh failed", keepAliveError);
+  }
 
   const { propertyId } = await params;
   const trigger =

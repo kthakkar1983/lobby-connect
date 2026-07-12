@@ -65,4 +65,11 @@ describe("requireOnDuty", () => {
     expect(result).toBeInstanceOf(NextResponse);
     expect(result?.status).toBe(403);
   });
+
+  it("403s (fail closed) on a missing profile row with no error", async () => {
+    const admin = mockAdmin({ data: null, error: null });
+    const result = await requireOnDuty(admin, USER_ID);
+    expect(result).toBeInstanceOf(NextResponse);
+    expect(result?.status).toBe(403);
+  });
 });
