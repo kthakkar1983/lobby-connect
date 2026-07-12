@@ -24,12 +24,17 @@ export async function closeOpenShiftForUser(
   endedAtIso: string,
   kind: "manual" | "auto",
 ): Promise<void> {
-  const { data: open } = await admin
+  const { data: open, error: openReadError } = await admin
     .from("shifts")
     .select("id, started_at")
     .eq("user_id", userId)
     .is("ended_at", null)
     .maybeSingle();
+  // A transient read error is indistinguishable from "no open shift" (both leave
+  // `open` falsy), so log it — otherwise the cron backstop could fail silently.
+  if (openReadError) {
+    console.error("[shifts] closeOpenShiftForUser: open-shift read failed", openReadError);
+  }
   if (!open) return;
 
   const { error: breakCloseError } = await admin
@@ -55,24 +60,26 @@ export async function closeOpenShiftForUser(
 }
 
 export async function openBreak(admin: Admin, userId: string): Promise<void> {
-  const { data: open } = await admin
+  const { data: open, error: openReadError } = await admin
     .from("shifts")
     .select("id")
     .eq("user_id", userId)
     .is("ended_at", null)
     .maybeSingle();
+  if (openReadError) console.error("[shifts] openBreak: open-shift read failed", openReadError);
   if (!open) return;
   const { error } = await admin.from("shift_breaks").insert({ shift_id: open.id });
   if (error && error.code !== "23505") console.error("[shifts] openBreak failed", error);
 }
 
 export async function closeOpenBreak(admin: Admin, userId: string, endedAtIso: string): Promise<void> {
-  const { data: open } = await admin
+  const { data: open, error: openReadError } = await admin
     .from("shifts")
     .select("id")
     .eq("user_id", userId)
     .is("ended_at", null)
     .maybeSingle();
+  if (openReadError) console.error("[shifts] closeOpenBreak: open-shift read failed", openReadError);
   if (!open) return;
   const { error } = await admin
     .from("shift_breaks")

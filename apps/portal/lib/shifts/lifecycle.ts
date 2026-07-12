@@ -54,5 +54,5 @@ export function computeClockedSeconds(
 /** Utilization % = talk-time / clocked, clamped 0..100, integer. */
 export function computeUtilization(clockedSeconds: number, talkSeconds: number): number {
   if (clockedSeconds <= 0) return 0;
-  return Math.min(100, Math.round((talkSeconds / clockedSeconds) * 100));
+  return Math.max(0, Math.min(100, Math.round((talkSeconds / clockedSeconds) * 100)));
 }
