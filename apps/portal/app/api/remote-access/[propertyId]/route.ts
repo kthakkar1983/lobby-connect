@@ -3,6 +3,7 @@ import { requireApiActor } from "@/lib/auth/api-actor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { requireOnDuty } from "@/lib/shifts/gate";
 
 // The only route that returns a long-lived secret — never cacheable anywhere.
 const NO_STORE = { "cache-control": "no-store" } as const;
@@ -13,11 +14,21 @@ export async function GET(
 ): Promise<NextResponse> {
   const actor = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
   if (actor instanceof NextResponse) return actor;
+
+  const admin = createAdminClient();
+  const gate = await requireOnDuty(admin, actor.userId);
+  if (gate) return gate;
+  // Connect acts as a heartbeat so a long remote session doesn't lapse the shift.
+  await admin
+    .from("profiles")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", actor.userId)
+    .neq("status", "OFFLINE");
+
   const { propertyId } = await params;
   const trigger =
     new URL(request.url).searchParams.get("trigger") === "prewarm" ? "prewarm" : "connect";
 
-  const admin = createAdminClient();
   const { data: row } = await admin
     .from("property_remote_access")
     .select("peer_id, unattended_password, operator_id")

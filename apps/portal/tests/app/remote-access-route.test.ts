@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-const { requireApiActor, maybeSingleResult, selectSpy, logAuditEvent } = vi.hoisted(() => ({
+const {
+  requireApiActor,
+  maybeSingleResult,
+  selectSpy,
+  logAuditEvent,
+  profileResult,
+  profileUpdateSpy,
+} = vi.hoisted(() => ({
   requireApiActor: vi.fn(),
   maybeSingleResult: {
     data: null as {
@@ -12,6 +19,14 @@ const { requireApiActor, maybeSingleResult, selectSpy, logAuditEvent } = vi.hois
   },
   selectSpy: vi.fn(),
   logAuditEvent: vi.fn(),
+  profileResult: {
+    data: { status: "AVAILABLE", last_seen_at: new Date().toISOString() } as {
+      status: string;
+      last_seen_at: string | null;
+    } | null,
+    error: null as { code?: string; message?: string } | null,
+  },
+  profileUpdateSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/api-actor", () => ({
@@ -25,6 +40,23 @@ vi.mock("@/lib/auth/audit", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(table: string) {
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve(profileResult),
+            }),
+          }),
+          update: (patch: unknown) => {
+            profileUpdateSpy(patch);
+            return {
+              eq: () => ({
+                neq: () => Promise.resolve({ data: null, error: null }),
+              }),
+            };
+          },
+        };
+      }
       if (table !== "property_remote_access") throw new Error(`unexpected table ${table}`);
       return {
         select: (cols: string) => {
@@ -60,7 +92,10 @@ beforeEach(() => {
   requireApiActor.mockReset();
   selectSpy.mockReset();
   logAuditEvent.mockReset();
+  profileUpdateSpy.mockReset();
   maybeSingleResult.data = null;
+  profileResult.data = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
+  profileResult.error = null;
   requireApiActor.mockResolvedValue(ACTOR);
   logAuditEvent.mockResolvedValue(undefined);
 });
@@ -137,5 +172,19 @@ describe("GET /api/remote-access/[propertyId]", () => {
     expect(res.status).toBe(200);
     const call = logAuditEvent.mock.calls[0]![0] as { details: { trigger: string } };
     expect(call.details.trigger).toBe("prewarm");
+  });
+
+  it("403s when off duty (OFFLINE) — no credential lookup, no heartbeat, no audit", async () => {
+    profileResult.data = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
+    maybeSingleResult.data = {
+      peer_id: "peer-9",
+      unattended_password: "secret",
+      operator_id: "op-1",
+    };
+    const res = await GET(req("prop-1"), ctx("prop-1"));
+    expect(res.status).toBe(403);
+    expect(selectSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });
