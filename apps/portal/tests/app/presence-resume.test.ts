@@ -5,6 +5,7 @@ const {
   requireApiActor,
   updateSpy,
   eqSpy,
+  gteSpy,
   updateResult,
   shiftsSelectEqSpy,
   breaksUpdateSpy,
@@ -15,7 +16,15 @@ const {
   requireApiActor: vi.fn(),
   updateSpy: vi.fn(),
   eqSpy: vi.fn(),
-  updateResult: { error: null as { message: string } | null },
+  gteSpy: vi.fn(),
+  // The gated conditional UPDATE resolves with `{ data, error }` (a `.select("id")`
+  // tail) — `data` is the array of rows the conditional update actually matched.
+  // Defaults to "the gate passed" (one matched row) so every pre-existing test
+  // is unaffected; gate-failure tests override this to `[]`.
+  updateResult: {
+    data: [{ id: "u-1" }] as { id: string }[] | null,
+    error: null as { message: string } | null,
+  },
   shiftsSelectEqSpy: vi.fn(),
   breaksUpdateSpy: vi.fn(),
   breaksUpdateEqSpy: vi.fn(),
@@ -32,16 +41,24 @@ vi.mock("@/lib/supabase/admin", () => ({
     from(table: string) {
       if (table === "profiles") {
         return {
-          // .update({ status: "AVAILABLE", last_seen_at }).eq("id", actor.userId)
+          // .update({ status: "AVAILABLE", last_seen_at })
+          //   .eq("id", userId).eq("status", "BREAK").gte("last_seen_at", cutoff)
+          //   .select("id")
           update: (values: unknown) => {
             updateSpy(values);
             callOrder.push("profiles.update");
-            return {
+            const chain = {
               eq: (col: string, val: string) => {
                 eqSpy(col, val);
-                return Promise.resolve(updateResult);
+                return chain;
               },
+              gte: (col: string, val: string) => {
+                gteSpy(col, val);
+                return chain;
+              },
+              select: () => Promise.resolve(updateResult),
             };
+            return chain;
           },
         };
       }
@@ -91,6 +108,8 @@ beforeEach(() => {
   requireApiActor.mockReset();
   updateSpy.mockReset();
   eqSpy.mockReset();
+  gteSpy.mockReset();
+  updateResult.data = [{ id: "u-1" }];
   updateResult.error = null;
   shiftsSelectEqSpy.mockReset();
   breaksUpdateSpy.mockReset();
@@ -111,7 +130,7 @@ describe("POST /api/presence/resume", () => {
     expect(shiftsSelectEqSpy).not.toHaveBeenCalled();
   });
 
-  it("204 and writes AVAILABLE + a fresh last_seen scoped to the caller", async () => {
+  it("204 and writes AVAILABLE + a fresh last_seen scoped to the caller, gated on BREAK", async () => {
     const res = await POST();
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledTimes(1);
@@ -121,9 +140,12 @@ describe("POST /api/presence/resume", () => {
     const vals = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(vals).toHaveProperty("last_seen_at");
     expect(eqSpy).toHaveBeenCalledWith("id", "u-1");
+    expect(eqSpy).toHaveBeenCalledWith("status", "BREAK");
+    expect(gteSpy).toHaveBeenCalledWith("last_seen_at", expect.any(String));
   });
 
   it("500 when the update errors, and never attempts to close a break", async () => {
+    updateResult.data = null;
     updateResult.error = { message: "boom" };
     const res = await POST();
     expect(res.status).toBe(500);
@@ -148,6 +170,16 @@ describe("POST /api/presence/resume", () => {
     openShiftRow.current = null;
     const res = await POST();
     expect(res.status).toBe(204);
+    expect(breaksUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("409s and never closes a break when the caller is not currently on break (gate matched zero rows)", async () => {
+    // Simulates an OFFLINE/never-onduty/lapsed/not-on-break caller: the
+    // conditional UPDATE's WHERE (status=BREAK + fresh heartbeat) matches nothing.
+    updateResult.data = [];
+    const res = await POST();
+    expect(res.status).toBe(409);
+    expect(shiftsSelectEqSpy).not.toHaveBeenCalled();
     expect(breaksUpdateSpy).not.toHaveBeenCalled();
   });
 });

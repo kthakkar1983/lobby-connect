@@ -50,6 +50,7 @@ let dutyRow: { status: string; last_seen_at: string | null } | null = {
 let dutyReadError: { message: string } | null = null;
 // GET's shift-start lookup (Task 10): only queried when onDuty resolves true.
 let openShiftForGet: { started_at: string } | null = { started_at: "2026-07-12T00:00:00.000Z" };
+let shiftReadErrorForGet: { message: string } | null = null;
 const shiftsSelectSpy = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -85,7 +86,8 @@ vi.mock("@/lib/supabase/admin", () => ({
             return {
               eq: () => ({
                 is: () => ({
-                  maybeSingle: () => Promise.resolve({ data: openShiftForGet, error: null }),
+                  maybeSingle: () =>
+                    Promise.resolve({ data: openShiftForGet, error: shiftReadErrorForGet }),
                 }),
               }),
             };
@@ -120,6 +122,7 @@ beforeEach(() => {
   dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
   dutyReadError = null;
   openShiftForGet = { started_at: "2026-07-12T00:00:00.000Z" };
+  shiftReadErrorForGet = null;
   shiftsSelectSpy.mockClear();
 });
 
@@ -406,6 +409,23 @@ describe("GET /api/presence (D13 hydration)", () => {
       onBreak: false,
       shiftStartedAt: null,
     });
+  });
+
+  it("a transient error reading the open shift fails open (shiftStartedAt null) but is logged", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    openShiftForGet = null;
+    shiftReadErrorForGet = { message: "boom" };
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[presence] GET: open-shift read failed",
+      shiftReadErrorForGet,
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("a DB error on the duty read surfaces as 500 (client fails open on !res.ok)", async () => {

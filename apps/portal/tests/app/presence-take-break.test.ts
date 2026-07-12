@@ -5,6 +5,8 @@ const {
   requireApiActor,
   updateSpy,
   eqSpy,
+  neqSpy,
+  gteSpy,
   updateResult,
   shiftsSelectEqSpy,
   breaksInsertSpy,
@@ -14,7 +16,16 @@ const {
   requireApiActor: vi.fn(),
   updateSpy: vi.fn(),
   eqSpy: vi.fn(),
-  updateResult: { error: null as { message: string } | null },
+  neqSpy: vi.fn(),
+  gteSpy: vi.fn(),
+  // The gated conditional UPDATE resolves with `{ data, error }` (a `.select("id")`
+  // tail) — `data` is the array of rows the conditional update actually matched.
+  // Defaults to "the gate passed" (one matched row) so every pre-existing test
+  // is unaffected; gate-failure tests override this to `[]`.
+  updateResult: {
+    data: [{ id: "u-1" }] as { id: string }[] | null,
+    error: null as { message: string } | null,
+  },
   shiftsSelectEqSpy: vi.fn(),
   breaksInsertSpy: vi.fn(),
   callOrder: [] as string[],
@@ -30,16 +41,28 @@ vi.mock("@/lib/supabase/admin", () => ({
     from(table: string) {
       if (table === "profiles") {
         return {
-          // .update({ status: "BREAK", last_seen_at }).eq("id", actor.userId)
+          // .update({ status: "BREAK", last_seen_at })
+          //   .eq("id", userId).neq("status", "OFFLINE").gte("last_seen_at", cutoff)
+          //   .select("id")
           update: (values: unknown) => {
             updateSpy(values);
             callOrder.push("profiles.update");
-            return {
+            const chain = {
               eq: (col: string, val: string) => {
                 eqSpy(col, val);
-                return Promise.resolve(updateResult);
+                return chain;
               },
+              neq: (col: string, val: string) => {
+                neqSpy(col, val);
+                return chain;
+              },
+              gte: (col: string, val: string) => {
+                gteSpy(col, val);
+                return chain;
+              },
+              select: () => Promise.resolve(updateResult),
             };
+            return chain;
           },
         };
       }
@@ -82,6 +105,9 @@ beforeEach(() => {
   requireApiActor.mockReset();
   updateSpy.mockReset();
   eqSpy.mockReset();
+  neqSpy.mockReset();
+  gteSpy.mockReset();
+  updateResult.data = [{ id: "u-1" }];
   updateResult.error = null;
   shiftsSelectEqSpy.mockReset();
   breaksInsertSpy.mockReset();
@@ -101,7 +127,7 @@ describe("POST /api/presence/take-break", () => {
     expect(shiftsSelectEqSpy).not.toHaveBeenCalled();
   });
 
-  it("204 and writes BREAK + a fresh last_seen scoped to the caller", async () => {
+  it("204 and writes BREAK + a fresh last_seen scoped to the caller, gated on-duty", async () => {
     const res = await POST();
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledTimes(1);
@@ -111,9 +137,12 @@ describe("POST /api/presence/take-break", () => {
     const vals = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(vals).toHaveProperty("last_seen_at");
     expect(eqSpy).toHaveBeenCalledWith("id", "u-1");
+    expect(neqSpy).toHaveBeenCalledWith("status", "OFFLINE");
+    expect(gteSpy).toHaveBeenCalledWith("last_seen_at", expect.any(String));
   });
 
   it("500 when the update errors, and never attempts to open a break", async () => {
+    updateResult.data = null;
     updateResult.error = { message: "boom" };
     const res = await POST();
     expect(res.status).toBe(500);
@@ -137,6 +166,16 @@ describe("POST /api/presence/take-break", () => {
     openShiftRow.current = null;
     const res = await POST();
     expect(res.status).toBe(204);
+    expect(breaksInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it("409s and never opens a break when the caller is not on a live shift (gate matched zero rows)", async () => {
+    // Simulates an OFFLINE/never-onduty/lapsed caller: the conditional UPDATE's
+    // WHERE (neq OFFLINE + fresh heartbeat) matches nothing.
+    updateResult.data = [];
+    const res = await POST();
+    expect(res.status).toBe(409);
+    expect(shiftsSelectEqSpy).not.toHaveBeenCalled();
     expect(breaksInsertSpy).not.toHaveBeenCalled();
   });
 });

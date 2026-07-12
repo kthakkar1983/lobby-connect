@@ -162,12 +162,19 @@ export async function GET(): Promise<NextResponse> {
 
   let shiftStartedAt: string | null = null;
   if (onDuty) {
-    const { data: open } = await admin
+    const { data: open, error: shiftReadError } = await admin
       .from("shifts")
       .select("started_at")
       .eq("user_id", actor.userId)
       .is("ended_at", null)
       .maybeSingle();
+    // A transient read error is indistinguishable from "no open shift" (both
+    // leave `open` falsy) — fail open (shiftStartedAt just stays null, same as
+    // store.ts's closeOpenShiftForUser) but log it so a real DB error doesn't
+    // vanish silently. See store.ts for the identical rationale.
+    if (shiftReadError) {
+      console.error("[presence] GET: open-shift read failed", shiftReadError);
+    }
     shiftStartedAt = open?.started_at ?? null;
   }
 

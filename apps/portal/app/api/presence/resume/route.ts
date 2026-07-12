@@ -3,22 +3,40 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { closeOpenBreak } from "@/lib/shifts/store";
+import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
-/** Resume from a break (spec D6): back to AVAILABLE + close the open break row. */
+/**
+ * Resume from a break (spec D6): back to AVAILABLE + close the open break row.
+ *
+ * Quality-review fix: this must NOT be a second, ungated OFFLINE->live door.
+ * The liveness check and the write are one atomic conditional UPDATE: only a
+ * row that is currently (fresh) BREAK may flip back to AVAILABLE. A caller
+ * whose shift already lapsed/ended (or who was never on break) matches zero
+ * rows and gets 409, never a phantom live AVAILABLE row with no open shift.
+ */
 export async function POST(): Promise<NextResponse> {
   const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
   if (actorOrResponse instanceof NextResponse) return actorOrResponse;
   const actor = actorOrResponse;
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ status: "AVAILABLE", last_seen_at: new Date().toISOString() })
-    .eq("id", actor.userId);
-  if (error) return NextResponse.json({ error: "Could not resume" }, { status: 500 });
+  const nowIso = new Date().toISOString();
+  const staleCutoffIso = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
 
-  await closeOpenBreak(admin, actor.userId, new Date().toISOString());
+  const { data: updated, error } = await admin
+    .from("profiles")
+    .update({ status: "AVAILABLE", last_seen_at: nowIso })
+    .eq("id", actor.userId)
+    .eq("status", "BREAK")
+    .gte("last_seen_at", staleCutoffIso)
+    .select("id");
+  if (error) return NextResponse.json({ error: "Could not resume" }, { status: 500 });
+  if (!updated || updated.length === 0) {
+    return NextResponse.json({ error: "Not currently on break" }, { status: 409 });
+  }
+
+  await closeOpenBreak(admin, actor.userId, nowIso);
   return new NextResponse(null, { status: 204 });
 }
