@@ -8,6 +8,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 const updateSpy = vi.fn();
 let updateError: { message: string } | null = null;
+const shiftInsertSpy = vi.fn();
+let shiftInsertError: { code?: string; message?: string } | null = null;
+// Records the order profiles.update / shifts.insert actually fire in, so a
+// test can assert the shift-open call happens strictly after the profile
+// write succeeds (not before, not unconditionally).
+const callOrder: string[] = [];
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -23,12 +29,19 @@ vi.mock("@/lib/supabase/admin", () => ({
           }),
           update: (v: unknown) => {
             updateSpy(v);
+            callOrder.push("profiles.update");
             return { eq: () => Promise.resolve({ error: updateError }) };
           },
         };
       }
       if (table === "shifts") {
-        return { insert: () => Promise.resolve({ error: null }) };
+        return {
+          insert: (v: unknown) => {
+            shiftInsertSpy(v);
+            callOrder.push("shifts.insert");
+            return Promise.resolve({ error: shiftInsertError });
+          },
+        };
       }
       return {};
     },
@@ -41,6 +54,9 @@ beforeEach(() => {
   getUser.mockReset();
   updateSpy.mockClear();
   updateError = null;
+  shiftInsertSpy.mockClear();
+  shiftInsertError = null;
+  callOrder.length = 0;
 });
 
 describe("POST /api/presence/go-on-duty", () => {
@@ -64,5 +80,34 @@ describe("POST /api/presence/go-on-duty", () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     updateError = { message: "boom" };
     expect((await POST()).status).toBe(500);
+  });
+
+  it("opens a shift for the actor (userId, operatorId) after the profile write succeeds", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    const res = await POST();
+    expect(res.status).toBe(204);
+    expect(shiftInsertSpy).toHaveBeenCalledWith({
+      user_id: "u1",
+      operator_id: "op-1",
+    });
+    // profiles.update must complete before shifts.insert fires — not before,
+    // not in parallel, not on a swapped/removed guard.
+    expect(callOrder).toEqual(["profiles.update", "shifts.insert"]);
+  });
+
+  it("does not open a shift when the profile write fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    updateError = { message: "boom" };
+    const res = await POST();
+    expect(res.status).toBe(500);
+    expect(shiftInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it("still returns 204 when the shift insert errors (fail-open)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    shiftInsertError = { code: "500", message: "boom" };
+    const res = await POST();
+    expect(res.status).toBe(204);
+    expect(shiftInsertSpy).toHaveBeenCalled();
   });
 });
