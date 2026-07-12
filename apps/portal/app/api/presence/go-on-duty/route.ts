@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
+import { openShift } from "@/lib/shifts/store";
 
 export const runtime = "nodejs";
 
@@ -25,5 +26,6 @@ export async function POST(): Promise<NextResponse> {
   if (error) {
     return NextResponse.json({ error: "Could not go on duty" }, { status: 500 });
   }
+  await openShift(admin, actor.userId, actor.operatorId);
   return new NextResponse(null, { status: 204 });
 }

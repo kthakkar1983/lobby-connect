@@ -27,6 +27,9 @@ vi.mock("@/lib/supabase/admin", () => ({
           },
         };
       }
+      if (table === "shifts") {
+        return { insert: () => Promise.resolve({ error: null }) };
+      }
       return {};
     },
   }),
