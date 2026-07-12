@@ -20,6 +20,7 @@ const PRESENCE_LABELS: Record<ProfileStatus, string> = {
   AVAILABLE: "Available",
   ON_CALL: "On call",
   AWAY: "Away",
+  BREAK: "On break",
   OFFLINE: "Offline",
 };
 
@@ -31,6 +32,7 @@ const PRESENCE_DOTS: Record<ProfileStatus, string> = {
   AVAILABLE: "bg-live",
   ON_CALL: "bg-accent",
   AWAY: "bg-muted-foreground",
+  BREAK: "bg-muted-foreground",
   OFFLINE: "bg-border",
 };
 

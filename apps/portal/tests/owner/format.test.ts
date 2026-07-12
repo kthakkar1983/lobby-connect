@@ -32,6 +32,7 @@ describe("presence labels", () => {
     expect(presenceLabel("AVAILABLE")).toBe("Available");
     expect(presenceLabel("ON_CALL")).toBe("On call");
     expect(presenceLabel("AWAY")).toBe("Away");
+    expect(presenceLabel("BREAK")).toBe("On break");
     expect(presenceLabel("OFFLINE")).toBe("Offline");
   });
 });
@@ -41,6 +42,7 @@ describe("presenceDotClass (brand tokens)", () => {
     expect(presenceDotClass("AVAILABLE")).toBe("bg-live");
     expect(presenceDotClass("ON_CALL")).toBe("bg-accent");
     expect(presenceDotClass("AWAY")).toBe("bg-muted-foreground");
+    expect(presenceDotClass("BREAK")).toBe("bg-muted-foreground");
     expect(presenceDotClass("OFFLINE")).toBe("bg-border");
   });
 });
@@ -50,6 +52,7 @@ describe("isLivePresence", () => {
     expect(isLivePresence("AVAILABLE")).toBe(true);
     expect(isLivePresence("ON_CALL")).toBe(true);
     expect(isLivePresence("AWAY")).toBe(false);
+    expect(isLivePresence("BREAK")).toBe(false);
     expect(isLivePresence("OFFLINE")).toBe(false);
   });
 });
