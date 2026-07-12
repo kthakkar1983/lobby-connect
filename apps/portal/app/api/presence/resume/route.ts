@@ -13,8 +13,8 @@ export const runtime = "nodejs";
  * Quality-review fix: this must NOT be a second, ungated OFFLINE->live door.
  * The liveness check and the write are one atomic conditional UPDATE: only a
  * row that is currently (fresh) BREAK may flip back to AVAILABLE. A caller
- * whose shift already lapsed/ended (or who was never on break) matches zero
- * rows and gets 409, never a phantom live AVAILABLE row with no open shift.
+ * whose shift already lapsed/ended (or who is not on break) matches zero
+ * rows and gets 409 — not a phantom live AVAILABLE row with no open shift.
  */
 export async function POST(): Promise<NextResponse> {
   const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
