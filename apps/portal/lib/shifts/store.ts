@@ -32,20 +32,26 @@ export async function closeOpenShiftForUser(
     .maybeSingle();
   if (!open) return;
 
-  await admin
+  const { error: breakCloseError } = await admin
     .from("shift_breaks")
     .update({ ended_at: endedAtIso })
     .eq("shift_id", open.id)
     .is("ended_at", null);
+  if (breakCloseError) {
+    console.error("[shifts] closeOpenShiftForUser: shift_breaks close failed", breakCloseError);
+  }
 
   const reason =
     kind === "manual" ? "manual" : classifyShiftEnd(open.started_at, endedAtIso, SESSION_MAX_MS);
 
-  await admin
+  const { error: shiftCloseError } = await admin
     .from("shifts")
     .update({ ended_at: endedAtIso, ended_reason: reason })
     .eq("id", open.id)
     .is("ended_at", null);
+  if (shiftCloseError) {
+    console.error("[shifts] closeOpenShiftForUser: shifts close failed", shiftCloseError);
+  }
 }
 
 export async function openBreak(admin: Admin, userId: string): Promise<void> {
@@ -68,9 +74,10 @@ export async function closeOpenBreak(admin: Admin, userId: string, endedAtIso: s
     .is("ended_at", null)
     .maybeSingle();
   if (!open) return;
-  await admin
+  const { error } = await admin
     .from("shift_breaks")
     .update({ ended_at: endedAtIso })
     .eq("shift_id", open.id)
     .is("ended_at", null);
+  if (error) console.error("[shifts] closeOpenBreak failed", error);
 }
