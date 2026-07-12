@@ -288,7 +288,13 @@ describe("fetchTimesheet", () => {
           error: null,
         },
         audit: {
-          data: [{ actor_user_id: "user-1", created_at: "2026-07-10T02:00:00.000Z" }],
+          // A real Connect (counted) + a prewarm cache-warm (NOT counted), both
+          // in-window. The client-side guard drops the prewarm even though this
+          // mock returns both regardless of the PostgREST filter.
+          data: [
+            { actor_user_id: "user-1", created_at: "2026-07-10T02:00:00.000Z", details: { trigger: "connect" } },
+            { actor_user_id: "user-1", created_at: "2026-07-10T02:05:00.000Z", details: { trigger: "prewarm" } },
+          ],
           error: null,
         },
       },
@@ -305,15 +311,48 @@ describe("fetchTimesheet", () => {
       clockedSeconds: 8 * 3600,
       callCount: 1,
       talkSeconds: 300,
-      remoteCount: 1,
+      remoteCount: 1, // the connect row only; the prewarm is excluded
       endedReason: "manual",
     });
 
-    // Query-shape spot checks: operator scoping + the completed/action filters
-    // this task's spec calls for.
+    // Query-shape spot checks: operator scoping + the completed/action/connect
+    // filters this task's spec calls for.
     expect(callLog).toContainEqual(["eq", "operator_id", "op-1"]);
     expect(callLog).toContainEqual(["eq", "state", "COMPLETED"]);
     expect(callLog).toContainEqual(["eq", "action", "remote_access.credentials_issued"]);
+    expect(callLog).toContainEqual(["eq", "details->>trigger", "connect"]);
+  });
+
+  it("counts only trigger:'connect' remote rows, never prewarm (even if the DB filter is bypassed)", async () => {
+    const shift = {
+      id: "shift-1",
+      user_id: "user-1",
+      started_at: "2026-07-10T00:00:00.000Z",
+      ended_at: "2026-07-10T08:00:00.000Z",
+      ended_reason: "manual",
+    };
+    const supabase = makeSupabase({ data: [shift], error: null });
+    const admin = makeAdmin({
+      profiles: {
+        data: [{ id: "user-1", full_name: "Dilnoza", role: "AGENT", last_seen_at: null }],
+        error: null,
+      },
+      calls: { data: [], error: null },
+      audit: {
+        // Two prewarms + one connect, all in-window. Only the connect counts.
+        data: [
+          { actor_user_id: "user-1", created_at: "2026-07-10T01:00:00.000Z", details: { trigger: "prewarm" } },
+          { actor_user_id: "user-1", created_at: "2026-07-10T03:00:00.000Z", details: { trigger: "connect" } },
+          { actor_user_id: "user-1", created_at: "2026-07-10T05:00:00.000Z", details: { trigger: "prewarm" } },
+          // A malformed/legacy row with no trigger must not count either.
+          { actor_user_id: "user-1", created_at: "2026-07-10T06:00:00.000Z", details: null },
+        ],
+        error: null,
+      },
+    });
+
+    const rows = await fetchTimesheet(supabase, admin, "op-1", RANGE);
+    expect(rows[0]!.remoteCount).toBe(1);
   });
 
   it("degrades to a placeholder profile and logs (not throws) on a partial read error", async () => {

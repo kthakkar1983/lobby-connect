@@ -240,6 +240,7 @@ type CallRow = {
 type AuditRow = {
   actor_user_id: string | null;
   created_at: string;
+  details: { trigger?: string } | null;
 };
 
 /**
@@ -258,14 +259,15 @@ type AuditRow = {
  *   semantics), but worth confirming against a real multi-day dataset.
  * - "Talk time" counts only `state = 'COMPLETED'` calls (the one terminal
  *   state with a meaningful `duration_seconds`; NO_ANSWER/FAILED have none).
- * - "Remote" counts EVERY `remote_access.credentials_issued` audit row in the
- *   shift's window, regardless of `details.trigger` ("prewarm" | "connect").
- *   Prewarm fires automatically on every answered call (not only when the
- *   agent actually opens RustDesk), so this over-counts true remote-desktop
- *   usage relative to filtering to `trigger:"connect"` only. Kept simple per
- *   the plan's literal "count issuances" wording — narrowing to real connects
- *   is a one-line filter (`.eq("details->>trigger", "connect")`) later if
- *   that reads better to Kumar.
+ * - "Remote" counts only REAL remote sessions: `remote_access.credentials_issued`
+ *   rows with `details.trigger = "connect"` (an actual Connect press). The other
+ *   trigger, "prewarm", fires automatically on every answered call as a
+ *   credential cache-warm — NOT a remote-desktop session — so counting prewarms
+ *   would make "remote sessions" ≈ call count and useless as a work signal.
+ *   Cache hits emit no audit row, so connect-rows = distinct real sessions she
+ *   started. Filtered both in PostgREST (`.eq("details->>trigger", "connect")`,
+ *   JSONB text extraction) for efficiency AND client-side as a robustness guard
+ *   (a null/absent `details.trigger` never counts).
  */
 export async function fetchTimesheet(
   supabase: Supa,
@@ -301,9 +303,10 @@ export async function fetchTimesheet(
       .lte("answered_at", range.toIso),
     admin
       .from("audit_logs")
-      .select("actor_user_id, created_at")
+      .select("actor_user_id, created_at, details")
       .eq("operator_id", operatorId)
       .eq("action", AUDIT_ACTIONS.REMOTE_ACCESS_CREDENTIALS_ISSUED)
+      .eq("details->>trigger", "connect")
       .in("actor_user_id", userIds)
       .gte("created_at", range.fromIso)
       .lte("created_at", range.toIso),
@@ -345,7 +348,13 @@ export async function fetchTimesheet(
   const callsByShift = bucketEventsByShift(windows, callEvents);
 
   const remoteEvents = auditRows
-    .filter((a): a is AuditRow & { actor_user_id: string } => !!a.actor_user_id)
+    // The PostgREST `details->>trigger=connect` filter already scopes this, but
+    // re-apply client-side so a prewarm (or a null/absent trigger) can never be
+    // counted as a real remote session even if the DB filter were relaxed.
+    .filter(
+      (a): a is AuditRow & { actor_user_id: string } =>
+        !!a.actor_user_id && a.details?.trigger === "connect",
+    )
     .map((a) => ({ userId: a.actor_user_id, atIso: a.created_at }));
   const remoteByShift = bucketEventsByShift(windows, remoteEvents);
 
