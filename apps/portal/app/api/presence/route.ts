@@ -158,8 +158,23 @@ export async function GET(): Promise<NextResponse> {
   }
 
   const status = data?.status ?? "OFFLINE";
+  const onDuty = isLiveShift(status, data?.last_seen_at ?? null, Date.now());
+
+  let shiftStartedAt: string | null = null;
+  if (onDuty) {
+    const { data: open } = await admin
+      .from("shifts")
+      .select("started_at")
+      .eq("user_id", actor.userId)
+      .is("ended_at", null)
+      .maybeSingle();
+    shiftStartedAt = open?.started_at ?? null;
+  }
+
   return NextResponse.json({
-    onDuty: isLiveShift(status, data?.last_seen_at ?? null, Date.now()),
+    onDuty,
     accepting: status !== "AWAY",
+    onBreak: status === "BREAK",
+    shiftStartedAt,
   });
 }

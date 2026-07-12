@@ -48,6 +48,9 @@ let dutyRow: { status: string; last_seen_at: string | null } | null = {
   last_seen_at: new Date().toISOString(),
 };
 let dutyReadError: { message: string } | null = null;
+// GET's shift-start lookup (Task 10): only queried when onDuty resolves true.
+let openShiftForGet: { started_at: string } | null = { started_at: "2026-07-12T00:00:00.000Z" };
+const shiftsSelectSpy = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -73,6 +76,20 @@ vi.mock("@/lib/supabase/admin", () => ({
             }),
           }),
           update: profilesUpdate,
+        };
+      }
+      if (table === "shifts") {
+        return {
+          select: (cols: string) => {
+            shiftsSelectSpy(cols);
+            return {
+              eq: () => ({
+                is: () => ({
+                  maybeSingle: () => Promise.resolve({ data: openShiftForGet, error: null }),
+                }),
+              }),
+            };
+          },
         };
       }
       return { update: profilesUpdate };
@@ -102,6 +119,8 @@ beforeEach(() => {
   breakPreserveError = null;
   dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
   dutyReadError = null;
+  openShiftForGet = { started_at: "2026-07-12T00:00:00.000Z" };
+  shiftsSelectSpy.mockClear();
 });
 
 describe("POST /api/presence", () => {
@@ -315,31 +334,78 @@ describe("GET /api/presence (D13 hydration)", () => {
     expect((await GET()).status).toBe(401);
   });
 
-  it("fresh AVAILABLE → on duty, accepting", async () => {
-    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: true });
+  it("fresh AVAILABLE → on duty, accepting, not on break, includes shift start", async () => {
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
   });
 
   it("fresh AWAY → on duty, not accepting", async () => {
     dutyRow = { status: "AWAY", last_seen_at: new Date().toISOString() };
-    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: false });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: false,
+      onBreak: false,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
   });
 
-  it("explicit OFFLINE → off duty (accepting defaults true)", async () => {
+  it("fresh BREAK → on duty, not accepting, onBreak true", async () => {
+    dutyRow = { status: "BREAK", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: true,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
+  });
+
+  it("explicit OFFLINE → off duty (accepting defaults true), no shift lookup", async () => {
     dutyRow = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: false,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+    expect(shiftsSelectSpy).not.toHaveBeenCalled();
   });
 
-  it("lapsed shift (stale AVAILABLE) → off duty", async () => {
+  it("lapsed shift (stale AVAILABLE) → off duty, no shift lookup", async () => {
     dutyRow = {
       status: "AVAILABLE",
       last_seen_at: new Date(Date.now() - 120_000).toISOString(),
     };
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: false,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+    expect(shiftsSelectSpy).not.toHaveBeenCalled();
   });
 
   it("missing row → off duty, accepting true", async () => {
     dutyRow = null;
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: false,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+  });
+
+  it("onDuty but no open shift row → shiftStartedAt null", async () => {
+    openShiftForGet = null;
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
   });
 
   it("a DB error on the duty read surfaces as 500 (client fails open on !res.ok)", async () => {
