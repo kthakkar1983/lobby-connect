@@ -15,19 +15,33 @@ vi.mock("@/lib/auth/api-actor", () => ({
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(table: string) {
-      if (table !== "profiles") throw new Error(`unexpected table ${table}`);
-      return {
-        // .update({ status: "OFFLINE" }).eq("id", actor.userId)
-        update: (values: unknown) => {
-          updateSpy(values);
-          return {
-            eq: (col: string, val: string) => {
-              eqSpy(col, val);
-              return Promise.resolve(updateResult);
-            },
-          };
-        },
-      };
+      if (table === "profiles") {
+        return {
+          // .update({ status: "OFFLINE" }).eq("id", actor.userId)
+          update: (values: unknown) => {
+            updateSpy(values);
+            return {
+              eq: (col: string, val: string) => {
+                eqSpy(col, val);
+                return Promise.resolve(updateResult);
+              },
+            };
+          },
+        };
+      }
+      if (table === "shifts") {
+        // closeOpenShiftForUser's lookup for an open shift — none open, so it no-ops.
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
     },
   }),
 }));

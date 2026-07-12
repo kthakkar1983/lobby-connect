@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
+import { closeOpenShiftForUser } from "@/lib/shifts/store";
 
 export const runtime = "nodejs";
 
@@ -29,5 +30,7 @@ export async function POST(): Promise<NextResponse> {
   if (error) {
     return NextResponse.json({ error: "Could not end shift" }, { status: 500 });
   }
+
+  await closeOpenShiftForUser(admin, actor.userId, new Date().toISOString(), "manual");
   return new NextResponse(null, { status: 204 });
 }
