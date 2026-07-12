@@ -1,8 +1,25 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, act, cleanup } from "@testing-library/react";
 
 import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
+
+// Task 17 (shift-tracking plan): mocked so tests can drive canWork directly,
+// without a real DutyProvider's fetch-hydration cycle (mirrors the pattern in
+// duty-control.test.tsx).
+const { useDutyOptional } = vi.hoisted(() => ({
+  useDutyOptional: vi.fn(),
+}));
+vi.mock("@/components/dashboard/duty-provider", () => ({
+  useDutyOptional: () => useDutyOptional(),
+}));
+
+beforeEach(() => {
+  useDutyOptional.mockReset();
+  // Default: no DutyProvider mounted — every pre-existing test in this file
+  // must stay byte-for-byte unaffected by Task 17's gate.
+  useDutyOptional.mockReturnValue(null);
+});
 
 afterEach(() => cleanup());
 
@@ -233,6 +250,93 @@ describe("PropertyCard", () => {
 
     expect(screen.getByText(/Ringing/)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+  });
+
+  it("Task 17: canWork=false disables the Answer button + shows the go-on-duty label on a ringing VIDEO call, and does not invoke acceptVideo", async () => {
+    const calls: string[] = [];
+    acceptVideoSpy = (callId: string) => calls.push(callId);
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptVideo").click();
+    });
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    const btn = screen.getByRole("button", { name: "Go on duty" });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("Task 17: canWork=false does NOT gate a ringing AUDIO call — Answer stays enabled and invokes acceptAudio", async () => {
+    let audioCalls = 0;
+    acceptAudioSpy = () => {
+      audioCalls += 1;
+    };
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptAudio").click();
+    });
+    await act(async () => {
+      screen.getByText("publish audio ring for p1").click();
+    });
+
+    const btn = screen.getByRole("button", { name: "Answer" });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(audioCalls).toBe(1);
+  });
+
+  it("Task 17: canWork=true on a ringing VIDEO call behaves exactly like the no-provider case", async () => {
+    const calls: string[] = [];
+    acceptVideoSpy = (callId: string) => calls.push(callId);
+    useDutyOptional.mockReturnValue({ canWork: true } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptVideo").click();
+    });
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    const btn = screen.getByRole("button", { name: "Answer" });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(calls).toEqual(["call-1"]);
   });
 
   it("renders footerSlot under the actions row (Task 9: the admin fleet board's Covering toggle)", () => {

@@ -6,6 +6,7 @@ import { BellOff } from "lucide-react";
 
 import { useCallSurface, type IncomingRing } from "@/components/dashboard/call-surface-provider";
 import { ConnectButton } from "@/components/dashboard/connect-button";
+import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { Button } from "@/components/ui/button";
 
@@ -28,12 +29,16 @@ export function UnmatchedRingCards({
   unmatched: IncomingRing[];
 }): React.JSX.Element | null {
   const { actions, silencedKeys, silenceRing } = useCallSurface();
+  const duty = useDutyOptional();
   if (unmatched.length === 0) return null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {unmatched.map((ring) => {
         const silenced = silencedKeys.has(ring.key);
+        // Task 17 (shift-tracking plan): same video-only UI defense-in-depth as
+        // PropertyCard's Answer — see the comment there. No-op with no DutyProvider.
+        const answerGated = ring.channel === "VIDEO" && duty != null && !duty.canWork;
         return (
           <div
             key={ring.key}
@@ -46,12 +51,19 @@ export function UnmatchedRingCards({
             </p>
             <div className="mt-3 flex items-center gap-2">
               <Button
-                onClick={() =>
-                  ring.channel === "AUDIO" ? actions.acceptAudio?.() : ring.callId && actions.acceptVideo?.(ring.callId)
+                onClick={
+                  answerGated
+                    ? undefined
+                    : () =>
+                        ring.channel === "AUDIO"
+                          ? actions.acceptAudio?.()
+                          : ring.callId && actions.acceptVideo?.(ring.callId)
                 }
-                className="animate-pulse"
+                disabled={answerGated}
+                className={answerGated ? undefined : "animate-pulse"}
+                title={answerGated ? "Go on duty to answer" : undefined}
               >
-                Answer
+                {answerGated ? "Go on duty" : "Answer"}
               </Button>
               <Button
                 variant="neutral"

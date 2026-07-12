@@ -1,15 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, act, cleanup, waitFor } from "@testing-library/react";
 
-// Mock only the hook the button reads — keeps this test focused on the button's
-// three branches, without spinning up the provider's pre-warm machinery.
+// Mock only the hooks the button reads — keeps this test focused on the button's
+// branches, without spinning up the provider's pre-warm machinery or a real
+// DutyProvider hydration cycle.
 const { useCallSurfaceOptional, connectToProperty } = vi.hoisted(() => ({
   useCallSurfaceOptional: vi.fn(),
   connectToProperty: vi.fn(),
 }));
+const { useDutyOptional } = vi.hoisted(() => ({
+  useDutyOptional: vi.fn(),
+}));
 
 vi.mock("@/components/dashboard/call-surface-provider", () => ({
   useCallSurfaceOptional: () => useCallSurfaceOptional(),
+}));
+vi.mock("@/components/dashboard/duty-provider", () => ({
+  useDutyOptional: () => useDutyOptional(),
 }));
 
 import { ConnectButton } from "@/components/dashboard/connect-button";
@@ -25,6 +32,10 @@ beforeEach(() => {
   useCallSurfaceOptional.mockReset();
   connectToProperty.mockReset();
   useCallSurfaceOptional.mockReturnValue(surfaceStub());
+  useDutyOptional.mockReset();
+  // Default: no DutyProvider mounted (owner surfaces + every other test in this
+  // file) — Task 17's gate must be a total no-op here, matching production.
+  useDutyOptional.mockReturnValue(null);
 });
 
 describe("ConnectButton", () => {
@@ -90,5 +101,44 @@ describe("ConnectButton", () => {
     render(<ConnectButton propertyId="prop-1" />);
     const btn = screen.getByText("Connect").closest("button")!;
     expect(btn.disabled).toBe(false);
+  });
+
+  it("Task 17: with no DutyProvider mounted, ignores canWork entirely (never gated)", () => {
+    // Belt-and-suspenders on top of the default beforeEach stub: even if a
+    // caller somehow returned a duty-shaped value, useDutyOptional() returning
+    // null (no provider) must short-circuit the gate.
+    useDutyOptional.mockReturnValue(null);
+    render(<ConnectButton propertyId="prop-1" />);
+    const btn = screen.getByText("Connect").closest("button")!;
+    expect(btn.disabled).toBe(false);
+  });
+
+  it("Task 17: DutyProvider present + canWork=false disables the button, shows the go-on-duty label, and never invokes connect", async () => {
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+    render(<ConnectButton propertyId="prop-1" />);
+
+    const btn = screen.getByRole("button")!;
+    expect(btn.textContent).toBe("Go on duty to start");
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("Connect")).toBeNull();
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(connectToProperty).not.toHaveBeenCalled();
+  });
+
+  it("Task 17: DutyProvider present + canWork=true behaves exactly like the no-provider case", async () => {
+    useDutyOptional.mockReturnValue({ canWork: true } as unknown as ReturnType<typeof useDutyOptional>);
+    connectToProperty.mockResolvedValue({ launched: true });
+    render(<ConnectButton propertyId="prop-1" />);
+
+    const btn = screen.getByText("Connect").closest("button")!;
+    expect(btn.disabled).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(connectToProperty).toHaveBeenCalledWith("prop-1");
   });
 });
