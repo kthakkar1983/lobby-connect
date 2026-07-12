@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
 import { isLiveShift, isLiveStatus } from "@/lib/voice/presence";
 import { PRESENCE_STALE_AFTER_MS, REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
+import { closeOpenShiftForUser } from "@/lib/shifts/store";
 
 export const runtime = "nodejs";
 
@@ -85,12 +86,22 @@ export async function POST(request: Request): Promise<NextResponse> {
   // stops targeting a lapsed shift immediately. Staleness is re-checked in the
   // WHERE so this can never clobber a concurrent go-on-duty; last_seen_at is
   // untouched. A raw-OFFLINE row matches nothing (nothing to persist).
-  await admin
+  const { data: lapsed } = await admin
     .from("profiles")
     .update({ status: "OFFLINE" })
     .eq("id", actor.userId)
     .neq("status", "OFFLINE")
-    .lt("last_seen_at", staleCutoffIso);
+    .lt("last_seen_at", staleCutoffIso)
+    .select("id, last_seen_at");
+
+  if (lapsed && lapsed.length > 0) {
+    await closeOpenShiftForUser(
+      admin,
+      actor.userId,
+      lapsed[0]?.last_seen_at ?? staleCutoffIso,
+      "auto",
+    );
+  }
 
   return NextResponse.json({ onDuty: false });
 }
