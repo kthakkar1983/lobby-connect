@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SkipLink } from "@/components/skip-link";
 import { LineStatusProvider } from "@/components/dashboard/line-status-provider";
 import { CallSurfaceProvider } from "@/components/dashboard/call-surface-provider";
+import { DutyProvider } from "@/components/dashboard/duty-provider";
 import { DashboardWorkspace } from "@/components/dashboard-workspace";
 
 type Role = "ADMIN" | "AGENT";
@@ -33,27 +34,38 @@ export function AppShell({
   return (
     <LineStatusProvider>
       <CallSurfaceProvider>
-        {/* Rest collapsed; the rail hover-expands (see AppSidebar). */}
-        <SidebarProvider defaultOpen={false}>
-          <AppSidebar role={role} />
-          <SidebarInset>
-            {/* The seam — the navy-rail | workspace join, carrying the sign-in split. */}
-            <div
-              className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[2px] bg-[image:var(--gradient-seam-vertical)]"
-              aria-hidden="true"
-            />
-            <SkipLink />
-            <DashboardWorkspace
-              role={role}
-              fullName={fullName}
-              email={email}
-              operatorId={operatorId}
-              firstName={firstName}
-            >
-              {children}
-            </DashboardWorkspace>
-          </SidebarInset>
-        </SidebarProvider>
+        {/* DutyProvider wraps both the header (DutyControl) and the softphone so
+            duty state has ONE owner; it sits inside CallSurfaceProvider but is
+            deliberately separate from it (no ring/audio ownership → no render-loop
+            coupling). See duty-provider.tsx.
+            INVARIANT (finding #5): do NOT insert a React.memo or Suspense boundary
+            between DutyProvider and the softphone (rendered inside DashboardWorkspace).
+            The "no stray beat after End shift" gate depends on the softphone
+            re-rendering synchronously with the provider's onDuty flip — see the
+            onDutyRef comment in softphone.tsx. */}
+        <DutyProvider>
+          {/* Rest collapsed; the rail hover-expands (see AppSidebar). */}
+          <SidebarProvider defaultOpen={false}>
+            <AppSidebar role={role} />
+            <SidebarInset>
+              {/* The seam — the navy-rail | workspace join, carrying the sign-in split. */}
+              <div
+                className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[2px] bg-[image:var(--gradient-seam-vertical)]"
+                aria-hidden="true"
+              />
+              <SkipLink />
+              <DashboardWorkspace
+                role={role}
+                fullName={fullName}
+                email={email}
+                operatorId={operatorId}
+                firstName={firstName}
+              >
+                {children}
+              </DashboardWorkspace>
+            </SidebarInset>
+          </SidebarProvider>
+        </DutyProvider>
       </CallSurfaceProvider>
     </LineStatusProvider>
   );

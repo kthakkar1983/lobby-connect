@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
-import { isLiveShift, isLiveStatus } from "@/lib/voice/presence";
-import { PRESENCE_STALE_AFTER_MS, REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
+import { isLiveStatus } from "@/lib/voice/presence";
+import { REAP_IN_PROGRESS_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -44,12 +44,40 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  const nowMs = Date.now();
-  const nowIso = new Date(nowMs).toISOString();
+  const nowIso = new Date().toISOString();
+
+  // BREAK preservation (finding #1 — HOISTED above the ON_CALL branch). A
+  // heartbeat must NEVER clobber a deliberate BREAK, no matter which live status
+  // the beat carries. The softphone only ever intends AVAILABLE/AWAY/ON_CALL (it
+  // has no notion of BREAK), but two paths would otherwise overwrite a break the
+  // agent deliberately started:
+  //   - an AVAILABLE/AWAY beat → the normal refresh below (back to AVAILABLE/AWAY);
+  //   - an ON_CALL beat — a live audio call posting ON_CALL directly, OR an
+  //     AVAILABLE beat UPGRADED to ON_CALL by the live-video check above → the
+  //     unconditional ON_CALL write below.
+  // Either overwrite leaks the open shift_breaks row (it then closes only at
+  // end-of-shift, recording a bogus break duration) AND makes Resume 409
+  // (Resume is gated on status=BREAK). So this atomic conditional UPDATE runs
+  // FIRST for every beat: it refreshes last_seen_at only (never status) while
+  // the row is BREAK, and returns without falling through. No staleness guard:
+  // a beat during a break keeps the break alive regardless of tab throttling —
+  // a break ends only via Resume, End shift, or the cron sweep (which closes the
+  // open break via closeOpenShiftForUser), never by a lapsed heartbeat.
+  const { data: preserved, error: preserveError } = await admin
+    .from("profiles")
+    .update({ last_seen_at: nowIso })
+    .eq("id", actor.userId)
+    .eq("status", "BREAK")
+    .select("id");
+  // FAIL OPEN on a real DB error, same posture as the refresh check below: do
+  // nothing further this beat rather than risk clobbering BREAK.
+  if (preserveError) return new NextResponse(null, { status: 204 });
+  if (preserved && preserved.length > 0) return new NextResponse(null, { status: 204 });
 
   // D13 ON_CALL exception (spec §3.4): a live call outranks the duty gate —
   // raw OFFLINE included (the accepted two-tab edge) — so a >90s network blip
-  // mid-call can't dump the agent off duty. Exactly the pre-D13 write.
+  // mid-call can't dump the agent off duty. Exactly the pre-D13 write. A fresh
+  // BREAK was already preserved above, so this can no longer clobber one.
   if (status === "ON_CALL") {
     await admin
       .from("profiles")
@@ -58,47 +86,40 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse(null, { status: 204 });
   }
 
-  // D13 duty gate: an AVAILABLE/AWAY beat may only REFRESH a live shift. The
-  // liveness check and the write are one atomic conditional UPDATE (no
-  // read-then-write race): match only a row that isn't explicitly OFFLINE and
-  // whose heartbeat is still fresh. Zero rows = the shift is over — only
-  // /api/presence/go-on-duty starts one.
-  const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
+  // D13 duty gate, reconciled with the ring/push architecture: an AVAILABLE/AWAY
+  // beat REFRESHES a live shift. One atomic conditional UPDATE (no read-then-write
+  // race): match any row that isn't explicitly OFFLINE — NO staleness guard. A
+  // beat proves the browser is alive, and a throttled/frozen portal tab is the
+  // NORMAL working posture here (heads-down in RustDesk), so a stale heartbeat
+  // must NOT end the shift — it refreshes. A shift ends only via End shift
+  // (manual), the daily cron sweep of a tab that stopped beating entirely
+  // (lapsed), or the 12h session cap (capped). The `.neq OFFLINE` is what stops a
+  // beat from resurrecting an ENDED shift — go-on-duty stays the only door in.
   const { data: refreshed, error: refreshError } = await admin
     .from("profiles")
     .update({ status, last_seen_at: nowIso })
     .eq("id", actor.userId)
     .neq("status", "OFFLINE")
-    .gte("last_seen_at", staleCutoffIso)
     .select("id");
 
   // FAIL OPEN on a real DB error (spec §3.4 + the lib/push/targets.ts rule: a
-  // blip must never end a live shift): behave like the pre-D13 fire-and-forget
-  // beat — 204, no gate verdict, no lapse-persist. Only a clean zero-row match
-  // means the shift is actually over.
+  // blip must never end a live shift): behave like a fire-and-forget beat — 204,
+  // no verdict.
   if (refreshError) return new NextResponse(null, { status: 204 });
 
+  // Refreshed a live shift (any non-OFFLINE row, stale or fresh).
   if (refreshed && refreshed.length > 0) return new NextResponse(null, { status: 204 });
 
-  // Gated. If the shift LAPSED (raw status still live, heartbeat stale), persist
-  // OFFLINE now — the event-driven version of the daily sweep — so video push
-  // stops targeting a lapsed shift immediately. Staleness is re-checked in the
-  // WHERE so this can never clobber a concurrent go-on-duty; last_seen_at is
-  // untouched. A raw-OFFLINE row matches nothing (nothing to persist).
-  await admin
-    .from("profiles")
-    .update({ status: "OFFLINE" })
-    .eq("id", actor.userId)
-    .neq("status", "OFFLINE")
-    .lt("last_seen_at", staleCutoffIso);
-
+  // Zero rows = the row is OFFLINE = the shift is genuinely over (ended, or
+  // cron-swept after the tab stopped beating). A beat can never reopen it. Tell
+  // the client so its header converges to off-duty.
   return NextResponse.json({ onDuty: false });
 }
 
 /**
  * Duty hydration (D13): the client inits onDuty + the Accepting toggle from the
- * SERVER instead of assuming true on mount. Server clock does the staleness math
- * (no client clock skew). AGENT/ADMIN only — this is a softphone endpoint.
+ * SERVER instead of assuming true on mount. onDuty is the raw server status
+ * (only OFFLINE is off duty). AGENT/ADMIN only — this is a softphone endpoint.
  */
 export async function GET(): Promise<NextResponse> {
   const actorOrResponse = await requireApiActor({ allow: ["AGENT", "ADMIN"] });
@@ -120,8 +141,33 @@ export async function GET(): Promise<NextResponse> {
   }
 
   const status = data?.status ?? "OFFLINE";
+  // Duty is RAW-STATUS (mirrors the canDoWork gate): a stale heartbeat is normal
+  // working state and must not hydrate an on-duty agent OFF duty. Only an explicit
+  // OFFLINE (ended / cron-swept) is off duty; her next beat refreshes last_seen.
+  const onDuty = status !== "OFFLINE";
+
+  let shiftStartedAt: string | null = null;
+  if (onDuty) {
+    const { data: open, error: shiftReadError } = await admin
+      .from("shifts")
+      .select("started_at")
+      .eq("user_id", actor.userId)
+      .is("ended_at", null)
+      .maybeSingle();
+    // A transient read error is indistinguishable from "no open shift" (both
+    // leave `open` falsy) — fail open (shiftStartedAt just stays null, same as
+    // store.ts's closeOpenShiftForUser) but log it so a real DB error doesn't
+    // vanish silently. See store.ts for the identical rationale.
+    if (shiftReadError) {
+      console.error("[presence] GET: open-shift read failed", shiftReadError);
+    }
+    shiftStartedAt = open?.started_at ?? null;
+  }
+
   return NextResponse.json({
-    onDuty: isLiveShift(status, data?.last_seen_at ?? null, Date.now()),
+    onDuty,
     accepting: status !== "AWAY",
+    onBreak: status === "BREAK",
+    shiftStartedAt,
   });
 }

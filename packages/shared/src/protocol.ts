@@ -46,6 +46,18 @@ export const REAP_RINGING_AFTER_MS = 10 * 60_000;
  */
 export const CRON_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Max-shift cap. Enforced by Supabase's "Time-box user sessions" = 12h dashboard
+ * Auth setting (NOT app code): 12h after login the session dies, the heartbeat
+ * 401s, presence lapses, and the shift auto-closes at the last beat. This value
+ * only labels such a close as `capped` (classifyShiftEnd) and is the number the
+ * ops runbook must match. Start at 12h; tighten later.
+ */
+export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
+
+/** A close whose duration lands within this sliver of SESSION_MAX_MS is `capped`, not `lapsed`. */
+export const SHIFT_CAP_EPSILON_MS = 15 * 60 * 1000;
+
 // The reaper must outlast the ring window, or a still-ringing call could be reaped
 // mid-window. TypeScript can't compare number *values* at the type level, so guard
 // at module load; protocol.test.ts pins the same invariant.

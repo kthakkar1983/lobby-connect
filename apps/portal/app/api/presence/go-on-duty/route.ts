@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiActor } from "@/lib/auth/api-actor";
+import { openShift } from "@/lib/shifts/store";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,16 @@ export async function POST(): Promise<NextResponse> {
   const actor = actorOrResponse;
 
   const admin = createAdminClient();
+  // Capture the agent's prior last activity BEFORE the update below overwrites
+  // last_seen_at, so openShift's close-then-insert can close a stale-open shift
+  // (machine slept / tabs closed with no final beat) at her REAL last activity
+  // instead of now — otherwise the off-duty gap would merge into clocked time.
+  const { data: prior } = await admin
+    .from("profiles")
+    .select("last_seen_at")
+    .eq("id", actor.userId)
+    .maybeSingle();
+
   const { error } = await admin
     .from("profiles")
     .update({ status: "AVAILABLE", last_seen_at: new Date().toISOString() })
@@ -25,5 +36,6 @@ export async function POST(): Promise<NextResponse> {
   if (error) {
     return NextResponse.json({ error: "Could not go on duty" }, { status: 500 });
   }
+  await openShift(admin, actor.userId, actor.operatorId, prior?.last_seen_at ?? null);
   return new NextResponse(null, { status: 204 });
 }

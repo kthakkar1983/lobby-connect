@@ -1,11 +1,12 @@
 import { PRESENCE_STALE_AFTER_MS, type Role } from "@lc/shared";
 
-export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
+export type PresenceStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "BREAK" | "OFFLINE";
 
 const LIVE_STATUSES: ReadonlySet<string> = new Set([
   "AVAILABLE",
   "AWAY",
   "ON_CALL",
+  "BREAK",
 ]);
 
 /** Statuses a browser may set on itself. OFFLINE is cron-only. */
@@ -25,20 +26,6 @@ export function effectivePresence(
   nowMs: number,
 ): PresenceStatus {
   return isStale(lastSeenAt, nowMs) ? "OFFLINE" : (status as PresenceStatus);
-}
-
-/**
- * D13: is this agent's SHIFT live right now? Built on effectivePresence, so a
- * shift is over when explicitly ended (raw OFFLINE), swept, or lapsed past
- * PRESENCE_STALE_AFTER_MS. The heartbeat route refuses to refresh a non-live
- * shift; POST /api/presence/go-on-duty is the only way back in.
- */
-export function isLiveShift(
-  status: string,
-  lastSeenAt: string | null,
-  nowMs: number,
-): boolean {
-  return effectivePresence(status, lastSeenAt, nowMs) !== "OFFLINE";
 }
 
 /**

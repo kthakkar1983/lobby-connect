@@ -12,7 +12,8 @@ import type { Database as Generated } from "./database.generated";
 // String-union types for CHECK-constrained columns
 // =============================================================================
 export type Role = "AGENT" | "ADMIN" | "OWNER";
-export type ProfileStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "OFFLINE";
+export type ProfileStatus = "AVAILABLE" | "ON_CALL" | "AWAY" | "BREAK" | "OFFLINE";
+export type ShiftEndedReason = "manual" | "lapsed" | "capped";
 export type CallChannel = "AUDIO" | "VIDEO";
 export type CallState =
   | "RINGING"
@@ -72,6 +73,11 @@ type ColumnOverrides = {
         Insert: { kiosk_cta_style?: KioskCtaStyle };
         Update: { kiosk_cta_style?: KioskCtaStyle };
       };
+      shifts: {
+        Row: { ended_reason: ShiftEndedReason | null };
+        Insert: { ended_reason?: ShiftEndedReason | null };
+        Update: { ended_reason?: ShiftEndedReason | null };
+      };
     };
   };
 };
@@ -101,3 +107,5 @@ export type AdminCallAvailability = Tables<"admin_call_availability">;
 export type Call = Tables<"calls">;
 export type AuditLog = Tables<"audit_logs">;
 export type OperatorSettings = Tables<"operator_settings">;
+export type Shift = Tables<"shifts">;
+export type ShiftBreak = Tables<"shift_breaks">;

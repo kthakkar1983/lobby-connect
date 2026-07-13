@@ -10,16 +10,27 @@ const updateSpy = vi.fn();
 let updateFilters: string[][] = [];
 let refreshedRows: unknown[] = [{ id: "u1" }]; // what the D13 conditional update matches
 let refreshError: { message: string } | null = null;
+// The BREAK-preservation check (quality-review follow-up to Task 9) is a
+// separate conditional UPDATE from the general refresh above — it writes
+// only `{ last_seen_at }` (no `status` key), which is how this mock tells
+// the two apart, so each can be driven independently in tests. Defaults to
+// "no fresh BREAK row" so every pre-existing test is unaffected.
+let breakPreserveRows: unknown[] = [];
+let breakPreserveError: { message: string } | null = null;
 function profilesUpdate(v: unknown) {
   updateSpy(v);
   const filters: string[] = [];
   updateFilters.push(filters);
+  const isBreakPreserveWrite = typeof v === "object" && v !== null && !("status" in v);
   const chain = {
     eq: () => { filters.push("eq"); return chain; },
     neq: () => { filters.push("neq"); return chain; },
     gte: () => { filters.push("gte"); return chain; },
     lt: () => { filters.push("lt"); return chain; },
-    select: () => Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
+    select: () =>
+      isBreakPreserveWrite
+        ? Promise.resolve({ data: breakPreserveError ? null : breakPreserveRows, error: breakPreserveError })
+        : Promise.resolve({ data: refreshError ? null : refreshedRows, error: refreshError }),
     // Unconditional writes (ON_CALL bypass, lapse-persist) are awaited directly.
     then: (onFulfilled: (v: { error: null }) => unknown) =>
       Promise.resolve({ error: null }).then(onFulfilled),
@@ -37,6 +48,10 @@ let dutyRow: { status: string; last_seen_at: string | null } | null = {
   last_seen_at: new Date().toISOString(),
 };
 let dutyReadError: { message: string } | null = null;
+// GET's shift-start lookup (Task 10): only queried when onDuty resolves true.
+let openShiftForGet: { started_at: string } | null = { started_at: "2026-07-12T00:00:00.000Z" };
+let shiftReadErrorForGet: { message: string } | null = null;
+const shiftsSelectSpy = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -64,6 +79,21 @@ vi.mock("@/lib/supabase/admin", () => ({
           update: profilesUpdate,
         };
       }
+      if (table === "shifts") {
+        return {
+          select: (cols: string) => {
+            shiftsSelectSpy(cols);
+            return {
+              eq: () => ({
+                is: () => ({
+                  maybeSingle: () =>
+                    Promise.resolve({ data: openShiftForGet, error: shiftReadErrorForGet }),
+                }),
+              }),
+            };
+          },
+        };
+      }
       return { update: profilesUpdate };
     },
   }),
@@ -87,8 +117,13 @@ beforeEach(() => {
   updateFilters = [];
   refreshedRows = [{ id: "u1" }];
   refreshError = null;
+  breakPreserveRows = [];
+  breakPreserveError = null;
   dutyRow = { status: "AVAILABLE", last_seen_at: new Date().toISOString() };
   dutyReadError = null;
+  openShiftForGet = { started_at: "2026-07-12T00:00:00.000Z" };
+  shiftReadErrorForGet = null;
+  shiftsSelectSpy.mockClear();
 });
 
 describe("POST /api/presence", () => {
@@ -189,21 +224,27 @@ describe("D13 duty gate (spec §3.4)", () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   });
 
-  it("an allowed beat refreshes via a CONDITIONAL update (neq OFFLINE + gte cutoff)", async () => {
+  it("an allowed beat refreshes any non-OFFLINE row — neq OFFLINE, NO staleness guard", async () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
-    expect(updateFilters[0]).toEqual(["eq", "neq", "gte"]);
+    // updateFilters[0] is the BREAK-preservation check (runs first, no match by
+    // default). [1] = the general refresh: `neq OFFLINE` only, with NO `.gte`
+    // staleness guard — a stale-but-live shift is refreshed (a beat proves the
+    // browser is alive; a throttled tab is normal working state). This filter
+    // shape IS the regression guard: re-adding `.gte` re-breaks the pushed-video
+    // answer 403.
+    expect(updateFilters[1]).toEqual(["eq", "neq"]);
   });
 
-  it("a gated beat writes nothing live, persists the lapse, returns onDuty:false", async () => {
-    refreshedRows = []; // the conditional update matched 0 rows — shift is over
+  it("a beat matching 0 rows means the shift is OFFLINE/over → onDuty:false, NO lapse-persist write", async () => {
+    refreshedRows = []; // the conditional refresh matched 0 rows — status is OFFLINE
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ onDuty: false });
-    // Second update = lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
+    // Calls: [0] BREAK-preservation check (no match), [1] the general refresh (0
+    // rows). There is NO third lapse-persist write — a stale heartbeat no longer
+    // ends a shift; only End shift / the daily cron / the 12h cap do.
     expect(updateSpy).toHaveBeenCalledTimes(2);
-    expect(updateSpy.mock.calls[1]?.[0]).toEqual({ status: "OFFLINE" });
-    expect(updateFilters[1]).toEqual(["eq", "neq", "lt"]);
   });
 
   it("AWAY beats are gated identically", async () => {
@@ -213,12 +254,19 @@ describe("D13 duty gate (spec §3.4)", () => {
     expect(await res.json()).toEqual({ onDuty: false });
   });
 
-  it("ON_CALL bypasses the gate — unconditional write, 204", async () => {
+  it("ON_CALL runs the BREAK guard first, then writes unconditionally, 204 (finding #1)", async () => {
     refreshedRows = []; // would gate an AVAILABLE beat
+    // No fresh BREAK row (default) → the hoisted guard matches nothing and the
+    // ON_CALL write proceeds unconditionally.
     const res = await POST(req({ status: "ON_CALL" }));
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    expect(updateFilters[0]).toEqual(["eq"]); // no conditional filters
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateFilters[0]).toEqual(["eq", "eq"]); // BREAK-preservation guard (no staleness guard)
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[1]).toEqual(["eq"]); // unconditional ON_CALL write
+    expect(updateSpy.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ status: "ON_CALL" }),
+    );
   });
 
   it("a video-upgraded AVAILABLE beat also bypasses (resolved status is ON_CALL)", async () => {
@@ -233,7 +281,78 @@ describe("D13 duty gate (spec §3.4)", () => {
     refreshError = { message: "boom" };
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledTimes(1); // no second (lapse-persist) update
+    // [0] BREAK-preservation check (no match) + [1] the refresh itself; no
+    // third (lapse-persist) update.
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("BREAK preservation (quality-review follow-up to Task 9)", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+  });
+
+  it("an AVAILABLE beat does not clobber a fresh BREAK row — preserves BREAK, 204", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    // Only the preservation check ran — the general refresh must NOT have
+    // fired, or it would have clobbered BREAK back to AVAILABLE.
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[0]).toEqual(["eq", "eq"]); // status=BREAK match, NO staleness guard
+  });
+
+  it("an AWAY beat does not clobber a fresh BREAK row — preserves BREAK, 204", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "AWAY" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a BREAK row is preserved regardless of heartbeat age — no staleness guard keeps the break alive", async () => {
+    // With the staleness guard dropped, a beat during a break KEEPS the break
+    // (refreshes last_seen, never flips to AVAILABLE) whether the heartbeat is
+    // fresh or stale. A break ends only via Resume / End shift / the cron sweep —
+    // never by a lapsed beat (which previously silently flipped BREAK→OFFLINE and
+    // could leak the open shift_breaks row).
+    breakPreserveRows = [{ id: "u1" }]; // BREAK matches on status alone
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[0]).toEqual(["eq", "eq"]);
+  });
+
+  it("a fresh BREAK row is preserved even when a live video call would upgrade to ON_CALL (finding #1)", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    videoCallRows = [{ id: "c1" }];
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    // The hoisted BREAK guard now covers the ON_CALL branch: a beat that would
+    // upgrade to ON_CALL because of a live video call must NOT clobber a
+    // deliberate break (which leaked the shift_breaks row + 409'd Resume).
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+
+  it("a direct ON_CALL beat preserves a fresh BREAK row (audio-call edge, finding #1)", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "ON_CALL" }));
+    expect(res.status).toBe(204);
+    // The ON_CALL branch no longer clobbers a deliberate break: the guard runs
+    // first, matches, and returns before the unconditional ON_CALL write.
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+
+  it("fails open on a DB error during the BREAK-preservation check", async () => {
+    breakPreserveError = { message: "boom" };
+    const res = await POST(req({ status: "AVAILABLE" }));
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1); // no further writes attempted
   });
 });
 
@@ -247,31 +366,100 @@ describe("GET /api/presence (D13 hydration)", () => {
     expect((await GET()).status).toBe(401);
   });
 
-  it("fresh AVAILABLE → on duty, accepting", async () => {
-    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: true });
+  it("fresh AVAILABLE → on duty, accepting, not on break, includes shift start", async () => {
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
   });
 
   it("fresh AWAY → on duty, not accepting", async () => {
     dutyRow = { status: "AWAY", last_seen_at: new Date().toISOString() };
-    expect(await (await GET()).json()).toEqual({ onDuty: true, accepting: false });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: false,
+      onBreak: false,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
   });
 
-  it("explicit OFFLINE → off duty (accepting defaults true)", async () => {
+  it("fresh BREAK → on duty, not accepting, onBreak true", async () => {
+    dutyRow = { status: "BREAK", last_seen_at: new Date().toISOString() };
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: true,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
+  });
+
+  it("explicit OFFLINE → off duty (accepting defaults true), no shift lookup", async () => {
     dutyRow = { status: "OFFLINE", last_seen_at: new Date().toISOString() };
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: false,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+    expect(shiftsSelectSpy).not.toHaveBeenCalled();
   });
 
-  it("lapsed shift (stale AVAILABLE) → off duty", async () => {
+  it("stale AVAILABLE → STILL on duty (raw-status duty: a throttled tab is normal working state, not off-duty)", async () => {
+    // Regression: hydration used to collapse a stale heartbeat to off-duty, which
+    // (with the answer gate) flipped a heads-down agent OFF duty the moment her
+    // tab foregrounded to answer a pushed call. Duty is now raw-status — only an
+    // explicit OFFLINE is off duty — so a stale AVAILABLE agent hydrates on-duty
+    // and the shift lookup runs.
     dutyRow = {
       status: "AVAILABLE",
       last_seen_at: new Date(Date.now() - 120_000).toISOString(),
     };
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
+    });
+    expect(shiftsSelectSpy).toHaveBeenCalled();
   });
 
   it("missing row → off duty, accepting true", async () => {
     dutyRow = null;
-    expect(await (await GET()).json()).toEqual({ onDuty: false, accepting: true });
+    expect(await (await GET()).json()).toEqual({
+      onDuty: false,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+  });
+
+  it("onDuty but no open shift row → shiftStartedAt null", async () => {
+    openShiftForGet = null;
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+  });
+
+  it("a transient error reading the open shift fails open (shiftStartedAt null) but is logged", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    openShiftForGet = null;
+    shiftReadErrorForGet = { message: "boom" };
+    expect(await (await GET()).json()).toEqual({
+      onDuty: true,
+      accepting: true,
+      onBreak: false,
+      shiftStartedAt: null,
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[presence] GET: open-shift read failed",
+      shiftReadErrorForGet,
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("a DB error on the duty read surfaces as 500 (client fails open on !res.ok)", async () => {

@@ -8,6 +8,8 @@ import {
   CRON_SWEEP_INTERVAL_MS,
   INCOMING_VIDEO_FALLBACK_POLL_MS,
   MAX_CALL_DURATION_MS,
+  SESSION_MAX_MS,
+  SHIFT_CAP_EPSILON_MS,
 } from "../src/protocol";
 
 const VIDEO_TOKEN_TTL_MS = 3_600_000; // video/token mints a 3600s join token, no renewal
@@ -38,4 +40,10 @@ describe("protocol timing invariants", () => {
     expect(CRON_SWEEP_INTERVAL_MS).toBe(86_400_000);
     expect(MAX_CALL_DURATION_MS).toBe(1_800_000);
   });
+});
+
+it("session cap is 12h and epsilon is a sane sliver under it", () => {
+  expect(SESSION_MAX_MS).toBe(12 * 60 * 60 * 1000);
+  expect(SHIFT_CAP_EPSILON_MS).toBeGreaterThan(0);
+  expect(SHIFT_CAP_EPSILON_MS).toBeLessThan(SESSION_MAX_MS / 10);
 });

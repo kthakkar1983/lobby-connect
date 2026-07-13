@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Activity,
   Building2,
+  Clock,
   LayoutDashboard,
   Phone,
   ScrollText,
@@ -38,6 +39,7 @@ const ADMIN_NAV: readonly NavEntry[] = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/properties", label: "Properties", icon: Building2 },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+  { href: "/admin/shifts", label: "Shifts", icon: Clock },
   { href: "/admin/status", label: "Status", icon: Activity },
 ];
 

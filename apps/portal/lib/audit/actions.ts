@@ -28,6 +28,9 @@ export const AUDIT_ACTIONS = {
   REMOTE_ACCESS_ROTATED: "remote_access.rotated",
   REMOTE_ACCESS_REMOVED: "remote_access.removed",
   REMOTE_ACCESS_CREDENTIALS_ISSUED: "remote_access.credentials_issued",
+  SHIFT_EDITED: "shift.edited",
+  SHIFT_DELETED: "shift.deleted",
+  SHIFT_CREATED_MANUAL: "shift.created_manual",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

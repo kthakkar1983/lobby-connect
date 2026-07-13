@@ -7,8 +7,8 @@ import {
   isReachableForDial,
   roleHasPresence,
   isLiveStatus,
-  isLiveShift,
 } from "@/lib/voice/presence";
+import { isVideoSilencedStatus } from "@/lib/push/targets";
 
 describe("isStale", () => {
   const now = Date.parse("2026-05-31T12:00:00.000Z");
@@ -97,23 +97,11 @@ describe("roleHasPresence", () => {
   });
 });
 
-describe("isLiveShift (D13)", () => {
-  const now = Date.parse("2026-07-06T12:00:00Z");
-  const fresh = new Date(now - 30_000).toISOString();
-  const stale = new Date(now - 120_000).toISOString();
+describe("BREAK status (Task 9)", () => {
+  const now = 1_000_000_000_000;
+  const fresh = new Date(now - 5_000).toISOString();
 
-  it("live for any fresh non-OFFLINE status", () => {
-    expect(isLiveShift("AVAILABLE", fresh, now)).toBe(true);
-    expect(isLiveShift("AWAY", fresh, now)).toBe(true);
-    expect(isLiveShift("ON_CALL", fresh, now)).toBe(true);
-  });
-
-  it("over when explicitly OFFLINE, even with a fresh heartbeat", () => {
-    expect(isLiveShift("OFFLINE", fresh, now)).toBe(false);
-  });
-
-  it("over when the heartbeat lapsed or never happened, whatever the raw status", () => {
-    expect(isLiveShift("AVAILABLE", stale, now)).toBe(false);
-    expect(isLiveShift("AVAILABLE", null, now)).toBe(false);
-  });
+  it("BREAK is a browser-settable live status", () => expect(isLiveStatus("BREAK")).toBe(true));
+  it("BREAK is not dialed", () => expect(isReachableForDial("BREAK", fresh, now)).toBe(false));
+  it("BREAK silences video", () => expect(isVideoSilencedStatus("BREAK")).toBe(true));
 });

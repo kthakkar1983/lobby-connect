@@ -1,9 +1,23 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, act, cleanup } from "@testing-library/react";
 
 import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
 import { PodCardGrid } from "@/components/dashboard/pod-card-grid";
 import type { PropertyCardData } from "@/components/dashboard/property-card";
+
+// Task 17 (shift-tracking plan): mocked so tests can drive canWork directly,
+// mirroring property-card.test.tsx / duty-control.test.tsx.
+const { useDutyOptional } = vi.hoisted(() => ({
+  useDutyOptional: vi.fn(),
+}));
+vi.mock("@/components/dashboard/duty-provider", () => ({
+  useDutyOptional: () => useDutyOptional(),
+}));
+
+beforeEach(() => {
+  useDutyOptional.mockReset();
+  useDutyOptional.mockReturnValue(null);
+});
 
 afterEach(() => cleanup());
 
@@ -158,6 +172,65 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
     expect(silenced.hasAttribute("disabled")).toBe(true);
     // Ring stays answerable after silencing.
     expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
+  });
+
+  it("Task 17: canWork=false disables the unmatched fallback's Answer for a VIDEO ring and does not invoke acceptVideo", async () => {
+    const calls: string[] = [];
+    acceptVideoSpy = (callId: string) => calls.push(callId);
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PodCardGrid properties={[p1]} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptVideo").click();
+    });
+    await act(async () => {
+      screen.getByText("publish video ring for property outside pod").click();
+    });
+
+    const btn = screen.getByRole("button", { name: "Go on duty" });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("Task 17: canWork=false does NOT gate the unmatched fallback's Answer for an AUDIO ring", async () => {
+    let audioCalls = 0;
+    acceptAudioSpy = () => {
+      audioCalls += 1;
+    };
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PodCardGrid properties={[p1]} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("register acceptAudio").click();
+    });
+    await act(async () => {
+      screen.getByText("publish audio ring with null propertyId").click();
+    });
+
+    const btn = screen.getByRole("button", { name: "Answer" });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(audioCalls).toBe(1);
   });
 
   it("suppresses the unmatched-ring fallback when showUnmatchedRings={false} (Task 9: the fleet board hoists it instead)", async () => {

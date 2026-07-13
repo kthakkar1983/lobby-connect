@@ -8,6 +8,7 @@ import { BellOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCallSurface } from "@/components/dashboard/call-surface-provider";
+import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { cardLiveState, type CardLiveState } from "@/lib/dashboard/pods";
 import { formatTimeOnly } from "@/lib/owner/format";
 
@@ -42,8 +43,14 @@ export function PropertyCard({
   footerSlot?: React.ReactNode;
 }): React.JSX.Element {
   const { rings, active, actions, silencedKeys, silenceRing, openTileForCall } = useCallSurface();
+  const duty = useDutyOptional();
   const ring = rings.find((r) => r.propertyId === property.id) ?? null;
   const silenced = ring ? silencedKeys.has(ring.key) : false;
+  // Task 17 (shift-tracking plan): UI defense-in-depth on top of the server 403
+  // (requireOnDuty on answer-video) — video only (there's no server 403 backing
+  // audio-answer, and the audio dial already presence-gates who even rings).
+  // No-op when no DutyProvider is mounted (owner surfaces + isolated tests).
+  const answerGated = ring?.channel === "VIDEO" && duty != null && !duty.canWork;
   const onCallHere = active?.propertyId === property.id;
   const state = cardLiveState({
     ringing: !!ring,
@@ -99,8 +106,13 @@ export function PropertyCard({
 
       <div className="mt-3 flex items-center gap-2">
         {ringing && canAnswer && (
-          <Button onClick={answer} className="animate-pulse">
-            Answer
+          <Button
+            onClick={answerGated ? undefined : answer}
+            disabled={answerGated}
+            className={answerGated ? undefined : "animate-pulse"}
+            title={answerGated ? "Go on duty to answer" : undefined}
+          >
+            {answerGated ? "Go on duty" : "Answer"}
           </Button>
         )}
         {ringing && ring && (

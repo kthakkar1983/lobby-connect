@@ -6,7 +6,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
       if (table === "profiles") {
-        return { update: () => ({ lt: () => ({ neq: () => Promise.resolve({ error: null }) }) }) };
+        return {
+          update: () => ({
+            lt: () => ({
+              neq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
+            }),
+          }),
+        };
       }
       if (table === "operators") {
         return { select: () => Promise.resolve({ data: [{ id: "op1" }], error: null }) };
