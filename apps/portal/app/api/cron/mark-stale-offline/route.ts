@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
-import { closeOpenShiftForUser } from "@/lib/shifts/store";
+import { closeOpenShiftForUser, capOverlongShifts } from "@/lib/shifts/store";
 import { SHIFT_ABANDON_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
@@ -42,6 +42,14 @@ export async function GET(request: Request): Promise<NextResponse> {
       closeOpenShiftForUser(admin, p.id, p.last_seen_at ?? cutoff, "auto"),
     ),
   );
+
+  // Second responsibility (SHIFT-length cap, not staleness): force-close any open
+  // shift that has run past MAX_SHIFT_MS even if its heartbeat is fresh — the
+  // free-tier stand-in for Supabase's deferred 12h session cap, so a forgotten
+  // shift on an awake, still-beating machine can't inflate clocked hours
+  // unbounded. Runs AFTER the abandon sweep so a shift that is both stale AND
+  // over-cap closes at its accurate last_seen_at (above), not the ceiling.
+  await capOverlongShifts(admin, Date.now());
 
   // Self-report cron liveness for /status (per operator — multi-tenant-safe).
   const { data: operators } = await admin.from("operators").select("id");

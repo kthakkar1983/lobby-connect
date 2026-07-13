@@ -78,6 +78,30 @@ export const SHIFT_CAP_EPSILON_MS = 15 * 60 * 1000;
  */
 export const SHIFT_ABANDON_AFTER_MS = SESSION_MAX_MS;
 
+/**
+ * App-level max-shift cap — the FREE-TIER stand-in for Supabase's 12h "Time-box
+ * user sessions" Auth setting (Pro-only, deferred). SHIFT_ABANDON_AFTER_MS closes
+ * a shift only once the heartbeat goes *stale*, so a forgotten shift on an AWAKE
+ * machine that keeps beating (dashboard left open + on duty on a box that never
+ * sleeps) never goes stale → the abandon sweep never sees it → clocked hours
+ * inflate unbounded (computeClockedSeconds only bounds an open-but-STALE shift).
+ *
+ * So the presence sweep ALSO force-closes any open shift whose `started_at` is
+ * older than this — regardless of staleness — at the CEILING (`started_at +
+ * MAX_SHIFT_MS`, never "now"/`last_seen_at`, both of which grow with cron cadence
+ * and re-introduce the inflation), reason `capped`, and flips the agent OFFLINE
+ * (except mid-call). SHIFT-anchored, not login-anchored: needs no login timestamp
+ * and sidesteps classifyShiftEnd's session-vs-shift labeling quirk.
+ *
+ * The PRIMARY max-shift ceiling: at 10h it fires BEFORE the deferred 12h Supabase
+ * session cap, so if that Pro setting is later enabled it becomes a redundant
+ * outer backstop, not the primary. 10h is a deliberately tight ceiling just past a
+ * full night shift: a genuine agent who runs past it is bounced off duty and
+ * re-Goes-on-duty for a fresh shift (two rows) — the correct bias for accurate
+ * clocked time. Design: docs/specs/2026-07-13-app-level-max-shift-cap-design.md.
+ */
+export const MAX_SHIFT_MS = 10 * 60 * 60 * 1000;
+
 // The reaper must outlast the ring window, or a still-ringing call could be reaped
 // mid-window. TypeScript can't compare number *values* at the type level, so guard
 // at module load; protocol.test.ts pins the same invariant.
@@ -97,4 +121,11 @@ if (MAX_CALL_DURATION_MS >= 3_600_000) {
 // end a live shift — the exact bug this constant exists to prevent.
 if (SHIFT_ABANDON_AFTER_MS < PRESENCE_STALE_AFTER_MS) {
   throw new Error("protocol: SHIFT_ABANDON_AFTER_MS must not be shorter than PRESENCE_STALE_AFTER_MS");
+}
+
+// A shift-length ceiling must outlast the read-time reachability staleness, or the
+// cap could fire on a shift younger than a single stale-heartbeat window.
+// protocol.test.ts pins the same invariant.
+if (MAX_SHIFT_MS <= PRESENCE_STALE_AFTER_MS) {
+  throw new Error("protocol: MAX_SHIFT_MS must exceed PRESENCE_STALE_AFTER_MS");
 }

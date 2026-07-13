@@ -11,6 +11,7 @@ import {
   SESSION_MAX_MS,
   SHIFT_CAP_EPSILON_MS,
   SHIFT_ABANDON_AFTER_MS,
+  MAX_SHIFT_MS,
 } from "../src/protocol";
 
 const VIDEO_TOKEN_TTL_MS = 3_600_000; // video/token mints a 3600s join token, no renewal
@@ -61,5 +62,18 @@ describe("shift-abandon horizon (the cron's shift-close / OFFLINE-flip cutoff)",
     // The abandon horizon (genuinely gone) must outlast the 90s reachability
     // staleness (a throttled-but-working tab). Same guard runs at module load.
     expect(SHIFT_ABANDON_AFTER_MS).toBeGreaterThanOrEqual(PRESENCE_STALE_AFTER_MS);
+  });
+});
+
+describe("app-level max-shift cap (the free-tier session-cap stand-in)", () => {
+  it("is 10h", () => {
+    expect(MAX_SHIFT_MS).toBe(10 * 60 * 60 * 1000);
+  });
+
+  it("is a sane multi-hour ceiling (well past the reachability staleness)", () => {
+    // The PRIMARY max-shift ceiling (fires before the deferred 12h session cap).
+    // It must outlast the 90s read-time reachability staleness. Same guard runs at
+    // module load.
+    expect(MAX_SHIFT_MS).toBeGreaterThan(PRESENCE_STALE_AFTER_MS);
   });
 });
