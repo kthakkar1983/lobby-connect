@@ -836,3 +836,67 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     });
   });
 });
+
+/**
+ * Finding #3 (spec §7.1): audio Accept must be duty-gated. An agent who was
+ * AVAILABLE when the call started ringing, then went on break, must NOT be able
+ * to answer the already-ringing audio call — /api/twilio/voice/answered is
+ * ungated and would flip her ON_CALL. The dial presence-gates who RINGS; this
+ * closes the "flipped to break while it was ringing" edge, client-side.
+ */
+describe("Softphone — duty gate on accept (finding #3 / spec §7.1)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    push.armPush.mockResolvedValue(true);
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  const answeredCalls = () =>
+    fetchMock.mock.calls.filter((args) => (args[0] as string) === "/api/twilio/voice/answered");
+
+  it("does NOT accept an in-flight audio call while the agent is on break", async () => {
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    // Go on break — canWork becomes false (on duty, not working).
+    await user.click(screen.getByRole("button", { name: /probe-take-break/i }));
+    await waitFor(() => expect(screen.getByTestId("duty-onbreak").textContent).toBe("true"));
+
+    // A call that was already ringing when she flipped to break.
+    await act(async () => twilio.fireIncoming());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+
+    // Answering must no-op: the Twilio call is never accepted and the answered
+    // route (which would flip her ON_CALL server-side) is never hit.
+    await user.click(screen.getByText("Answer on card"));
+    expect(twilio.fakeCall.accept).not.toHaveBeenCalled();
+    expect(answeredCalls()).toHaveLength(0);
+  });
+
+  it("accepts normally when on duty and not on break (gate open)", async () => {
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    await act(async () => twilio.fireIncoming());
+    await waitFor(() => expect(screen.getByTestId("audio-rings").textContent).toBe("1"));
+
+    await user.click(screen.getByText("Answer on card"));
+    expect(twilio.fakeCall.accept).toHaveBeenCalled();
+    await waitFor(() => expect(answeredCalls().length).toBe(1));
+  });
+});

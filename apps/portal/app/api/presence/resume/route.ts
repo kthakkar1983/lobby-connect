@@ -33,10 +33,20 @@ export async function POST(): Promise<NextResponse> {
     .gte("last_seen_at", staleCutoffIso)
     .select("id");
   if (error) return NextResponse.json({ error: "Could not resume" }, { status: 500 });
+
+  // Finding #1 (defense-in-depth): close any open break for this shift
+  // REGARDLESS of whether the status flip matched a row. The primary fix (the
+  // hoisted BREAK guard in the heartbeat) prevents a beat from clobbering
+  // BREAK -> ON_CALL in the first place, but if the status was already
+  // overwritten by some other path, the conditional UPDATE above matches zero
+  // rows while the shift_breaks row stays open — and it would then leak to
+  // end-of-shift with a bogus duration. closeOpenBreak is idempotent (a no-op
+  // when nothing is open), so closing here can only ever help. It runs before
+  // the 409 so the "not currently on break" path still cleans up a stray break.
+  await closeOpenBreak(admin, actor.userId, nowIso);
+
   if (!updated || updated.length === 0) {
     return NextResponse.json({ error: "Not currently on break" }, { status: 409 });
   }
-
-  await closeOpenBreak(admin, actor.userId, nowIso);
   return new NextResponse(null, { status: 204 });
 }

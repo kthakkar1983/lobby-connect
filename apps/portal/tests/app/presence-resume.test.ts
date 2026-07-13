@@ -173,13 +173,28 @@ describe("POST /api/presence/resume", () => {
     expect(breaksUpdateSpy).not.toHaveBeenCalled();
   });
 
-  it("409s and never closes a break when the caller is not currently on break (gate matched zero rows)", async () => {
-    // Simulates an OFFLINE/never-onduty/lapsed/not-on-break caller: the
-    // conditional UPDATE's WHERE (status=BREAK + fresh heartbeat) matches nothing.
+  it("409s but STILL closes any open break when the status flip matches zero rows (finding #1)", async () => {
+    // A caller whose BREAK was already clobbered (e.g. a heartbeat wrote ON_CALL)
+    // before Resume: the conditional flip matches nothing, but the shift_breaks
+    // row is still open and must be closed here so it can't leak to end-of-shift
+    // with a bogus duration.
     updateResult.data = [];
+    openShiftRow.current = { id: "shift-1" };
     const res = await POST();
     expect(res.status).toBe(409);
-    expect(shiftsSelectEqSpy).not.toHaveBeenCalled();
+    expect(shiftsSelectEqSpy).toHaveBeenCalledWith("user_id", "u-1");
+    expect(breaksUpdateSpy).toHaveBeenCalledWith({ ended_at: expect.any(String) });
+    expect(breaksUpdateEqSpy).toHaveBeenCalledWith("shift_id", "shift-1");
+  });
+
+  it("409s and writes nothing to shift_breaks when the caller has no open shift", async () => {
+    // Genuinely not on break / no open shift: closeOpenBreak still runs (finding
+    // #1) but no-ops before touching shift_breaks when there's no open shift.
+    updateResult.data = [];
+    openShiftRow.current = null;
+    const res = await POST();
+    expect(res.status).toBe(409);
+    expect(shiftsSelectEqSpy).toHaveBeenCalledWith("user_id", "u-1");
     expect(breaksUpdateSpy).not.toHaveBeenCalled();
   });
 });

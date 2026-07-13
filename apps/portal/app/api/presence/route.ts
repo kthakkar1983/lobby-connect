@@ -47,10 +47,41 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
+  const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
+
+  // BREAK preservation (finding #1 — HOISTED above the ON_CALL branch). A
+  // heartbeat must NEVER clobber a deliberate, fresh BREAK, no matter which
+  // live status the beat carries. The softphone only ever intends
+  // AVAILABLE/AWAY/ON_CALL (it has no notion of BREAK), but two paths would
+  // otherwise overwrite a break the agent deliberately started:
+  //   - an AVAILABLE/AWAY beat → the normal refresh below (back to AVAILABLE/AWAY);
+  //   - an ON_CALL beat — a live audio call posting ON_CALL directly, OR an
+  //     AVAILABLE beat UPGRADED to ON_CALL by the live-video check above → the
+  //     unconditional ON_CALL write below.
+  // Either overwrite leaks the open shift_breaks row (it then closes only at
+  // end-of-shift, recording a bogus break duration) AND makes Resume 409
+  // (Resume is gated on status=BREAK). So this atomic conditional UPDATE runs
+  // FIRST for every beat: it refreshes last_seen_at only (never status) while
+  // the row is still (fresh) BREAK, and returns without falling through. A
+  // STALE BREAK row matches nothing here and falls through to the normal gate
+  // below, which lapses it exactly like any other stale live status (closing
+  // the open break too, via closeOpenShiftForUser).
+  const { data: preserved, error: preserveError } = await admin
+    .from("profiles")
+    .update({ last_seen_at: nowIso })
+    .eq("id", actor.userId)
+    .eq("status", "BREAK")
+    .gte("last_seen_at", staleCutoffIso)
+    .select("id");
+  // FAIL OPEN on a real DB error, same posture as the refresh check below: do
+  // nothing further this beat rather than risk clobbering BREAK.
+  if (preserveError) return new NextResponse(null, { status: 204 });
+  if (preserved && preserved.length > 0) return new NextResponse(null, { status: 204 });
 
   // D13 ON_CALL exception (spec §3.4): a live call outranks the duty gate —
   // raw OFFLINE included (the accepted two-tab edge) — so a >90s network blip
-  // mid-call can't dump the agent off duty. Exactly the pre-D13 write.
+  // mid-call can't dump the agent off duty. Exactly the pre-D13 write. A fresh
+  // BREAK was already preserved above, so this can no longer clobber one.
   if (status === "ON_CALL") {
     await admin
       .from("profiles")
@@ -64,34 +95,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   // read-then-write race): match only a row that isn't explicitly OFFLINE and
   // whose heartbeat is still fresh. Zero rows = the shift is over — only
   // /api/presence/go-on-duty starts one.
-  const staleCutoffIso = new Date(nowMs - PRESENCE_STALE_AFTER_MS).toISOString();
-
-  // BREAK preservation (quality-review follow-up to Task 9): the softphone
-  // heartbeat only ever intends AVAILABLE/AWAY/ON_CALL — it has no notion of
-  // BREAK yet (a future task wires the take-break/resume UI onto it). Without
-  // this, a beat landing while the row is BREAK would silently overwrite it
-  // back to AVAILABLE/AWAY: the shift_breaks row would leak open forever and
-  // the agent would become dialable/video-reachable again without ever
-  // clicking Resume. Mirrors the ON_CALL exception above with its own atomic
-  // conditional UPDATE that only refreshes last_seen_at (never touches
-  // status) while the row is still (fresh) BREAK. A STALE BREAK row matches
-  // nothing here and falls through to the normal gate below, which lapses it
-  // exactly like any other stale live status (closing the open break too, via
-  // closeOpenShiftForUser).
-  if (status === "AVAILABLE" || status === "AWAY") {
-    const { data: preserved, error: preserveError } = await admin
-      .from("profiles")
-      .update({ last_seen_at: nowIso })
-      .eq("id", actor.userId)
-      .eq("status", "BREAK")
-      .gte("last_seen_at", staleCutoffIso)
-      .select("id");
-    // FAIL OPEN on a real DB error, same posture as the refresh check below:
-    // do nothing further this beat rather than risk clobbering BREAK.
-    if (preserveError) return new NextResponse(null, { status: 204 });
-    if (preserved && preserved.length > 0) return new NextResponse(null, { status: 204 });
-  }
-
   const { data: refreshed, error: refreshError } = await admin
     .from("profiles")
     .update({ status, last_seen_at: nowIso })

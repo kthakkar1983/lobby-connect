@@ -118,17 +118,34 @@ export function Softphone({ role }: SoftphoneProps) {
   // Accepting default over a real AWAY (spec §3.4 ordering rule). No provider ->
   // treat as hydrated (fail-open, beats flow).
   const dutyHydrated = duty ? duty.hydrated : true;
+  // Duty hard-gate for in-flight audio (spec §7.1): whether the agent may work
+  // right now (on duty AND not on break). No provider -> fail-open (work
+  // allowed). Mirrored into a ref below for acceptCall's []-stable closure.
+  const canWork = duty?.canWork ?? true;
 
   // Synchronous mirrors. The `= value` on every render tracks the provider; the
   // gate helpers below also set these synchronously (e.g. applyBeatResult flips
   // onDutyRef before the re-render lands) — the provider setState that follows
   // makes the next render agree.
+  //
+  // INVARIANT (Task 16, finding #5): the "no stray beat after End shift" safety
+  // relies on the softphone re-rendering SYNCHRONOUSLY with the DutyProvider.
+  // When DutyControl calls endShift(), the provider flips onDuty=false; React 19
+  // flushes this consumer in the SAME update, so onDutyRef.current becomes false
+  // before the next heartbeat tick can read it and beat() self-gates. A future
+  // React.memo or Suspense boundary inserted BETWEEN DutyProvider and this
+  // softphone (see app-shell.tsx) could defer that flush and widen the window
+  // for a stray beat. The server duty gate is the ultimate backstop (a stray
+  // AVAILABLE beat after End shift hits status=OFFLINE and is gated), but do not
+  // rely on it alone — keep the provider→softphone consumer path boundary-free.
   const onDutyRef = useRef(onDuty);
   onDutyRef.current = onDuty;
   const readyRef = useRef(accepting);
   readyRef.current = accepting;
   const dutyHydratedRef = useRef(dutyHydrated);
   dutyHydratedRef.current = dutyHydrated;
+  const canWorkRef = useRef(canWork);
+  canWorkRef.current = canWork;
   // Mirror the provider methods so the softphone's callbacks can stay []-stable
   // (interval/effect deps) while still calling the current provider fns.
   const refreshFromServerRef = useRef(duty?.refreshFromServer);
@@ -559,6 +576,15 @@ export function Softphone({ role }: SoftphoneProps) {
   const acceptCall = useCallback(async () => {
     const call = callRef.current;
     if (!call) return;
+    // Duty hard-gate (spec §7.1, finding #3): an agent who went off-duty or
+    // on-break AFTER this call started ringing must not be able to answer it.
+    // The dial already presence-gates who rings, but a flip-to-break while a
+    // call is mid-ring is the uncovered edge — and /api/twilio/voice/answered is
+    // ungated (it would flip her ON_CALL server-side). accept() is the only path
+    // to the media + that route, so guarding here fully blocks the answer. The
+    // video Answer is gated in the card UI; audio has no card gate, so it lives
+    // here. No DutyProvider (owner surfaces / isolated tests) -> canWork = true.
+    if (!canWorkRef.current) return;
     call.accept();
     answeredAtRef.current = Date.now();
     setMuted(false);

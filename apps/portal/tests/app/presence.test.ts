@@ -251,12 +251,19 @@ describe("D13 duty gate (spec §3.4)", () => {
     expect(await res.json()).toEqual({ onDuty: false });
   });
 
-  it("ON_CALL bypasses the gate — unconditional write, 204", async () => {
+  it("ON_CALL runs the BREAK guard first, then writes unconditionally, 204 (finding #1)", async () => {
     refreshedRows = []; // would gate an AVAILABLE beat
+    // No fresh BREAK row (default) → the hoisted guard matches nothing and the
+    // ON_CALL write proceeds unconditionally.
     const res = await POST(req({ status: "ON_CALL" }));
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    expect(updateFilters[0]).toEqual(["eq"]); // no conditional filters
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateFilters[0]).toEqual(["eq", "eq", "gte"]); // BREAK-preservation guard
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[1]).toEqual(["eq"]); // unconditional ON_CALL write
+    expect(updateSpy.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ status: "ON_CALL" }),
+    );
   });
 
   it("a video-upgraded AVAILABLE beat also bypasses (resolved status is ON_CALL)", async () => {
@@ -308,15 +315,28 @@ describe("BREAK preservation (quality-review follow-up to Task 9)", () => {
     expect(await res.json()).toEqual({ onDuty: false });
   });
 
-  it("a live video call still bypasses via ON_CALL, even with a fresh BREAK row", async () => {
+  it("a fresh BREAK row is preserved even when a live video call would upgrade to ON_CALL (finding #1)", async () => {
     breakPreserveRows = [{ id: "u1" }];
     videoCallRows = [{ id: "c1" }];
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
-    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
-    // The BREAK-preservation check is scoped to AVAILABLE/AWAY only, so a
-    // video-upgraded ON_CALL beat never reaches it.
+    // The hoisted BREAK guard now covers the ON_CALL branch: a beat that would
+    // upgrade to ON_CALL because of a live video call must NOT clobber a
+    // deliberate break (which leaked the shift_breaks row + 409'd Resume).
     expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
+  });
+
+  it("a direct ON_CALL beat preserves a fresh BREAK row (audio-call edge, finding #1)", async () => {
+    breakPreserveRows = [{ id: "u1" }];
+    const res = await POST(req({ status: "ON_CALL" }));
+    expect(res.status).toBe(204);
+    // The ON_CALL branch no longer clobbers a deliberate break: the guard runs
+    // first, matches, and returns before the unconditional ON_CALL write.
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ status: "ON_CALL" }));
   });
 
   it("fails open on a DB error during the BREAK-preservation check", async () => {

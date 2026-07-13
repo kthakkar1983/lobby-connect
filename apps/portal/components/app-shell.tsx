@@ -37,7 +37,12 @@ export function AppShell({
         {/* DutyProvider wraps both the header (DutyControl) and the softphone so
             duty state has ONE owner; it sits inside CallSurfaceProvider but is
             deliberately separate from it (no ring/audio ownership → no render-loop
-            coupling). See duty-provider.tsx. */}
+            coupling). See duty-provider.tsx.
+            INVARIANT (finding #5): do NOT insert a React.memo or Suspense boundary
+            between DutyProvider and the softphone (rendered inside DashboardWorkspace).
+            The "no stray beat after End shift" gate depends on the softphone
+            re-rendering synchronously with the provider's onDuty flip — see the
+            onDutyRef comment in softphone.tsx. */}
         <DutyProvider>
           {/* Rest collapsed; the rail hover-expands (see AppSidebar). */}
           <SidebarProvider defaultOpen={false}>

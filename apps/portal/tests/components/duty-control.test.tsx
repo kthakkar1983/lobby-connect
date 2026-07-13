@@ -9,11 +9,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { useDuty } = vi.hoisted(() => ({
+const { useDuty, useCallSurfaceOptional } = vi.hoisted(() => ({
   useDuty: vi.fn(),
+  useCallSurfaceOptional: vi.fn(),
 }));
 vi.mock("@/components/dashboard/duty-provider", () => ({
   useDuty: () => useDuty(),
+}));
+// Call-awareness (finding #2): DutyControl reads the live call from here. Mocked
+// so this presentational test stays isolated from the real CallSurfaceProvider.
+vi.mock("@/components/dashboard/call-surface-provider", () => ({
+  useCallSurfaceOptional: () => useCallSurfaceOptional(),
 }));
 
 import { DutyControl } from "@/components/dashboard/duty-control";
@@ -22,6 +28,7 @@ type DutyStub = {
   onDuty: boolean;
   onBreak: boolean;
   shiftStartedAt: string | null;
+  pushBlocked: boolean;
   goOnDuty: ReturnType<typeof vi.fn>;
   endShift: ReturnType<typeof vi.fn>;
   takeBreak: ReturnType<typeof vi.fn>;
@@ -33,12 +40,18 @@ function dutyStub(overrides: Partial<DutyStub> = {}): DutyStub {
     onDuty: false,
     onBreak: false,
     shiftStartedAt: null,
+    pushBlocked: false,
     goOnDuty: vi.fn().mockResolvedValue(undefined),
     endShift: vi.fn().mockResolvedValue(undefined),
     takeBreak: vi.fn().mockResolvedValue(undefined),
     resume: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+}
+
+/** No live call by default. Pass `{ callId }` to simulate an in-progress call. */
+function onCall(active: { callId: string } | null) {
+  useCallSurfaceOptional.mockReturnValue(active ? { active } : null);
 }
 
 /** Every render's outermost element — used to assert the fixed-footprint wrapper. */
@@ -48,6 +61,8 @@ function wrapperClassName(container: HTMLElement): string {
 
 beforeEach(() => {
   useDuty.mockReset();
+  useCallSurfaceOptional.mockReset();
+  onCall(null); // default: no live call
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date("2026-07-12T03:00:00.000Z"));
 });
@@ -136,6 +151,63 @@ describe("DutyControl", () => {
     const endShiftItem = await screen.findByText(/^end shift$/i);
     await user.click(endShiftItem);
     expect(stub.endShift).toHaveBeenCalledOnce();
+  });
+
+  it("on a call: hides 'Take a break' but keeps the on-duty pill (finding #2a, spec §8.1)", () => {
+    useDuty.mockReturnValue(
+      dutyStub({ onDuty: true, shiftStartedAt: "2026-07-12T01:00:00.000Z" }),
+    );
+    onCall({ callId: "c1" });
+    render(<DutyControl />);
+
+    // The live on-duty pill still shows; the break affordance is gone mid-call.
+    expect(screen.getByText(/on duty ·/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /take a break/i })).toBeNull();
+  });
+
+  it("on a call: the End shift menu item is disabled (finding #2b)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const stub = dutyStub({ onDuty: true, shiftStartedAt: "2026-07-12T01:00:00.000Z" });
+    useDuty.mockReturnValue(stub);
+    onCall({ callId: "c1" });
+    render(<DutyControl />);
+
+    await user.click(screen.getByRole("button", { name: /duty menu/i }));
+    // Radix marks a disabled item aria-disabled=true (and pointer-events:none),
+    // so it can't be selected — ending a shift mid-call is blocked.
+    const endShiftItem = await screen.findByRole("menuitem", { name: /end shift/i });
+    expect(endShiftItem.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("off a call: 'Take a break' shows and End shift is selectable (regression)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const stub = dutyStub({ onDuty: true, shiftStartedAt: "2026-07-12T01:00:00.000Z" });
+    useDuty.mockReturnValue(stub);
+    onCall(null);
+    render(<DutyControl />);
+
+    expect(screen.getByRole("button", { name: /take a break/i })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /duty menu/i }));
+    const endShiftItem = await screen.findByRole("menuitem", { name: /end shift/i });
+    expect(endShiftItem.getAttribute("aria-disabled")).not.toBe("true");
+    await user.click(endShiftItem);
+    expect(stub.endShift).toHaveBeenCalledOnce();
+  });
+
+  it("shows the 'notifications blocked' hint on a live shift when push is blocked (finding #4)", () => {
+    useDuty.mockReturnValue(
+      dutyStub({ onDuty: true, pushBlocked: true, shiftStartedAt: "2026-07-12T01:00:00.000Z" }),
+    );
+    render(<DutyControl />);
+    expect(screen.getByRole("img", { name: /notifications blocked/i })).toBeTruthy();
+  });
+
+  it("hides the blocked hint when push is armed", () => {
+    useDuty.mockReturnValue(
+      dutyStub({ onDuty: true, pushBlocked: false, shiftStartedAt: "2026-07-12T01:00:00.000Z" }),
+    );
+    render(<DutyControl />);
+    expect(screen.queryByRole("img", { name: /notifications blocked/i })).toBeNull();
   });
 
   it("keeps a constant-width wrapper class across off/on/break states (fixed footprint)", () => {
