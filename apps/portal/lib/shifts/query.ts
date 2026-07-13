@@ -161,6 +161,7 @@ export type ProfileForAssembly = {
 };
 
 export type ShiftTimesheetRow = {
+  readonly id: string;
   readonly userId: string;
   readonly name: string;
   readonly role: string;
@@ -198,6 +199,7 @@ export function assembleShiftRow(
   );
   const talkSeconds = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
   return {
+    id: shift.id,
     userId: shift.user_id,
     name: profile?.full_name ?? "Unknown",
     role: profile?.role ?? "",

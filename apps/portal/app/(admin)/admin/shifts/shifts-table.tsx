@@ -1,14 +1,16 @@
 "use client";
 
-// Task 19 (shift-tracking plan): the admin timesheet table. Read-only display
-// — row actions (edit end time / delete / add a missed shift) are Task 20.
-// Modeled on `admin/audit/audit-table.tsx`: a `"use client"` table that owns
-// URL-driven filter state via `router.push`, fed by a Server Component page.
+// Task 19 (shift-tracking plan): the admin timesheet table. Task 20 adds row
+// actions (edit start/end, delete with a typed confirm) + an "Add shift"
+// dialog, wired to `./actions`. Modeled on `admin/audit/audit-table.tsx` for
+// the URL-driven filter state, and `admin/users/users-table.tsx` for the
+// dialog/confirm/toast shape of the new mutations.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
-import { Clock } from "lucide-react";
+import { Clock, MoreHorizontal, Plus } from "lucide-react";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -20,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -27,11 +30,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DashTile } from "@/components/dashboard/dash-tile";
 import { computeUtilization } from "@/lib/shifts/lifecycle";
 import type { ShiftTimesheetRow, TimesheetRange } from "@/lib/shifts/query";
 import { cn } from "@/lib/utils";
+import { editShiftAction, deleteShiftAction, addShiftAction } from "./actions";
+
+export type RosterEntry = {
+  readonly id: string;
+  readonly full_name: string;
+  readonly role: string;
+};
 
 // ---------------------------------------------------------------------------
 // Small pure display helpers (presentational only — no lib/ home needed for
@@ -70,6 +105,26 @@ function initialsOf(name: string): string {
 
 function titleCase(s: string): string {
   return s.length === 0 ? s : s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+/** ISO instant -> a `datetime-local` input value in the BROWSER's local
+ *  timezone ("YYYY-MM-DDTHH:mm"), since the input has no timezone of its own.
+ *  Round-trips with `localInputToIso` below. */
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** A `datetime-local` input value -> ISO instant, interpreting the value as
+ *  local time (per the ECMAScript Date-Time String spec, a date-time string
+ *  with no offset parses as local — the same rule the input relies on to
+ *  round-trip). Empty/unparseable input returns null (caller decides whether
+ *  that's an error or "leave open"). */
+function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }
 
 const ENDED_BADGE: Record<
@@ -258,19 +313,331 @@ function SummaryStrip({ rows }: { readonly rows: ShiftTimesheetRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Row actions — edit dialog + delete confirm (Task 20)
+// ---------------------------------------------------------------------------
+
+function EditShiftDialog({
+  row,
+  open,
+  onOpenChange,
+}: {
+  readonly row: ShiftTimesheetRow;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [start, setStart] = useState(() => toLocalInputValue(row.startedAt));
+  const [end, setEnd] = useState(() => (row.endedAt ? toLocalInputValue(row.endedAt) : ""));
+
+  function onSave() {
+    setError(null);
+    const startedAtIso = localInputToIso(start);
+    if (!startedAtIso) {
+      setError("Start time is invalid.");
+      return;
+    }
+    if (end && !localInputToIso(end)) {
+      setError("End time is invalid.");
+      return;
+    }
+    const endedAtIso = end ? localInputToIso(end) : null;
+
+    startTransition(async () => {
+      const result = await editShiftAction({
+        id: row.id,
+        started_at: startedAtIso,
+        ended_at: endedAtIso,
+      });
+      if (result.ok) {
+        toast.success("Shift updated");
+        onOpenChange(false);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) setError(null);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit shift — {row.name}</DialogTitle>
+          <DialogDescription>
+            Adjust the start and end time. Leave End blank to reopen this shift
+            as on-duty.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-shift-start">Start</Label>
+            <Input
+              id="edit-shift-start"
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-shift-end">End</Label>
+            <Input
+              id="edit-shift-end"
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">{error}</p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button onClick={onSave} disabled={pending}>
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteShiftDialog({
+  row,
+  open,
+  onOpenChange,
+}: {
+  readonly row: ShiftTimesheetRow;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [confirmName, setConfirmName] = useState("");
+
+  function onDelete() {
+    startTransition(async () => {
+      const result = await deleteShiftAction({ id: row.id });
+      if (result.ok) {
+        toast.success("Shift deleted");
+        onOpenChange(false);
+        setConfirmName("");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) setConfirmName("");
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this shift?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Permanently removes {row.name}&apos;s shift ({formatShiftTime(row.startedAt)} –{" "}
+            {row.endedAt ? formatShiftTime(row.endedAt) : "open"}) and its break
+            history. This can&apos;t be undone. Type their name to confirm.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Input
+          value={confirmName}
+          onChange={(e) => setConfirmName(e.target.value)}
+          placeholder={row.name}
+          autoComplete="off"
+          className="mt-2"
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onDelete}
+            disabled={
+              pending ||
+              confirmName.trim().toLowerCase() !== row.name.trim().toLowerCase()
+            }
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {pending ? "Deleting…" : "Delete permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function RowActions({ row }: { readonly row: ShiftTimesheetRow }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="Shift actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setEditOpen(true)}>Edit</DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => setDeleteOpen(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <EditShiftDialog row={row} open={editOpen} onOpenChange={setEditOpen} />
+      <DeleteShiftDialog row={row} open={deleteOpen} onOpenChange={setDeleteOpen} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Add shift dialog (Task 20) — backfills a missed/untracked shift.
+// ---------------------------------------------------------------------------
+
+function AddShiftDialog({ roster }: { readonly roster: ReadonlyArray<RosterEntry> }) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string>(roster[0]?.id ?? "");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+
+  function onSubmit() {
+    setError(null);
+    if (!userId) {
+      setError("Choose an agent.");
+      return;
+    }
+    const startedAtIso = localInputToIso(start);
+    if (!startedAtIso) {
+      setError("Start time is invalid.");
+      return;
+    }
+    const endedAtIso = localInputToIso(end);
+    if (!endedAtIso) {
+      setError("End time is invalid.");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await addShiftAction({
+        user_id: userId,
+        started_at: startedAtIso,
+        ended_at: endedAtIso,
+      });
+      if (result.ok) {
+        toast.success("Shift added");
+        setOpen(false);
+        setStart("");
+        setEnd("");
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setError(null);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="secondary" size="sm" disabled={roster.length === 0}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add shift
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add a missed shift</DialogTitle>
+          <DialogDescription>
+            Backfill a completed shift that wasn&apos;t tracked automatically
+            (e.g. the system was down).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-shift-user">Agent</Label>
+            <Select value={userId} onValueChange={setUserId}>
+              <SelectTrigger id="add-shift-user">
+                <SelectValue placeholder="Choose an agent" />
+              </SelectTrigger>
+              <SelectContent>
+                {roster.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name} ({titleCase(u.role)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-shift-start">Start</Label>
+            <Input
+              id="add-shift-start"
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-shift-end">End</Label>
+            <Input
+              id="add-shift-end"
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">{error}</p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button onClick={onSubmit} disabled={pending}>
+            {pending ? "Adding…" : "Add shift"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Table
 // ---------------------------------------------------------------------------
 
 export function ShiftsTable({
   rows,
   range,
+  roster,
 }: {
   readonly rows: ShiftTimesheetRow[];
   readonly range: TimesheetRange;
+  readonly roster: ReadonlyArray<RosterEntry>;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <PeriodSelector range={range} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PeriodSelector range={range} />
+        <AddShiftDialog roster={roster} />
+      </div>
       <SummaryStrip rows={rows} />
 
       {rows.length === 0 ? (
@@ -309,11 +676,14 @@ export function ShiftsTable({
               <TableHead className="font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">
                 Ended
               </TableHead>
+              <TableHead className="text-right font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={`${row.userId}-${row.startedAt}`} className="even:bg-muted/40">
+              <TableRow key={row.id} className="even:bg-muted/40">
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <span
@@ -346,6 +716,9 @@ export function ShiftsTable({
                 </TableCell>
                 <TableCell>
                   <EndedBadge endedReason={row.endedReason} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <RowActions row={row} />
                 </TableCell>
               </TableRow>
             ))}

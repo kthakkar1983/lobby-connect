@@ -133,6 +133,7 @@ describe("assembleShiftRow", () => {
     const profile = { full_name: "Ann", role: "AGENT", last_seen_at: null };
     const row = assembleShiftRow(shift, calls, 3, profile, Date.now());
     expect(row).toEqual({
+      id: "shift-1",
       userId: "user-1",
       name: "Ann",
       role: "AGENT",
