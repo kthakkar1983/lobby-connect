@@ -208,6 +208,8 @@ Summary strip (clocked this period / actual work / fleet utilization / shifts ca
 
 Currently the presence sweep is **daily** (`0 8 * * *`, a Vercel-Hobby leftover). On the box (Coolify, no Hobby limit) tighten the **presence** sweep to **~every 15 min** so lapsed/capped shifts close promptly in the timesheet. Update the Coolify `lc-ops` cron + `CRON_SWEEP_INTERVAL_MS` in `protocol.ts`. (Belt-and-suspenders with §9.2's read-time effective-end, so freshness never depends solely on cron cadence.)
 
+> **Update (2026-07-13, `task_71d65b0a`):** tightening the cadence is now **safe**. The sweep no longer closes a shift at the 90s reachability staleness — it acts on the new `SHIFT_ABANDON_AFTER_MS` (= `SESSION_MAX_MS`, 12h) horizon, so `*/15` runs often but only ever sweeps a *genuinely abandoned* (session-dead) agent, never a throttled-but-working one. Cadence is the promptness lever; the abandon cutoff is not. See `docs/specs/2026-07-13-shift-abandon-cron-cutoff-design.md`.
+
 ## 11. Testing
 
 TDD the pure logic before wiring (project convention):
