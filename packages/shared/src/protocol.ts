@@ -58,6 +58,26 @@ export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
 /** A close whose duration lands within this sliver of SESSION_MAX_MS is `capped`, not `lapsed`. */
 export const SHIFT_CAP_EPSILON_MS = 15 * 60 * 1000;
 
+/**
+ * How stale (since last heartbeat) an agent must be before the presence sweep
+ * cron flips her `OFFLINE` and closes her open shift — i.e. how long is
+ * "genuinely abandoned". Deliberately DISTINCT from `PRESENCE_STALE_AFTER_MS`
+ * (90s): that is the READ-TIME reachability signal (effectivePresence / audio
+ * dial / dashboards), where a briefly-throttled tab should read offline. Duty +
+ * video push, by contrast, are RAW-STATUS — an agent works heads-down in
+ * RustDesk with the portal tab throttled/frozen, so a stale heartbeat is her
+ * NORMAL working state (see lib/shifts/lifecycle.ts canDoWork + lib/push/targets).
+ * Sweeping her `OFFLINE` at 90s would end a live shift AND silence her video push.
+ *
+ * Set to SESSION_MAX_MS — the MINIMUM horizon that provably fires only after the
+ * auth session is dead: a heartbeat can't precede login, and the session dies at
+ * login + SESSION_MAX, so last_beat + SESSION_MAX >= session death. Past that she
+ * can't be a still-working stale agent (she can't answer or Connect until she
+ * re-logs-in). Cleanup PROMPTNESS is a cron-cadence lever, never a reason to
+ * shorten this (that re-opens the "ended a working agent's shift" bug).
+ */
+export const SHIFT_ABANDON_AFTER_MS = SESSION_MAX_MS;
+
 // The reaper must outlast the ring window, or a still-ringing call could be reaped
 // mid-window. TypeScript can't compare number *values* at the type level, so guard
 // at module load; protocol.test.ts pins the same invariant.
@@ -70,4 +90,11 @@ if (REAP_RINGING_AFTER_MS <= RING_WINDOW_MS) {
 // route; pinned numerically here since this module has no app imports.)
 if (MAX_CALL_DURATION_MS >= 3_600_000) {
   throw new Error("protocol: MAX_CALL_DURATION_MS must stay under the 3600s video join token TTL");
+}
+
+// The abandon horizon (when the cron ends a shift) must never be shorter than the
+// read-time reachability staleness (a throttled-but-working tab), or the cron would
+// end a live shift — the exact bug this constant exists to prevent.
+if (SHIFT_ABANDON_AFTER_MS < PRESENCE_STALE_AFTER_MS) {
+  throw new Error("protocol: SHIFT_ABANDON_AFTER_MS must not be shorter than PRESENCE_STALE_AFTER_MS");
 }

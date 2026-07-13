@@ -10,6 +10,7 @@ import {
   MAX_CALL_DURATION_MS,
   SESSION_MAX_MS,
   SHIFT_CAP_EPSILON_MS,
+  SHIFT_ABANDON_AFTER_MS,
 } from "../src/protocol";
 
 const VIDEO_TOKEN_TTL_MS = 3_600_000; // video/token mints a 3600s join token, no renewal
@@ -46,4 +47,19 @@ it("session cap is 12h and epsilon is a sane sliver under it", () => {
   expect(SESSION_MAX_MS).toBe(12 * 60 * 60 * 1000);
   expect(SHIFT_CAP_EPSILON_MS).toBeGreaterThan(0);
   expect(SHIFT_CAP_EPSILON_MS).toBeLessThan(SESSION_MAX_MS / 10);
+});
+
+describe("shift-abandon horizon (the cron's shift-close / OFFLINE-flip cutoff)", () => {
+  it("equals the 12h session cap (fires only after the session is provably dead)", () => {
+    // last_beat >= login and the session dies at login + SESSION_MAX, so
+    // last_beat + SESSION_MAX >= session death: the sweep can never catch a
+    // still-working agent. SESSION_MAX is the minimum horizon with that guarantee.
+    expect(SHIFT_ABANDON_AFTER_MS).toBe(SESSION_MAX_MS);
+  });
+
+  it("is never shorter than the read-time reachability staleness window", () => {
+    // The abandon horizon (genuinely gone) must outlast the 90s reachability
+    // staleness (a throttled-but-working tab). Same guard runs at module load.
+    expect(SHIFT_ABANDON_AFTER_MS).toBeGreaterThanOrEqual(PRESENCE_STALE_AFTER_MS);
+  });
 });

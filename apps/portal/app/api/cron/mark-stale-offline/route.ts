@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
 import { closeOpenShiftForUser } from "@/lib/shifts/store";
-import { PRESENCE_STALE_AFTER_MS } from "@lc/shared";
+import { SHIFT_ABANDON_AFTER_MS } from "@lc/shared";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(Date.now() - PRESENCE_STALE_AFTER_MS).toISOString();
+  // Cut at the ABANDON horizon (SHIFT_ABANDON_AFTER_MS = 12h), NOT the 90s
+  // reachability staleness. Duty + video push are RAW-STATUS: an agent works
+  // heads-down in RustDesk with the portal tab throttled/frozen, so a stale
+  // heartbeat is her NORMAL working state (see lib/shifts/lifecycle canDoWork +
+  // lib/push/targets). Sweeping her OFFLINE at 90s would end a live shift AND
+  // silence her video push. Read-time reachability (effectivePresence / audio
+  // dial / dashboards) already owns the short horizon; this sweep only cleans up
+  // an agent who is provably gone (stale past the 12h session cap). The cron
+  // CADENCE is the promptness lever — never shorten this cutoff (task_71d65b0a).
+  const cutoff = new Date(Date.now() - SHIFT_ABANDON_AFTER_MS).toISOString();
   const admin = createAdminClient();
   // Return the swept rows so we can close each one's open shift at its OWN last
   // heartbeat (spec D9: ended_at = last_seen_at, never "now") — the reliability
