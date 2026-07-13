@@ -4,9 +4,27 @@ import { classifyShiftEnd } from "@/lib/shifts/lifecycle";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-/** Open a shift iff none is open. The partial unique index makes a race a 23505
- *  we deliberately swallow (a shift is already open — the desired end state). */
-export async function openShift(admin: Admin, userId: string, operatorId: string): Promise<void> {
+/** Open a FRESH shift (close-then-insert, the assignments temporal-row pattern).
+ *  A shift can still be open when go-on-duty fires — a machine that slept or a
+ *  tab closed with no final beat leaves it open until the cron reconciles it. If
+ *  we just INSERTed, that would hit `shifts_one_open` (23505) and — with the
+ *  swallow below — the agent would silently re-enter the OLD shift, merging the
+ *  entire off-duty gap into clocked time. So first close any lingering open shift
+ *  at the agent's REAL last activity (`priorLastSeenIso`, captured before
+ *  go-on-duty overwrote last_seen_at), then insert. A residual 23505 (a genuine
+ *  concurrent go-on-duty) is still the desired end state, so stays swallowed. */
+export async function openShift(
+  admin: Admin,
+  userId: string,
+  operatorId: string,
+  priorLastSeenIso: string | null,
+): Promise<void> {
+  await closeOpenShiftForUser(
+    admin,
+    userId,
+    priorLastSeenIso ?? new Date().toISOString(),
+    "auto",
+  );
   const { error } = await admin
     .from("shifts")
     .insert({ user_id: userId, operator_id: operatorId });

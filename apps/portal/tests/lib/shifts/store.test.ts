@@ -80,7 +80,7 @@ beforeEach(() => {
 describe("openShift", () => {
   it("inserts a shift for the user+operator", async () => {
     const { admin, insertSpy } = mockAdmin({});
-    await openShift(admin, USER_ID, OPERATOR_ID);
+    await openShift(admin, USER_ID, OPERATOR_ID, null);
     expect(insertSpy).toHaveBeenCalledWith("shifts", {
       user_id: USER_ID,
       operator_id: OPERATOR_ID,
@@ -91,7 +91,7 @@ describe("openShift", () => {
     const { admin } = mockAdmin({
       insert: { shifts: { error: { code: "23505" } } },
     });
-    await expect(openShift(admin, USER_ID, OPERATOR_ID)).resolves.toBeUndefined();
+    await expect(openShift(admin, USER_ID, OPERATOR_ID, null)).resolves.toBeUndefined();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
@@ -99,8 +99,32 @@ describe("openShift", () => {
     const { admin } = mockAdmin({
       insert: { shifts: { error: { code: "500", message: "boom" } } },
     });
-    await expect(openShift(admin, USER_ID, OPERATOR_ID)).resolves.toBeUndefined();
+    await expect(openShift(admin, USER_ID, OPERATOR_ID, null)).resolves.toBeUndefined();
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it("closes a stale-open shift at the prior last activity BEFORE inserting a fresh one", async () => {
+    // Regression (whole-branch review): a machine that slept / tabs closed with
+    // no final beat leaves a shift open. Go on duty must close-then-insert, not
+    // re-enter the old shift (which would merge the off-duty gap into clocked time).
+    const started = "2026-07-12T00:00:00.000Z";
+    const priorLastSeen = "2026-07-12T02:00:00.000Z";
+    const { admin, insertSpy, updateSpy } = mockAdmin({
+      select: { shifts: { id: "old-shift", started_at: started } },
+    });
+
+    await openShift(admin, USER_ID, OPERATOR_ID, priorLastSeen);
+
+    // The lingering shift is closed at the agent's REAL last activity, not now.
+    expect(updateSpy).toHaveBeenCalledWith("shifts", {
+      ended_at: priorLastSeen,
+      ended_reason: "lapsed",
+    });
+    // ...then a fresh shift is inserted.
+    expect(insertSpy).toHaveBeenCalledWith("shifts", {
+      user_id: USER_ID,
+      operator_id: OPERATOR_ID,
+    });
   });
 });
 

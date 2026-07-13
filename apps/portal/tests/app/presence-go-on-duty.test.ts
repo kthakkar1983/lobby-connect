@@ -36,6 +36,13 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       if (table === "shifts") {
         return {
+          // openShift now close-then-inserts: it looks up an existing open shift
+          // first. Default = none open, so the close no-ops and the insert runs.
+          select: () => ({
+            eq: () => ({
+              is: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }),
+            }),
+          }),
           insert: (v: unknown) => {
             shiftInsertSpy(v);
             callOrder.push("shifts.insert");
