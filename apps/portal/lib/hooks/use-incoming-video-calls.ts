@@ -14,6 +14,7 @@ import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { INCOMING_VIDEO_FALLBACK_POLL_MS } from "@lc/shared";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { operatorCallsChannelTopic, CALLS_CHANGED_EVENT } from "@/lib/realtime/calls-channel";
+import { DUTY_ACTIVATED_EVENT } from "@/lib/duty/duty-events";
 
 export interface IncomingVideoCall {
   id: string;
@@ -96,11 +97,16 @@ export function useIncomingVideoCalls(
     const pollId = setInterval(tick, INCOMING_VIDEO_FALLBACK_POLL_MS);
     const onFocus = () => void tick();
     window.addEventListener("focus", onFocus);
+    // Resume-from-break / go-on-duty nudge: the poll returned [] while she was
+    // silenced, and no new broadcast fires when she comes back, so re-fetch NOW
+    // to surface a call that's already ringing. See lib/duty/duty-events.ts.
+    window.addEventListener(DUTY_ACTIVATED_EVENT, onFocus);
 
     return () => {
       clearInterval(pollId);
       if (resubscribeTimer) clearTimeout(resubscribeTimer);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener(DUTY_ACTIVATED_EVENT, onFocus);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [operatorId, tick]);

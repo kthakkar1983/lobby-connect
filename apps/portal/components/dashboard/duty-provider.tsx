@@ -17,6 +17,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { armPush } from "@/lib/push/client";
+import { DUTY_ACTIVATED_EVENT } from "@/lib/duty/duty-events";
+
+/** Nudge the incoming-video poll to re-fetch immediately (a call ringing while
+ *  she was silenced won't re-surface on its own). See lib/duty/duty-events.ts. */
+function nudgeIncomingVideo(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DUTY_ACTIVATED_EVENT));
+}
 
 type DutyState = {
   onDuty: boolean;
@@ -156,6 +163,7 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
       /* ignore */
     }
     beatRef.current?.();
+    nudgeIncomingVideo(); // surface a call already ringing when she clocks in
   }, []);
 
   const endShift = useCallback(async () => {
@@ -174,6 +182,8 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
     setOnBreak(false);
     await fetch("/api/presence/resume", { method: "POST" }).catch(() => {});
     beatRef.current?.();
+    // Server is now AVAILABLE again → surface a call that rang during the break.
+    nudgeIncomingVideo();
   }, []);
 
   const canWork = onDuty && !onBreak;

@@ -22,6 +22,7 @@ vi.mock("@/lib/push/client", () => ({
 }));
 
 import { DutyProvider, useDuty, useDutyOptional } from "@/components/dashboard/duty-provider";
+import { DUTY_ACTIVATED_EVENT } from "@/lib/duty/duty-events";
 
 describe("DutyProvider", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -119,6 +120,37 @@ describe("DutyProvider", () => {
     });
     expect(result.current.onBreak).toBe(false);
     expect(postsTo("/api/presence/resume")).toHaveLength(1);
+  });
+
+  it("resume dispatches the duty-activated nudge (a call ringing during the break re-surfaces immediately)", async () => {
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(true));
+    const onActive = vi.fn();
+    window.addEventListener(DUTY_ACTIVATED_EVENT, onActive);
+
+    await act(async () => {
+      await result.current.takeBreak();
+    });
+    await act(async () => {
+      await result.current.resume();
+    });
+
+    expect(onActive).toHaveBeenCalled();
+    window.removeEventListener(DUTY_ACTIVATED_EVENT, onActive);
+  });
+
+  it("goOnDuty dispatches the duty-activated nudge (a call ringing at clock-in re-surfaces immediately)", async () => {
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(true));
+    const onActive = vi.fn();
+    window.addEventListener(DUTY_ACTIVATED_EVENT, onActive);
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(onActive).toHaveBeenCalled();
+    window.removeEventListener(DUTY_ACTIVATED_EVENT, onActive);
   });
 
   it("canWork is onDuty && !onBreak", async () => {
