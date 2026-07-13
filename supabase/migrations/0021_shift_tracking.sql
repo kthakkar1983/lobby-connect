@@ -42,8 +42,10 @@ create table if not exists shift_breaks (
 );
 create unique index if not exists shift_breaks_one_open
   on shift_breaks (shift_id) where ended_at is null;
--- General FK-covering index for full-history/cascade lookups (the partial index
--- above only covers in-progress breaks); the timesheet reads all breaks per shift.
+-- General FK-covering index for cascade deletes + any future full-history read
+-- (the partial index above only covers in-progress breaks). NOTE: the v1
+-- timesheet does not yet read shift_breaks (break time is a spec-deferred column);
+-- this index anticipates that read and the ON DELETE CASCADE from shifts.
 create index if not exists shift_breaks_shift
   on shift_breaks (shift_id);
 
