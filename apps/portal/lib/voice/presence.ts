@@ -29,20 +29,6 @@ export function effectivePresence(
 }
 
 /**
- * D13: is this agent's SHIFT live right now? Built on effectivePresence, so a
- * shift is over when explicitly ended (raw OFFLINE), swept, or lapsed past
- * PRESENCE_STALE_AFTER_MS. The heartbeat route refuses to refresh a non-live
- * shift; POST /api/presence/go-on-duty is the only way back in.
- */
-export function isLiveShift(
-  status: string,
-  lastSeenAt: string | null,
-  nowMs: number,
-): boolean {
-  return effectivePresence(status, lastSeenAt, nowMs) !== "OFFLINE";
-}
-
-/**
  * Reachable for an outbound `<Dial>` leg = heartbeat fresh AND status is "online"
  * (AVAILABLE or ON_CALL) — i.e. the same definition the dashboard uses for an online
  * agent (see countOnlineAgents). Built on effectivePresence, so a stale heartbeat

@@ -104,7 +104,17 @@ export function VideoCall({
       try {
         const ans = await fetch(`/api/calls/${callId}/answer-video`, { method: "POST" });
         if (cancelled) return;
-        if (!ans.ok) return onClose();
+        if (!ans.ok) {
+          // A rejection here (duty-gate 403, claim race 409, etc.) used to close
+          // silently — which is exactly what made the stale-heartbeat 403 bug
+          // invisible. The root cause is fixed (duty is raw-status now), but a
+          // future regression must never be silent: capture it before closing.
+          Sentry.captureMessage("video answer rejected", {
+            level: "warning",
+            extra: { callId, status: ans.status },
+          });
+          return onClose();
+        }
         const { channelName } = (await ans.json()) as { channelName: string };
 
         // Legacy wire param — the token route still validates uid; LiveKit ignores it.

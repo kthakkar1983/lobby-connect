@@ -224,24 +224,27 @@ describe("D13 duty gate (spec §3.4)", () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   });
 
-  it("an allowed beat refreshes via a CONDITIONAL update (neq OFFLINE + gte cutoff)", async () => {
+  it("an allowed beat refreshes any non-OFFLINE row — neq OFFLINE, NO staleness guard", async () => {
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(204);
     // updateFilters[0] is the BREAK-preservation check (runs first, no match by
-    // default — see the "BREAK preservation" describe block below).
-    expect(updateFilters[1]).toEqual(["eq", "neq", "gte"]);
+    // default). [1] = the general refresh: `neq OFFLINE` only, with NO `.gte`
+    // staleness guard — a stale-but-live shift is refreshed (a beat proves the
+    // browser is alive; a throttled tab is normal working state). This filter
+    // shape IS the regression guard: re-adding `.gte` re-breaks the pushed-video
+    // answer 403.
+    expect(updateFilters[1]).toEqual(["eq", "neq"]);
   });
 
-  it("a gated beat writes nothing live, persists the lapse, returns onDuty:false", async () => {
-    refreshedRows = []; // the conditional update matched 0 rows — shift is over
+  it("a beat matching 0 rows means the shift is OFFLINE/over → onDuty:false, NO lapse-persist write", async () => {
+    refreshedRows = []; // the conditional refresh matched 0 rows — status is OFFLINE
     const res = await POST(req({ status: "AVAILABLE" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ onDuty: false });
-    // Calls: [0] BREAK-preservation check (no match), [1] general refresh (0
-    // rows), [2] lapse-persist: SET status=OFFLINE only, staleness re-checked (.lt).
-    expect(updateSpy).toHaveBeenCalledTimes(3);
-    expect(updateSpy.mock.calls[2]?.[0]).toEqual({ status: "OFFLINE" });
-    expect(updateFilters[2]).toEqual(["eq", "neq", "lt"]);
+    // Calls: [0] BREAK-preservation check (no match), [1] the general refresh (0
+    // rows). There is NO third lapse-persist write — a stale heartbeat no longer
+    // ends a shift; only End shift / the daily cron / the 12h cap do.
+    expect(updateSpy).toHaveBeenCalledTimes(2);
   });
 
   it("AWAY beats are gated identically", async () => {
@@ -258,7 +261,7 @@ describe("D13 duty gate (spec §3.4)", () => {
     const res = await POST(req({ status: "ON_CALL" }));
     expect(res.status).toBe(204);
     expect(updateSpy).toHaveBeenCalledTimes(2);
-    expect(updateFilters[0]).toEqual(["eq", "eq", "gte"]); // BREAK-preservation guard
+    expect(updateFilters[0]).toEqual(["eq", "eq"]); // BREAK-preservation guard (no staleness guard)
     expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
     expect(updateFilters[1]).toEqual(["eq"]); // unconditional ON_CALL write
     expect(updateSpy.mock.calls[1]?.[0]).toEqual(
@@ -297,7 +300,7 @@ describe("BREAK preservation (quality-review follow-up to Task 9)", () => {
     // fired, or it would have clobbered BREAK back to AVAILABLE.
     expect(updateSpy).toHaveBeenCalledTimes(1);
     expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
-    expect(updateFilters[0]).toEqual(["eq", "eq", "gte"]);
+    expect(updateFilters[0]).toEqual(["eq", "eq"]); // status=BREAK match, NO staleness guard
   });
 
   it("an AWAY beat does not clobber a fresh BREAK row — preserves BREAK, 204", async () => {
@@ -307,12 +310,18 @@ describe("BREAK preservation (quality-review follow-up to Task 9)", () => {
     expect(updateSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("a stale BREAK row is not preserved — falls through to the normal gate", async () => {
-    breakPreserveRows = []; // the .gte cutoff excludes a stale BREAK row
-    refreshedRows = []; // the general refresh also gates (shift is over)
+  it("a BREAK row is preserved regardless of heartbeat age — no staleness guard keeps the break alive", async () => {
+    // With the staleness guard dropped, a beat during a break KEEPS the break
+    // (refreshes last_seen, never flips to AVAILABLE) whether the heartbeat is
+    // fresh or stale. A break ends only via Resume / End shift / the cron sweep —
+    // never by a lapsed beat (which previously silently flipped BREAK→OFFLINE and
+    // could leak the open shift_breaks row).
+    breakPreserveRows = [{ id: "u1" }]; // BREAK matches on status alone
     const res = await POST(req({ status: "AVAILABLE" }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ onDuty: false });
+    expect(res.status).toBe(204);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]?.[0]).toEqual({ last_seen_at: expect.any(String) });
+    expect(updateFilters[0]).toEqual(["eq", "eq"]);
   });
 
   it("a fresh BREAK row is preserved even when a live video call would upgrade to ON_CALL (finding #1)", async () => {
@@ -397,18 +406,23 @@ describe("GET /api/presence (D13 hydration)", () => {
     expect(shiftsSelectSpy).not.toHaveBeenCalled();
   });
 
-  it("lapsed shift (stale AVAILABLE) → off duty, no shift lookup", async () => {
+  it("stale AVAILABLE → STILL on duty (raw-status duty: a throttled tab is normal working state, not off-duty)", async () => {
+    // Regression: hydration used to collapse a stale heartbeat to off-duty, which
+    // (with the answer gate) flipped a heads-down agent OFF duty the moment her
+    // tab foregrounded to answer a pushed call. Duty is now raw-status — only an
+    // explicit OFFLINE is off duty — so a stale AVAILABLE agent hydrates on-duty
+    // and the shift lookup runs.
     dutyRow = {
       status: "AVAILABLE",
       last_seen_at: new Date(Date.now() - 120_000).toISOString(),
     };
     expect(await (await GET()).json()).toEqual({
-      onDuty: false,
+      onDuty: true,
       accepting: true,
       onBreak: false,
-      shiftStartedAt: null,
+      shiftStartedAt: "2026-07-12T00:00:00.000Z",
     });
-    expect(shiftsSelectSpy).not.toHaveBeenCalled();
+    expect(shiftsSelectSpy).toHaveBeenCalled();
   });
 
   it("missing row → off duty, accepting true", async () => {

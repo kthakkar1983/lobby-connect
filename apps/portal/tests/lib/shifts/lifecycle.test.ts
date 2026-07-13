@@ -21,15 +21,14 @@ describe("classifyShiftEnd", () => {
 });
 
 describe("canDoWork", () => {
-  const now = 1_000_000_000_000;
-  const fresh = iso(now - 10_000);
-  it("AVAILABLE fresh -> true", () => expect(canDoWork("AVAILABLE", fresh, now)).toBe(true));
-  it("AWAY fresh -> true (heads-down remote work allowed)", () => expect(canDoWork("AWAY", fresh, now)).toBe(true));
-  it("ON_CALL fresh -> true", () => expect(canDoWork("ON_CALL", fresh, now)).toBe(true));
-  it("BREAK fresh -> false (not working on break)", () => expect(canDoWork("BREAK", fresh, now)).toBe(false));
-  it("OFFLINE -> false", () => expect(canDoWork("OFFLINE", fresh, now)).toBe(false));
-  it("stale AVAILABLE -> false (shift lapsed)", () =>
-    expect(canDoWork("AVAILABLE", iso(now - 5 * 60_000), now)).toBe(false));
+  // Duty is raw-status: canDoWork no longer takes last_seen/now. A stale
+  // heartbeat (throttled portal tab behind foregrounded RustDesk) is the normal
+  // working posture and must still be allowed to work — only OFFLINE/BREAK block.
+  it("AVAILABLE -> true", () => expect(canDoWork("AVAILABLE")).toBe(true));
+  it("AWAY -> true (heads-down remote work allowed)", () => expect(canDoWork("AWAY")).toBe(true));
+  it("ON_CALL -> true", () => expect(canDoWork("ON_CALL")).toBe(true));
+  it("BREAK -> false (not working on break)", () => expect(canDoWork("BREAK")).toBe(false));
+  it("OFFLINE -> false (off duty)", () => expect(canDoWork("OFFLINE")).toBe(false));
 });
 
 describe("computeClockedSeconds", () => {

@@ -1,5 +1,4 @@
 import { PRESENCE_STALE_AFTER_MS, SHIFT_CAP_EPSILON_MS, type ShiftEndedReason } from "@lc/shared";
-import { isLiveShift } from "@/lib/voice/presence";
 
 /**
  * A non-manual close near the session cap is `capped`; otherwise `lapsed`.
@@ -25,10 +24,24 @@ export function classifyShiftEnd(
   return dur >= capMs - SHIFT_CAP_EPSILON_MS ? "capped" : "lapsed";
 }
 
-/** The hard-gate predicate: on a live shift AND not on break. AWAY (heads-down
- *  remote work) is allowed; only BREAK and a lapsed/OFFLINE shift block work. */
-export function canDoWork(status: string, lastSeenAt: string | null, nowMs: number): boolean {
-  return isLiveShift(status, lastSeenAt, nowMs) && status !== "BREAK";
+/**
+ * The hard-gate predicate: may this agent do work right now?
+ *
+ * Duty/shift-liveness is RAW-STATUS — deliberately NOT staleness-based. In this
+ * product an agent works heads-down in the RustDesk client with the portal tab
+ * throttled/frozen, so a stale portal heartbeat is the NORMAL working state, not
+ * a signal she's gone (the ring + Web Push paths already treat her as present —
+ * see lib/push/targets.ts). Gating work on staleness silently 403'd a genuinely
+ * on-duty agent answering a pushed video call (and blocked her RustDesk Connect).
+ * So only an explicit OFFLINE (off duty — never clocked in, ended, or cron-swept)
+ * or BREAK blocks work; AVAILABLE/AWAY/ON_CALL all pass.
+ *
+ * Reachability/online-display and the outbound audio dial keep their staleness
+ * test (effectivePresence / isReachableForDial): a frozen tab genuinely can't
+ * take a Twilio leg, so that asymmetry is intentional.
+ */
+export function canDoWork(status: string): boolean {
+  return status !== "OFFLINE" && status !== "BREAK";
 }
 
 /** Clocked seconds for a shift. An open-but-stale shift uses its last heartbeat

@@ -25,15 +25,28 @@ const USER_ID = "user-1";
 const NOW = Date.parse("2026-07-12T10:00:00.000Z");
 
 describe("requireOnDuty", () => {
-  it("passes when AVAILABLE + fresh", async () => {
-    // requireOnDuty stamps freshness against the real Date.now(), so anchor the
-    // "fresh" heartbeat to the real clock (a fixed past ISO would read as stale).
+  it("passes when AVAILABLE", async () => {
     const admin = mockAdmin({
       data: { status: "AVAILABLE", last_seen_at: new Date(Date.now() - 10_000).toISOString() },
       error: null,
     });
-    const result = await requireOnDuty(admin, USER_ID);
-    expect(result).toBeNull();
+    expect(await requireOnDuty(admin, USER_ID)).toBeNull();
+  });
+
+  it("passes when AVAILABLE but the heartbeat is STALE — a throttled portal tab is normal working state, not off-duty (regression: the pushed-video answer 403)", async () => {
+    const admin = mockAdmin({
+      data: { status: "AVAILABLE", last_seen_at: new Date(Date.now() - 10 * 60_000).toISOString() },
+      error: null,
+    });
+    expect(await requireOnDuty(admin, USER_ID)).toBeNull();
+  });
+
+  it("passes when ON_CALL (even with a stale heartbeat)", async () => {
+    const admin = mockAdmin({
+      data: { status: "ON_CALL", last_seen_at: new Date(Date.now() - 10 * 60_000).toISOString() },
+      error: null,
+    });
+    expect(await requireOnDuty(admin, USER_ID)).toBeNull();
   });
 
   it("403s when OFFLINE", async () => {
