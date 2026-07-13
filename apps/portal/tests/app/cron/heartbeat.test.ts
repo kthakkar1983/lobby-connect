@@ -14,6 +14,12 @@ vi.mock("@/lib/supabase/admin", () => ({
           }),
         };
       }
+      if (table === "shifts") {
+        // The max-shift-cap scan runs in the same cron; no over-cap shifts here.
+        return {
+          select: () => ({ is: () => ({ lt: () => Promise.resolve({ data: [], error: null }) }) }),
+        };
+      }
       if (table === "operators") {
         return { select: () => Promise.resolve({ data: [{ id: "op1" }], error: null }) };
       }
