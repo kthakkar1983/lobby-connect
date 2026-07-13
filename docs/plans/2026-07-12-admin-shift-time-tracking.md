@@ -1232,31 +1232,17 @@ git commit -m "feat(shifts): admin edit/delete/add shift actions (audited) + edi
 
 *Ships: shifts close promptly and the 12h cap is live. Mostly config; one code change.*
 
-### Task 21: Tighten the presence sweep cadence (box)
+### Task 21: Deploy-time ops (cron cadence + session time-box) — NO code change
 
-**Files:**
-- Modify: `packages/shared/src/protocol.ts` (`CRON_SWEEP_INTERVAL_MS`)
-- Modify: `apps/portal/vercel.json` (schedule — for the frozen standby's parity only) / Coolify `lc-ops` cron (the live one)
+**DECISION (2026-07-12, during execution): do NOT change `CRON_SWEEP_INTERVAL_MS`.** Investigation found it is used in exactly two places — `lib/status/signals.ts` (the `/admin/status` warn/down thresholds) and `protocol.test.ts` — and the presence cron's *behavior* uses `PRESENCE_STALE_AFTER_MS` (90s), NOT this constant. So the constant purely tunes `/status` observability. Tightening it to 15 min would break the box's `/status` unless the Coolify cron changes in the same breath, would make the **frozen Vercel standby's** `/status` show the presence cron degraded (its `vercel.json` cron stays daily, and Vercel Hobby cannot even schedule `*/15` — it errors the deploy), and needs test churn — all to buy marginally-tighter observability. The actual goal (shifts close promptly) is met by the **ops cron-cadence change alone**: with the Coolify presence cron at `*/15`, lapsed/capped shifts close within 15 min, and `/status` stays green under the lenient 24h-derived thresholds. `computeClockedSeconds` already gives accurate durations for still-open-stale shifts at read time, so the cron cadence only affects how fast a row's badge flips from "On shift" to a closed reason.
 
-Context: we're on the box (Coolify), not Vercel Hobby, so the daily-cap no longer applies. The presence sweep should run ~every 15 min so lapsed/capped shifts close promptly. `computeClockedSeconds` already gives accurate durations for still-open-stale shifts at read time, so this only affects how fast a row flips to "closed."
+There is therefore **no code to write or commit for Task 21** — it is three deploy-time ops steps, coordinated with the migration + env exactly like the 2026-07-09 cutover (0019/0020 applied via MCP). Do these when the branch merges to `main` (which Coolify auto-deploys to the box):
 
-- [ ] **Step 1: Update the constant** to reflect a 15-min sweep and its comment:
-```ts
-export const CRON_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
-```
-Check the two module-load guards still hold and `protocol.test.ts` passes (this constant has no guard against it; if `/admin/status` thresholds derive from it, sanity-check that page).
+- [ ] **Deploy step A — apply migration `0021` to prod Supabase** via the Supabase MCP (same flow as 0018→0020 at cutover). Prod goes from 0020 → 0021 (shifts + shift_breaks tables, BREAK status, RLS).
+- [ ] **Deploy step B — set the Coolify `lc-ops` presence cron** (`/api/cron/mark-stale-offline`) to `*/15 * * * *` (the reaper is already `*/15`). This closes lapsed/capped shifts within 15 min. No code change needed; `/status` thresholds stay lenient and green. Record in `docs/setup/2026-07-02-box-ops-runbook.md`.
+- [ ] **Deploy step C — set the 12h session time-box** in Supabase Dashboard → Auth → Sessions → "Time-box user sessions" = 12h (43200s) on **prod**. This is what auto-signs-out (and thereby auto-clocks-out) a forgotten-open browser at the 12h cap. Record in `docs/setup/2026-07-03-accounts-credentials-inventory.md` + the runbook. Verify a >12h session is rejected on its next request.
 
-- [ ] **Step 2: Set the Coolify `lc-ops` presence cron to `*/15 * * * *`** (ops step; document in `docs/setup/2026-07-02-box-ops-runbook.md`). The reaper is already `*/15`.
-
-- [ ] **Step 3: Run** `pnpm --filter @lc/shared test` + a quick check of `/admin/status`.
-
-- [ ] **Step 4: Commit**
-```bash
-git add packages/shared/src/protocol.ts apps/portal/vercel.json
-git commit -m "feat(shifts): tighten presence sweep to 15m on the box (prompt shift close)"
-```
-
-- [ ] **Step 5 (ops, no commit): Set the 12h session time-box** in Supabase Dashboard → Auth → Sessions → "Time-box user sessions" = 12h (43200s) on the **prod** project. Record it in `docs/setup/2026-07-03-accounts-credentials-inventory.md` and the runbook. Verify: a session older than 12h is rejected on the next request. This is what auto-clocks-out a forgotten-open browser.
+**Deferred (optional, later):** if tighter presence-cron observability is wanted, `CRON_SWEEP_INTERVAL_MS` can be lowered — but only once the frozen Vercel standby is decommissioned (so its Hobby-capped daily `vercel.json` cron no longer clashes with a sub-daily threshold). Not worth doing while the standby lives.
 
 ---
 
