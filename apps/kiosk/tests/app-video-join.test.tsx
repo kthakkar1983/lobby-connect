@@ -78,6 +78,7 @@ function fakeSession(): KioskVideoSession {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     localAudioTrack: { enabled: true } as any,
     leave: vi.fn(async () => {}),
+    sendData: vi.fn(),
   };
 }
 

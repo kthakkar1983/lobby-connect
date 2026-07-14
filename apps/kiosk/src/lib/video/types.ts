@@ -22,6 +22,7 @@ export interface KioskVideoSession {
   localVideo: VideoTrackHandle;
   localAudioTrack: MediaStreamTrack;
   leave(): Promise<void>;
+  sendData(bytes: Uint8Array, reliable: boolean): void; // chat data channel (in-call kiosk<->agent chat)
 }
 
 export interface JoinCallbacks {
@@ -29,4 +30,6 @@ export interface JoinCallbacks {
   onAgentJoined(): void;
   onAgentLeft(): void;
   onConnectionStateChange(current: string, previous: string, reason?: string): void;
+  /** Inbound data-channel payload (chat). fromIdentity is the LiveKit participant identity ("kiosk" or "agent-<id>"). */
+  onData?(bytes: Uint8Array, fromIdentity: string): void;
 }
