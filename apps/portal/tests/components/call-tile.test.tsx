@@ -561,37 +561,17 @@ describe("CallTile", () => {
     expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeNull();
   });
 
-  // Smoke fix: the agent lives heads-down in RustDesk with the tile as a small
-  // always-on-top PiP, so "on the Chat face" does NOT mean she's watching it.
-  // Every inbound guest line must chime — even one that arrives while the Chat
-  // face is already open (the badge stays gated to the video face; the SOUND is
-  // not). Isolates the chime <audio> so guest-video track plays don't pollute.
-  it("chimes on EVERY inbound guest line, including while the Chat face is already open", async () => {
-    const controls = makeControls({
-      triggerEmergency: undefined,
-      sendChat: vi.fn(),
-      sendTyping: vi.fn(),
-    });
+  // The inbound-chat CHIME moved to the CallSurfaceProvider (main window) — the
+  // tile's DocPiP document is autoplay-locked, so a tile-owned chime was silent
+  // for the first guest message. The tile must therefore NOT carry its own chime
+  // <audio> (that would double-play once the PiP unlocks). See the chime test in
+  // call-surface-provider.test.tsx.
+  it("does not render its own chime audio (chime lives in the provider now)", async () => {
+    const controls = makeControls({ triggerEmergency: undefined, sendChat: vi.fn(), sendTyping: vi.fn() });
     const { pipDoc } = renderTile({ active: videoActive, controls });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
     await openTile();
-
-    const tile = within(pipDoc.body);
-    const chime = pipDoc.querySelector('audio[src*="chat-message"]') as HTMLAudioElement;
-    expect(chime).toBeTruthy();
-    const chimePlay = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(chime, "play", { configurable: true, value: chimePlay });
-
-    // First guest line on the video face → chime.
-    await act(async () => screen.getByText("publish guest chat").click());
-    expect(chimePlay).toHaveBeenCalledTimes(1);
-
-    // Switch to the Chat face, then a second guest line arrives while it's open.
-    await act(async () => {
-      (tile.getByText("Chat").closest("button") as HTMLButtonElement).click();
-    });
-    await act(async () => screen.getByText("publish guest chat").click());
-    expect(chimePlay).toHaveBeenCalledTimes(2); // still chimes — she may be in RustDesk
+    expect(pipDoc.querySelector('audio[src*="chat-message"]')).toBeNull();
   });
 });

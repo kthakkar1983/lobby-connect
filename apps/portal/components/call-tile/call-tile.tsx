@@ -135,19 +135,16 @@ export function CallTile(): React.JSX.Element | null {
   );
   const [chatMode, setChatMode] = useState<"video" | "chat">("video");
   const [chatUnread, setChatUnread] = useState(false);
-  const chimeRef = useRef<HTMLAudioElement>(null);
   // Seed sentinel: undefined = not yet initialised (so lines already present
-  // when the tile (re)mounts mid-call don't replay a chime). Reset per call
+  // when the tile (re)mounts mid-call don't re-arm the badge). Reset per call
   // via the [active?.callId] effect above.
   const lastChatIdRef = useRef<string | null | undefined>(undefined);
 
-  // Inbound-guest-line detection. The chime fires on EVERY genuinely-new guest
-  // line — including while the Chat face is already open. The agent's foreground
-  // app is RustDesk and this tile is a small always-on-top PiP, so "on the Chat
-  // face" does NOT mean she's watching it; the sound is her only reliable alert.
-  // The unread badge stays gated to the video face (no point badging the face
-  // she's already reading). currentTime reset makes the short clip re-trigger
-  // even if two lines land close together.
+  // Inbound-guest-line detection → unread badge only. The CHIME lives in the
+  // CallSurfaceProvider (main window), not here: this tile is a DocPiP whose
+  // document is autoplay-locked until it gets its own gesture, so a tile-owned
+  // chime was silent for the first guest message. The badge stays gated to the
+  // video face — no point badging the chat face she's already reading.
   useEffect(() => {
     const last = chat.lines[chat.lines.length - 1];
     const lastId = last?.id ?? null;
@@ -157,13 +154,8 @@ export function CallTile(): React.JSX.Element | null {
     }
     if (lastId === lastChatIdRef.current) return;
     lastChatIdRef.current = lastId;
-    if (last && last.from === "guest") {
-      const el = chimeRef.current;
-      if (el) {
-        el.currentTime = 0;
-        void el.play().catch(() => {});
-      }
-      if (chatMode !== "chat") setChatUnread(true);
+    if (last && last.from === "guest" && chatMode !== "chat") {
+      setChatUnread(true);
     }
   }, [chat.lines, chatMode]);
 
@@ -341,9 +333,6 @@ export function CallTile(): React.JSX.Element | null {
           </button>
         </div>
       )}
-      {/* Inbound-chat chime (Task 9) — hidden; played imperatively from the
-          detection effect above, never autoplayed. */}
-      <audio ref={chimeRef} src="/sounds/chat-message.mp3" preload="auto" className="hidden" />
     </div>
   );
 }

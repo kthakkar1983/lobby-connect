@@ -214,10 +214,28 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // sees a change; setPeerTyping no-ops when unchanged to keep identity stable.
   const chatStoreRef = useRef<ChatSnapshot>({ lines: [], peerTyping: false });
   const chatListenersRef = useRef<Set<() => void>>(new Set());
+  // Inbound-chat chime element. It lives HERE in the MAIN window (see the JSX
+  // below), NOT in the tile — the tile is a DocPiP whose document is autoplay-
+  // locked until it gets its own gesture, so the tile-owned chime stayed silent
+  // for the FIRST guest message (prod smoke 2026-07-14). The main document is
+  // already unlocked by the agent's Answer click and plays even backgrounded,
+  // exactly like the Twilio ring.
+  const chatChimeRef = useRef<HTMLAudioElement>(null);
   const appendChatLine = useCallback((line: ChatLine) => {
     const prev = chatStoreRef.current;
     chatStoreRef.current = { lines: [...prev.lines, line], peerTyping: prev.peerTyping };
     for (const cb of chatListenersRef.current) cb();
+    // Chime on every genuinely-inbound guest line (never the agent's own echo).
+    // appendChatLine is called once per received message, so no seed/dedup is
+    // needed here; the tile keeps ONLY the unread-badge, gated to its video face.
+    if (line.from === "guest") {
+      const el = chatChimeRef.current;
+      if (el) {
+        el.currentTime = 0;
+        const p = el.play();
+        if (p) void p.catch(() => {}); // guard: jsdom's play() returns undefined
+      }
+    }
   }, []);
   const setPeerTyping = useCallback((typing: boolean) => {
     const prev = chatStoreRef.current;
@@ -508,6 +526,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   return (
     <CallSurfaceContext.Provider value={value}>
       {children}
+      {/* Inbound-chat chime — MAIN window (autoplay-unlocked), played imperatively
+          from appendChatLine so the first guest message is audible even before
+          the agent has touched the DocPiP tile. */}
+      <audio ref={chatChimeRef} src="/sounds/chat-message.mp3" preload="auto" className="hidden" aria-hidden />
       {tileMount ? createPortal(<CallTile />, tileMount) : null}
     </CallSurfaceContext.Provider>
   );
