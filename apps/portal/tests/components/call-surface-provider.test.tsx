@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 
 const { fetchRemoteCredentials, launchRustdesk } = vi.hoisted(() => ({
   fetchRemoteCredentials: vi.fn(),
@@ -28,6 +28,12 @@ beforeEach(() => {
   launchRustdesk.mockReset();
   // Default: nothing configured — individual tests override.
   fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: true });
+  // jsdom doesn't implement HTMLMediaElement.play(); the provider's chat chime
+  // calls it on every inbound guest line — stub it so those tests stay pristine.
+  Object.defineProperty(HTMLMediaElement.prototype, "play", {
+    configurable: true,
+    value: vi.fn().mockResolvedValue(undefined),
+  });
 });
 
 const videoRing: IncomingRing = {
@@ -90,9 +96,60 @@ function Consumer() {
   );
 }
 
+/** Appends chat lines through the context so the provider's chime can be exercised. */
+function ChatAppender() {
+  const { appendChatLine } = useCallSurface();
+  const n = useRef(0);
+  return (
+    <div>
+      <button
+        onClick={() => {
+          n.current += 1;
+          appendChatLine({ id: `g-${n.current}`, from: "guest", text: "hi", ts: n.current });
+        }}
+      >
+        append guest
+      </button>
+      <button
+        onClick={() => {
+          n.current += 1;
+          appendChatLine({ id: `a-${n.current}`, from: "agent", text: "hello", ts: n.current });
+        }}
+      >
+        append agent
+      </button>
+    </div>
+  );
+}
+
 let acceptVideoSpy: (callId: string) => void;
 
 describe("CallSurfaceProvider", () => {
+  // The inbound-chat chime plays from the MAIN window document, NOT the tile's
+  // DocPiP: the PiP document is autoplay-locked until it gets its own gesture,
+  // so the FIRST guest message was silent (prod smoke 2026-07-14). The main
+  // document is already unlocked by the agent's Answer click and plays even
+  // while backgrounded (like the Twilio ring).
+  it("plays the chat chime from the main window on a guest line, not on the agent's own line", async () => {
+    render(
+      <CallSurfaceProvider>
+        <ChatAppender />
+      </CallSurfaceProvider>,
+    );
+    const chime = document.querySelector('audio[src*="chat-message"]') as HTMLAudioElement;
+    expect(chime).toBeTruthy();
+    const play = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(chime, "play", { configurable: true, value: play });
+
+    await act(async () => screen.getByText("append guest").click());
+    expect(play).toHaveBeenCalledTimes(1);
+
+    await act(async () => screen.getByText("append guest").click());
+    expect(play).toHaveBeenCalledTimes(2); // every guest line chimes
+
+    await act(async () => screen.getByText("append agent").click());
+    expect(play).toHaveBeenCalledTimes(2); // the agent's own echo does not
+  });
   it("mirrors publishRings from a publisher into a separate consumer", async () => {
     acceptVideoSpy = () => {};
     render(
