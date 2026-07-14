@@ -15,6 +15,7 @@ export interface LiveKitCallSession {
   mediaWarning: "camera" | "mic" | "both" | null;
   setMicMuted(muted: boolean): Promise<void>;
   leave(): Promise<void>;
+  sendData(bytes: Uint8Array, reliable: boolean): void; // chat data channel (in-call kiosk<->agent chat)
 }
 
 /**
@@ -31,6 +32,8 @@ export interface LiveKitCallCallbacks {
   /** Fired when the browser blocks remote-audio autoplay; recover() = room.startAudio(). */
   onAudioBlocked(recover: () => void): void;
   onGuestLeft(): void;
+  /** Inbound data-channel payload (chat). fromIdentity is the LiveKit participant identity ("kiosk" or "agent-<id>"). */
+  onData?(bytes: Uint8Array, fromIdentity: string): void;
 }
 
 interface AttachableTrack {
@@ -85,6 +88,9 @@ export async function joinLiveKitCall(
     if (!room.canPlaybackAudio) opts.onAudioBlocked(() => void room.startAudio());
   });
   room.on(RoomEvent.ParticipantDisconnected, () => opts.onGuestLeft());
+  room.on(RoomEvent.DataReceived, (payload, participant) => {
+    opts.onData?.(payload, participant?.identity ?? "");
+  });
 
   await room.connect(opts.url, opts.token);
 
@@ -125,5 +131,6 @@ export async function joinLiveKitCall(
         /* already disconnected */
       }
     },
+    sendData: (bytes, reliable) => void room.localParticipant.publishData(bytes, { reliable }),
   };
 }
