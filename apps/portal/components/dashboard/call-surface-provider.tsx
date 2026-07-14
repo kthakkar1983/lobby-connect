@@ -35,6 +35,17 @@ export interface ActiveCallInfo {
   timeZone: string | null;
 }
 
+export interface ChatLine {
+  id: string;
+  from: "guest" | "agent";
+  text: string;
+  ts: number;
+}
+export interface ChatSnapshot {
+  lines: ChatLine[];
+  peerTyping: boolean;
+}
+
 export interface CallSurfaceSnapshot {
   rings: IncomingRing[];
   active: ActiveCallInfo | null;
@@ -61,6 +72,14 @@ export interface RegisteredCallControls {
   muted: boolean;
   hangUp: () => void;
   triggerEmergency?: () => void;
+  /**
+   * Send a chat message / typing signal. Registered ONLY by the VIDEO call
+   * owner (video-call.tsx) — AUDIO calls have no chat, so the softphone omits
+   * these (exactly as it omits triggerEmergency). The tile/overlay dispatch
+   * through them.
+   */
+  sendChat?: (text: string) => void;
+  sendTyping?: (state: "start" | "stop") => void;
 }
 
 interface CallSurfaceValue extends CallSurfaceSnapshot {
@@ -131,6 +150,16 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   publishCaptions: (finals: string[], partial: string) => void;
   subscribeCaptions: (cb: () => void) => () => void;
   getCaptionSnapshot: () => { finals: string[]; partial: string };
+  /**
+   * Chat relay (in-call kiosk<->agent chat). Kept OUT of the memoized value like
+   * captions — per-message updates would re-render every consumer. The live-call
+   * owner appends inbound lines + peer-typing; the tile/overlay dock reads via
+   * useSyncExternalStore, so only the dock re-renders.
+   */
+  appendChatLine: (line: ChatLine) => void;
+  setPeerTyping: (typing: boolean) => void;
+  subscribeChat: (cb: () => void) => () => void;
+  getChatSnapshot: () => ChatSnapshot;
 }
 
 const CallSurfaceContext = createContext<CallSurfaceValue | null>(null);
@@ -178,6 +207,31 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     };
   }, []);
   const getCaptionSnapshot = useCallback(() => captionStoreRef.current, []);
+
+  // Chat external store — mirrors the caption relay: refs + a listener set keep
+  // per-message churn off the memoized `value`, so only the chat dock re-renders.
+  // Each mutation REPLACES the ref object (new identity) so useSyncExternalStore
+  // sees a change; setPeerTyping no-ops when unchanged to keep identity stable.
+  const chatStoreRef = useRef<ChatSnapshot>({ lines: [], peerTyping: false });
+  const chatListenersRef = useRef<Set<() => void>>(new Set());
+  const appendChatLine = useCallback((line: ChatLine) => {
+    const prev = chatStoreRef.current;
+    chatStoreRef.current = { lines: [...prev.lines, line], peerTyping: prev.peerTyping };
+    for (const cb of chatListenersRef.current) cb();
+  }, []);
+  const setPeerTyping = useCallback((typing: boolean) => {
+    const prev = chatStoreRef.current;
+    if (prev.peerTyping === typing) return; // no churn when unchanged
+    chatStoreRef.current = { lines: prev.lines, peerTyping: typing };
+    for (const cb of chatListenersRef.current) cb();
+  }, []);
+  const subscribeChat = useCallback((cb: () => void) => {
+    chatListenersRef.current.add(cb);
+    return () => {
+      chatListenersRef.current.delete(cb);
+    };
+  }, []);
+  const getChatSnapshot = useCallback(() => chatStoreRef.current, []);
 
   // Call-scoped Document-PiP tile. The handle (window/close fn) is a REF — it's
   // an imperative object, not render-relevant; only the mount element and the
@@ -373,6 +427,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     setCaptionsEnabled(false);
     captionStoreRef.current = { finals: [], partial: "" };
     for (const cb of captionListenersRef.current) cb();
+    chatStoreRef.current = { lines: [], peerTyping: false };
+    for (const cb of chatListenersRef.current) cb();
   }, [active?.callId]);
 
   // Auto-close: when the call ends (active → null), any open tile closes with
@@ -411,6 +467,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishCaptions,
       subscribeCaptions,
       getCaptionSnapshot,
+      appendChatLine,
+      setPeerTyping,
+      subscribeChat,
+      getChatSnapshot,
     }),
     [
       audioRings,
@@ -438,6 +498,10 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishCaptions,
       subscribeCaptions,
       getCaptionSnapshot,
+      appendChatLine,
+      setPeerTyping,
+      subscribeChat,
+      getChatSnapshot,
     ],
   );
 

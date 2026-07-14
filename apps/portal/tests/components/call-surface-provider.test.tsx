@@ -695,4 +695,57 @@ describe("CallSurfaceProvider", () => {
       delete (window as { documentPictureInPicture?: unknown }).documentPictureInPicture;
     });
   });
+
+  describe("chat", () => {
+    function ChatHarness() {
+      const s = useCallSurface();
+      const snap = useSyncExternalStore(s.subscribeChat, s.getChatSnapshot);
+      const startCall = (callId: string) =>
+        s.publishActive("VIDEO", {
+          callId,
+          channel: "VIDEO",
+          propertyId: "prop-1",
+          propertyName: "Hotel A",
+          onHold: false,
+          answeredAt: 0,
+          timeZone: null,
+        });
+      return (
+        <div>
+          <div data-testid="chat-lines">{snap.lines.map((l) => `${l.from}:${l.text}`).join("|")}</div>
+          <div data-testid="chat-typing">{snap.peerTyping ? "yes" : "no"}</div>
+          <button onClick={() => s.appendChatLine({ id: "1", from: "guest", text: "hi", ts: 1 })}>append guest</button>
+          <button onClick={() => s.setPeerTyping(true)}>typing on</button>
+          <button onClick={() => s.setPeerTyping(false)}>typing off</button>
+          <button onClick={() => startCall("call-1")}>start call-1</button>
+          <button onClick={() => startCall("call-2")}>start call-2</button>
+        </div>
+      );
+    }
+
+    it("relays an appended line to a useSyncExternalStore subscriber", async () => {
+      render(<CallSurfaceProvider><ChatHarness /></CallSurfaceProvider>);
+      await act(async () => screen.getByText("append guest").click());
+      expect(screen.getByTestId("chat-lines").textContent).toBe("guest:hi");
+    });
+
+    it("toggles peerTyping", async () => {
+      render(<CallSurfaceProvider><ChatHarness /></CallSurfaceProvider>);
+      await act(async () => screen.getByText("typing on").click());
+      expect(screen.getByTestId("chat-typing").textContent).toBe("yes");
+      await act(async () => screen.getByText("typing off").click());
+      expect(screen.getByTestId("chat-typing").textContent).toBe("no");
+    });
+
+    it("resets the thread + typing on a new callId (nothing persists across calls)", async () => {
+      render(<CallSurfaceProvider><ChatHarness /></CallSurfaceProvider>);
+      await act(async () => screen.getByText("start call-1").click());
+      await act(async () => screen.getByText("append guest").click());
+      await act(async () => screen.getByText("typing on").click());
+      expect(screen.getByTestId("chat-lines").textContent).toBe("guest:hi");
+      await act(async () => screen.getByText("start call-2").click());
+      expect(screen.getByTestId("chat-lines").textContent).toBe("");
+      expect(screen.getByTestId("chat-typing").textContent).toBe("no");
+    });
+  });
 });
