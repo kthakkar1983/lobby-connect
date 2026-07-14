@@ -159,6 +159,7 @@ export function App() {
           }
         },
         onData: (payload: Uint8Array, fromIdentity: string) => {
+          if (aborted()) return; // ignore late packets after teardown (mirrors the portal's cancelled guard)
           const env = decodeChat(payload);
           if (!env) return;
           if (env.type === "msg") {

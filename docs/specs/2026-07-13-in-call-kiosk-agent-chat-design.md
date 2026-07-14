@@ -94,7 +94,7 @@ AUDIO calls ride Twilio (`@twilio/voice-sdk`); there is no LiveKit room, and the
 ## 6. PCI card-data guard
 
 - Pure `redactCardNumbers(text): string` in `@lc/shared` (used by both apps).
-- **Algorithm:** find maximal runs of `[0-9 -]`, strip separators → candidate digits; **mask the run iff length ∈ [13,19] AND Luhn-valid.** Issuer prefix (Visa / MC / Amex / Discover / …) is computed only to *tag* confidence for optional telemetry — **not** required to redact, so no real card slips through an incomplete prefix table.
+- **Algorithm (hardened 2026-07-14 after whole-branch review):** find maximal runs of `[0-9 .-]` (space, dot, hyphen separators), strip separators → candidate digits, then mask the run iff **either** (a) the whole run is length ∈ [13,19] AND Luhn-valid (the base rule), **or** (b) the run is 19–25 digits and contains a Luhn-valid 13–19 window **anchored at the start or end** with ≤6 leftover digits on the other side — i.e. a PAN glued to a short expiry/CVV. The 19–25 length bound + start/end anchoring keep legitimate long numbers from masking on an interior coincidence, and runs ≤18 digits are never embedded-scanned, so a non-card 16-digit run (a Luhn-failing mistype) stays untouched. Issuer prefix (Visa / MC / Amex / Discover / …) is **not** required to redact, so no real card slips through an incomplete prefix table. *Original spec rule was whole-run-only, which leaked a PAN glued to an expiry/CVV or dot-separated (review finding); the hardened rule above closes those without over-masking. Residual accepted edge: two full cards mashed into one >25-digit run.*
 - **Runs on the kiosk before `publishData`** (mandatory) so a PAN never enters the LiveKit stream; applied symmetrically to the agent's outbound text (defense-in-depth).
 - Guest-facing "don't type card numbers" notice under the kiosk input.
 - **Proven by a TDD table:** positives (real test PANs, spaced/dashed) masked; negatives (house numbers 1–5 digits, ZIP 5/9, phone 10–11, room numbers, dates, order/confirmation numbers) pass untouched.
@@ -156,7 +156,7 @@ Build on the **current** call-surface shape. Captions is the existence proof tha
 - **D4 — Kiosk = Option A side-by-side** (survives the on-screen keyboard; keeps the human present).
 - **D5 — Tile = Video⇄Chat toggle** (fixed, non-resizable 380×300).
 - **D6 — Overlay = Playbook⇄Chat tab** (consistent with the tile; video always visible).
-- **D7 — PCI = active kiosk-side redaction** (13–19 digits + Luhn, pre-publish) **+ passive notice** — both layers.
+- **D7 — PCI = active kiosk-side redaction** (13–19 digits + Luhn, pre-publish; **hardened 2026-07-14** to also recognize dot separators and a PAN glued to a short expiry/CVV — see §6) **+ passive notice** — both layers.
 - **D8 — Attention = tile badge + agent chime; no mid-call Web Push.** Kiosk visual-only (auto-open makes a kiosk sound unnecessary).
 - **D9 — Typing indicator = animated CSS dots**, reduced-motion aware, throttled ping + watchdog.
 - **D10 — Sound = bundled licensed `chat-message.mp3` (Envato), agent-side inbound only.**
