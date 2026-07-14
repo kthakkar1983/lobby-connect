@@ -26,7 +26,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   // side with the same identity replaces its zombie participant.
   const identity = requester.kind === "kiosk" ? "kiosk" : `agent-${requester.userId}`;
   const at = new AccessToken(apiKey, apiSecret, { identity, ttl: TOKEN_TTL_SECONDS });
-  at.addGrant({ roomJoin: true, room: channel, canPublish: true, canSubscribe: true });
+  // canPublishData enables the in-call kiosk<->agent chat data channel (spec D1).
+  at.addGrant({ roomJoin: true, room: channel, canPublish: true, canPublishData: true, canSubscribe: true });
   const token = await at.toJwt();
   const payload: VideoTokenResult = { provider: "livekit", url, channelName: channel, token };
   return NextResponse.json(payload);
