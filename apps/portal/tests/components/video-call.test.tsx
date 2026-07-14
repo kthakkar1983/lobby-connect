@@ -302,4 +302,36 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
     expect(stage.className).not.toContain("hidden");
   });
+
+  // Task 10: the non-collapsed overlay gains a Playbook⇄Chat tab in the right
+  // panel; clicking Chat swaps the (mocked-null) PlaybookPanel for the real
+  // ChatDock, which renders its own message input.
+  it("shows the ChatDock input when the Chat tab is clicked (non-collapsed overlay)", async () => {
+    const user = userEvent.setup();
+    render(
+      <VideoCall callId="call-chat-tab" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("button", { name: /^chat$/i }));
+    expect(screen.getByPlaceholderText(/type/i)).toBeTruthy();
+  });
+
+  // Spec §4.3: when the tile is up, the overlay is collapsed to playbook-only —
+  // the tile owns chat, so the collapsed overlay must render no tab strip at all.
+  it("renders no Playbook/Chat tab when collapsed (tile owns chat)", async () => {
+    render(
+      <VideoCall
+        callId="call-chat-collapsed"
+        onClose={vi.fn()}
+        propertyName="The Sample Hotel"
+        propertyId="prop-1"
+        collapsed
+      />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    expect(screen.queryByRole("button", { name: /^chat$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^playbook$/i })).toBeNull();
+  });
 });
