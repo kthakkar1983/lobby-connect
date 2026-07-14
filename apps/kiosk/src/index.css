@@ -89,7 +89,6 @@
 }
 
 html, body, #root {
-  height: 100%;
   margin: 0;
   background: var(--color-background);
   color: var(--color-foreground);
@@ -100,6 +99,27 @@ html, body, #root {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+}
+
+html, body {
+  height: 100%;
+  /* Nothing scrolls at the document level, so iOS can't push the whole page up
+     to reveal a focused input when the on-screen keyboard opens. */
+  overflow: hidden;
+}
+
+/* The app is pinned to the VISUAL viewport (driven by useVisualViewportSize),
+   NOT the layout viewport. When the iPad keyboard opens, --kiosk-vv-height
+   shrinks and the call area shrinks with it — the top stays fixed instead of
+   scrolling away. Falls back to the full layout viewport before the JS runs or
+   where the VisualViewport API is unavailable. */
+#root {
+  position: fixed;
+  top: var(--kiosk-vv-top, 0px);
+  left: 0;
+  width: 100%;
+  height: var(--kiosk-vv-height, 100%);
+  overflow: hidden;
 }
 
 /* ============================================================

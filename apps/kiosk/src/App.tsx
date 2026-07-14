@@ -16,6 +16,7 @@ import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat } 
 import { joinLiveKit } from "./lib/video/livekit";
 import type { KioskVideoSession, VideoTrackHandle } from "./lib/video/types";
 import { unlockAudioPlayback } from "./lib/audio-unlock";
+import { useVisualViewportSize } from "./lib/use-visual-viewport-size";
 import { interpretConnectionState } from "./lib/connection";
 import type { KioskConfig } from "./types";
 import { SeamShimmer } from "./components/brand";
@@ -28,6 +29,10 @@ import { Apology } from "./screens/Apology";
 const HEARTBEAT_MS = 30_000;
 
 export function App() {
+  // Pin the app to the visual viewport so the iPad keyboard shrinks the call
+  // area instead of scrolling the video/chat off the top of the screen.
+  useVisualViewportSize();
+
   const [state, dispatch] = useReducer(reduce, undefined, initialState);
   const [config, setConfig] = useState<KioskConfig | null>(null);
   const [remoteVideo, setRemoteVideo] = useState<VideoTrackHandle | null>(null);

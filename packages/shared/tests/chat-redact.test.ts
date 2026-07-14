@@ -32,8 +32,21 @@ describe("redactCardNumbers", () => {
     }
   });
 
-  it("does not mask a 16-digit run that fails Luhn", () => {
-    expect(redactCardNumbers("1234 5678 9012 3456")).toBe("1234 5678 9012 3456");
+  it("masks any card-shaped 13-19 digit run, even one that fails Luhn", () => {
+    // Aggressive posture (spec §6): real cards ALWAYS pass Luhn, but a
+    // fat-fingered real card (or a card-shaped test number) fails it — mask
+    // those too so a near-complete PAN can never leave in cleartext.
+    expect(redactCardNumbers("1234 5678 9012 3456")).toBe(MASK); // 16 digits, fails Luhn
+    expect(redactCardNumbers("4111 1111 1111 1234")).toBe(MASK); // the smoke-test number
+    expect(redactCardNumbers("4111111111111234")).toBe(MASK);    // same, no separators
+    expect(redactCardNumbers("my card 4111 1111 1111 1234 thanks")).toBe(`my card ${MASK} thanks`);
+  });
+
+  it("also masks legit 13-15 digit runs (accepted false-positive, recoverable on live video)", () => {
+    // The cost of dropping the Luhn gate: a genuine long numeric string a guest
+    // might type also gets masked. Acceptable in this speech-failure exception
+    // path — the guest is on live video and can read it aloud.
+    expect(redactCardNumbers("011 44 20 7946 0958")).toBe(MASK); // 15-digit intl phone
   });
 
   it("masks separator variants and PANs glued to expiry/CVV (hardened)", () => {
@@ -57,7 +70,6 @@ describe("redactCardNumbers", () => {
       "room 237",
       "reservation 8825519",
       "checkout is 07/13/2026",
-      "1234 5678 9012 3456", // 16 digits, fails Luhn — must NOT mask
       "order 1234 5678 9012", // 12 digits (<13) — must NOT mask
     ]) {
       expect(redactCardNumbers(s)).toBe(s);
