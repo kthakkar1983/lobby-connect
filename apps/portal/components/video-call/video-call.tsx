@@ -1,19 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
-import { MAX_CALL_DURATION_MS } from "@lc/shared";
+import {
+  MAX_CALL_DURATION_MS,
+  CHAT_PROTOCOL_VERSION,
+  decodeChat,
+  encodeChat,
+  newMessageId,
+  redactCardNumbers,
+  typingExpired,
+} from "@lc/shared";
 import type { VideoTokenResult } from "@lc/shared";
 import { joinLiveKitCall, type LiveKitCallSession, type PortalVideoHandle } from "@/lib/video/livekit-session";
 import { recoverAudioOnNextGesture } from "@/lib/video/audio-unlock";
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
+import { ChatDock } from "@/components/call/chat-dock";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
+
+// Stable module-level fallbacks so useSyncExternalStore is called
+// unconditionally (never behind an optional-chain) — mirrors call-tile.tsx's
+// NOOP_SUBSCRIBE/GET_EMPTY_CHAT pattern for the same chat relay.
+const NOOP_CHAT_SUBSCRIBE = () => () => {};
+const EMPTY_CHAT_SNAPSHOT = { lines: [] as { id: string; from: "guest" | "agent"; text: string; ts: number }[], peerTyping: false };
+const GET_EMPTY_CHAT_SNAPSHOT = () => EMPTY_CHAT_SNAPSHOT;
 
 export function VideoCall({
   callId,
@@ -50,6 +66,10 @@ export function VideoCall({
   // The recovery fn for the audio-blocked banner (livekit: room.startAudio()).
   const audioRecoveryRef = useRef<(() => void) | null>(null);
   const finalizingRef = useRef(false);
+  // Chat typing watchdog: typing pings are lossy (unreliable DC), so a dropped
+  // "stop" would leave the guest's dots stuck on. lastPeerTypingRef holds the ms
+  // of the last "start"; the interval clears peerTyping once it goes stale.
+  const lastPeerTypingRef = useRef(0);
   // Ref-mirror roomNumber/notes so the guest-left teardown (which captures
   // handleEnd at mount time) always reads the current values.
   const roomNumberRef = useRef(roomNumber);
@@ -80,6 +100,37 @@ export function VideoCall({
   const captionsEnabled = surface?.captionsEnabled ?? false;
   const toggleCaptions = surface?.toggleCaptions ?? (() => {});
   const publishCaptions = surface?.publishCaptions;
+  const appendChatLine = surface?.appendChatLine;
+  const setPeerTyping = surface?.setPeerTyping;
+
+  // Task 10: Playbook⇄Chat tab in the right panel — only when NOT collapsed
+  // (collapsed = the tile owns chat; the overlay stays playbook-only). The chat
+  // relay itself mirrors the tile's useSyncExternalStore subscription (Task 9).
+  const chat = useSyncExternalStore(
+    surface?.subscribeChat ?? NOOP_CHAT_SUBSCRIBE,
+    surface?.getChatSnapshot ?? GET_EMPTY_CHAT_SNAPSHOT,
+  );
+  const [rightTab, setRightTab] = useState<"playbook" | "chat">("playbook");
+  const [chatUnread, setChatUnread] = useState(false);
+  const lastSeenChatRef = useRef<string | null | undefined>(undefined); // undefined = not yet seeded
+
+  // Unread-badge detection only — NO chime here (the tile owns the inbound
+  // chime; the overlay only badges the tab so it never double-plays a sound).
+  useEffect(() => {
+    const last = chat.lines[chat.lines.length - 1];
+    const lastId = last?.id ?? null;
+    if (lastSeenChatRef.current === undefined) {
+      lastSeenChatRef.current = lastId; // seed: existing lines aren't "new"
+      return;
+    }
+    if (lastId === lastSeenChatRef.current) return;
+    lastSeenChatRef.current = lastId;
+    if (last && last.from === "guest" && rightTab !== "chat") setChatUnread(true);
+  }, [chat.lines, rightTab]);
+  useEffect(() => {
+    if (rightTab === "chat") setChatUnread(false);
+  }, [rightTab]);
+
   // Gating the track (not just hiding the band) tears down the STT stream when
   // captions are off — stops the upstream audio + the per-minute billing.
   const captions = useCaptions(captionsEnabled ? guestAudioTrack : null);
@@ -154,6 +205,26 @@ export function VideoCall({
             });
           },
           onGuestLeft: () => void handleEnd(),
+          onData: (payload, fromIdentity) => {
+            if (cancelled) return;
+            const env = decodeChat(payload);
+            if (!env) return;
+            if (env.type === "msg") {
+              appendChatLine?.({
+                id: env.id,
+                from: fromIdentity === "kiosk" ? "guest" : "agent",
+                text: env.text,
+                ts: env.ts,
+              });
+              // an inbound message means the peer stopped typing
+              lastPeerTypingRef.current = 0;
+              setPeerTyping?.(false);
+            } else if (env.type === "typing") {
+              const active = env.state === "start";
+              lastPeerTypingRef.current = active ? Date.now() : 0;
+              setPeerTyping?.(active);
+            }
+          },
         });
         if (cancelled) {
           await session.leave();
@@ -282,6 +353,17 @@ export function VideoCall({
       toggleMute,
       muted,
       hangUp: () => registeredHangUpRef.current(),
+      sendChat: (text: string) => {
+        const clean = redactCardNumbers(text);
+        const env = { v: CHAT_PROTOCOL_VERSION, type: "msg" as const, id: newMessageId(), text: clean, ts: Date.now() };
+        lkSessionRef.current?.sendData(encodeChat(env), true);
+        appendChatLine?.({ id: env.id, from: "agent", text: clean, ts: env.ts }); // local echo
+      },
+      sendTyping: (state: "start" | "stop") =>
+        lkSessionRef.current?.sendData(
+          encodeChat({ v: CHAT_PROTOCOL_VERSION, type: "typing", state, ts: Date.now() }),
+          false,
+        ),
     });
     return () => registerCallControls(null);
     // Only re-register on a real mute-state change (the tile must reflect it);
@@ -289,6 +371,16 @@ export function VideoCall({
     // without needing to be a dep-array member itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerCallControls, muted]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (lastPeerTypingRef.current && typingExpired(lastPeerTypingRef.current, Date.now())) {
+        lastPeerTypingRef.current = 0;
+        setPeerTyping?.(false);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [setPeerTyping]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -361,7 +453,44 @@ export function VideoCall({
             </button>
           )}
         </div>
-        <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-3/5"} />
+        {collapsed ? (
+          <PlaybookPanel callId={callId} basis="basis-full" />
+        ) : (
+          <div className="flex basis-3/5 flex-col overflow-hidden border-l border-border">
+            <div className="flex shrink-0 border-b border-border bg-card text-sm">
+              <button
+                type="button"
+                onClick={() => setRightTab("playbook")}
+                className={`px-4 py-2 font-medium ${rightTab === "playbook" ? "border-b-2 border-accent text-foreground" : "text-text-muted"}`}
+              >
+                Playbook
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightTab("chat")}
+                className={`relative px-4 py-2 font-medium ${rightTab === "chat" ? "border-b-2 border-accent text-foreground" : "text-text-muted"}`}
+              >
+                Chat
+                {chatUnread && (
+                  <span data-testid="overlay-chat-unread" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-attention" />
+                )}
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              {rightTab === "playbook" ? (
+                <PlaybookPanel callId={callId} basis="basis-full" />
+              ) : (
+                <ChatDock
+                  lines={chat.lines}
+                  peerTyping={chat.peerTyping}
+                  onSend={(t) => surface?.callControls?.sendChat?.(t)}
+                  onTyping={(s) => surface?.callControls?.sendTyping?.(s)}
+                  className="min-h-0 flex-1"
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {saveFailed && (

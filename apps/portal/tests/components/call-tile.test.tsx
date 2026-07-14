@@ -10,6 +10,7 @@
  * (which is bound to the main test document and would never see tile content).
  */
 
+import { useRef } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, cleanup, waitFor, within } from "@testing-library/react";
 import type * as RemoteAccessConnect from "@/lib/remote-access/connect";
@@ -122,7 +123,12 @@ function Harness({
     publishGuestVideoTrack,
     openTileForCall,
     publishCaptions,
+    appendChatLine,
   } = useCallSurface();
+  // Task 9: a monotonic per-render counter so repeated "publish guest chat"
+  // clicks within one test always mint a distinct ChatLine id (the tile's
+  // inbound-detection effect keys off id-change, not object identity).
+  const chatSeqRef = useRef(0);
   return (
     <div>
       <button onClick={() => publishActive(active?.channel ?? "AUDIO", active)}>
@@ -132,6 +138,19 @@ function Harness({
       <button onClick={() => publishGuestVideoTrack(track ?? null)}>publish track</button>
       <button onClick={() => openTileForCall()}>open tile</button>
       <button onClick={() => publishCaptions(["Extra towels to 204"], "")}>publish captions</button>
+      <button
+        onClick={() => {
+          chatSeqRef.current += 1;
+          appendChatLine({
+            id: `guest-chat-${chatSeqRef.current}`,
+            from: "guest",
+            text: "Is the pool open?",
+            ts: Date.now(),
+          });
+        }}
+      >
+        publish guest chat
+      </button>
     </div>
   );
 }
@@ -478,5 +497,67 @@ describe("CallTile", () => {
     await openTile();
     expect(pipDoc.body.querySelector('[aria-label="Room number"]')).toBeNull();
     expect(pipDoc.body.querySelector('[aria-label="Call note"]')).toBeNull();
+  });
+
+  // Task 9: Video/Chat toggle. Chat is video-only, so controls must include
+  // sendChat/sendTyping (registered only by the video call owner) for the
+  // toggle to render at all — mirrors the video-has-no-911 pattern above.
+  it("clicking the Chat toggle switches the VIDEO face to chat mode and reveals the ChatDock input", async () => {
+    const controls = makeControls({
+      triggerEmergency: undefined,
+      sendChat: vi.fn(),
+      sendTyping: vi.fn(),
+    });
+    const { pipDoc } = renderTile({ active: videoActive, controls });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    // Still on the video face: no chat input yet.
+    expect(tile.queryByPlaceholderText(/type/i)).toBeNull();
+
+    const chatToggle = tile.getByText("Chat").closest("button") as HTMLButtonElement;
+    expect(chatToggle).toBeTruthy();
+    await act(async () => {
+      chatToggle.click();
+    });
+
+    expect(tile.getByPlaceholderText(/type/i)).toBeTruthy();
+  });
+
+  // Task 9: inbound-badge + chime gating. A guest line while the agent is
+  // still on the video face arms the unread dot; the SAME line-append while
+  // she's already viewing chat must not re-arm it (she's looking right at it).
+  it("marks the Chat toggle unread on an inbound guest line in video mode, but not once chat is already open", async () => {
+    const controls = makeControls({
+      triggerEmergency: undefined,
+      sendChat: vi.fn(),
+      sendTyping: vi.fn(),
+    });
+    const { pipDoc } = renderTile({ active: videoActive, controls });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeNull();
+
+    // Inbound guest line while still on the video face → badge appears.
+    await act(async () => screen.getByText("publish guest chat").click());
+    await waitFor(() =>
+      expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeTruthy(),
+    );
+
+    // Opening chat clears it (badge-clear effect).
+    const chatToggle = tile.getByText("Chat").closest("button") as HTMLButtonElement;
+    await act(async () => {
+      chatToggle.click();
+    });
+    expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeNull();
+
+    // A second inbound guest line while ALREADY viewing chat must not re-arm it.
+    await act(async () => screen.getByText("publish guest chat").click());
+    expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeNull();
   });
 });

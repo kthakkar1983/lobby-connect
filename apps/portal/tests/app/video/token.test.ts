@@ -53,7 +53,7 @@ describe("GET /api/video/token", () => {
     expect(body.uid).toBeUndefined();
     const claims = decodeJwtPayload(body.token) as { sub: string; video: Record<string, unknown>; exp: number; iat?: number; nbf?: number };
     expect(claims.sub).toBe("kiosk");
-    expect(claims.video).toMatchObject({ roomJoin: true, room: "call_abc", canPublish: true, canSubscribe: true });
+    expect(claims.video).toMatchObject({ roomJoin: true, room: "call_abc", canPublish: true, canPublishData: true, canSubscribe: true });
     const issued = claims.iat ?? claims.nbf ?? 0;
     expect(claims.exp - issued).toBe(3600); // 3600s join-token TTL (D10)
   });

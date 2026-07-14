@@ -91,6 +91,9 @@ export async function joinLiveKit(
     const isLeave = reason === DisconnectReason.CLIENT_INITIATED;
     opts.onConnectionStateChange("DISCONNECTED", "CONNECTED", isLeave ? "LEAVE" : String(reason ?? "UNKNOWN"));
   });
+  room.on(RoomEvent.DataReceived, (payload, participant) => {
+    opts.onData?.(payload, participant?.identity ?? "");
+  });
 
   await room.connect(opts.url, opts.token);
 
@@ -119,5 +122,6 @@ export async function joinLiveKit(
         /* already disconnected */
       }
     },
+    sendData: (bytes, reliable) => void room.localParticipant.publishData(bytes, { reliable }),
   };
 }
