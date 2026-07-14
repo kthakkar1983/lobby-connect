@@ -10,6 +10,7 @@ import { Mic, MicOff, PhoneOff, AlertTriangle, Monitor, Clock } from "lucide-rea
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
+import { ChatDock } from "@/components/call/chat-dock";
 
 // How long the armed "Confirm 911" state stays live before auto-reverting.
 const EMERGENCY_ARM_WINDOW_MS = 5_000;
@@ -20,6 +21,11 @@ const EMERGENCY_ARM_WINDOW_MS = 5_000;
 const EMPTY_CAPTIONS = { finals: [] as string[], partial: "" };
 const NOOP_SUBSCRIBE = () => () => {};
 const GET_EMPTY_CAPTIONS = () => EMPTY_CAPTIONS;
+const EMPTY_CHAT = {
+  lines: [] as { id: string; from: "guest" | "agent"; text: string; ts: number }[],
+  peerTyping: false,
+};
+const GET_EMPTY_CHAT = () => EMPTY_CHAT;
 
 function formatElapsed(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -96,13 +102,16 @@ export function CallTile(): React.JSX.Element | null {
     [],
   );
   useEffect(() => {
-    // A new call (or the call ending) must not carry a stale armed state into
-    // the next one.
+    // A new call (or the call ending) must not carry a stale armed state, chat
+    // mode, or chat-unread badge into the next one.
     setArmed(false);
     if (armTimerRef.current) {
       clearTimeout(armTimerRef.current);
       armTimerRef.current = null;
     }
+    setChatMode("video");
+    setChatUnread(false);
+    lastChatIdRef.current = undefined;
   }, [active?.callId]);
 
   // Captions mirror the surface (spec D6–D8): shared enabled flag (default OFF,
@@ -114,6 +123,45 @@ export function CallTile(): React.JSX.Element | null {
     surface?.subscribeCaptions ?? NOOP_SUBSCRIBE,
     surface?.getCaptionSnapshot ?? GET_EMPTY_CAPTIONS,
   );
+
+  // Chat mirrors the surface the same way captions do (Task 9): an external
+  // store of lines/peerTyping, plus tile-LOCAL UI state for which face is
+  // showing and whether an unseen guest line has arrived. Chat is video-only —
+  // the toggle/face below are gated on controls.sendChat, registered only by
+  // the video call owner.
+  const chat = useSyncExternalStore(
+    surface?.subscribeChat ?? NOOP_SUBSCRIBE,
+    surface?.getChatSnapshot ?? GET_EMPTY_CHAT,
+  );
+  const [chatMode, setChatMode] = useState<"video" | "chat">("video");
+  const [chatUnread, setChatUnread] = useState(false);
+  const chimeRef = useRef<HTMLAudioElement>(null);
+  // Seed sentinel: undefined = not yet initialised (so lines already present
+  // when the tile (re)mounts mid-call don't replay a chime). Reset per call
+  // via the [active?.callId] effect above.
+  const lastChatIdRef = useRef<string | null | undefined>(undefined);
+
+  // Inbound-guest-line detection: chime + unread badge on a genuinely NEW
+  // guest line, unless the agent is already looking at the chat face.
+  useEffect(() => {
+    const last = chat.lines[chat.lines.length - 1];
+    const lastId = last?.id ?? null;
+    if (lastChatIdRef.current === undefined) {
+      lastChatIdRef.current = lastId; // seed: treat existing lines as already seen
+      return;
+    }
+    if (lastId === lastChatIdRef.current) return;
+    lastChatIdRef.current = lastId;
+    if (last && last.from === "guest" && chatMode !== "chat") {
+      setChatUnread(true);
+      void chimeRef.current?.play().catch(() => {});
+    }
+  }, [chat.lines, chatMode]);
+
+  // Opening the chat face clears whatever badge was showing.
+  useEffect(() => {
+    if (chatMode === "chat") setChatUnread(false);
+  }, [chatMode]);
 
   const elapsed = useElapsed(active?.answeredAt ?? 0);
   const localTime = useHotelClock(active?.timeZone ?? null);
@@ -152,29 +200,46 @@ export function CallTile(): React.JSX.Element | null {
           </button>
         )}
         {active.channel === "VIDEO" ? (
-          <div className="relative flex-1 overflow-hidden rounded-md bg-[var(--color-call)]">
-            {guestVideoTrack ? (
-              <GuestVideo track={guestVideoTrack} />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs text-primary-foreground/60">
-                Connecting video…
-              </div>
-            )}
-            {localTime && (
-              <div
-                data-testid="hotel-clock-chip"
-                className="absolute left-2 top-2 z-10 flex flex-col gap-0.5 rounded-button bg-black/40 px-2 py-1"
-              >
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-live">Hotel</span>
-                <span className="flex items-center gap-1 font-mono text-xs font-semibold">
-                  <Clock size={11} /> {localTime}
-                </span>
-              </div>
-            )}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1 text-xs font-medium text-white">
-              {active.propertyName} · {formatElapsed(elapsed)}
+          chatMode === "chat" ? (
+            <div className="relative flex-1 overflow-hidden rounded-md bg-[var(--color-call)]">
+              <ChatDock
+                lines={chat.lines}
+                peerTyping={chat.peerTyping}
+                onSend={(t) => controls?.sendChat?.(t)}
+                onTyping={(s) => controls?.sendTyping?.(s)}
+                className="h-full"
+              />
+              {guestVideoTrack && (
+                <div className="absolute right-2 top-2 z-10 h-14 w-20 overflow-hidden rounded-md border border-primary-foreground/30">
+                  <GuestVideo track={guestVideoTrack} />
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="relative flex-1 overflow-hidden rounded-md bg-[var(--color-call)]">
+              {guestVideoTrack ? (
+                <GuestVideo track={guestVideoTrack} />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-primary-foreground/60">
+                  Connecting video…
+                </div>
+              )}
+              {localTime && (
+                <div
+                  data-testid="hotel-clock-chip"
+                  className="absolute left-2 top-2 z-10 flex flex-col gap-0.5 rounded-button bg-black/40 px-2 py-1"
+                >
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-live">Hotel</span>
+                  <span className="flex items-center gap-1 font-mono text-xs font-semibold">
+                    <Clock size={11} /> {localTime}
+                  </span>
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1 text-xs font-medium text-white">
+                {active.propertyName} · {formatElapsed(elapsed)}
+              </div>
+            </div>
+          )
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-semibold">{active.propertyName}</p>
@@ -216,6 +281,41 @@ export function CallTile(): React.JSX.Element | null {
           >
             <PhoneOff size={13} /> Hang up
           </button>
+          {/* Video/Chat toggle (Task 9) — video-only, only when the call owner
+              registered sendChat. Segmented control mirrors CaptionToggle's
+              compact footprint; the unread dot clears the moment chat opens. */}
+          {active.channel === "VIDEO" && controls.sendChat && (
+            <div className="flex items-center gap-0.5 rounded-button border border-primary-foreground/25 p-0.5 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setChatMode("video")}
+                className={
+                  chatMode === "video"
+                    ? "rounded-[3px] bg-accent px-1.5 py-0.5 text-accent-foreground"
+                    : "rounded-[3px] px-1.5 py-0.5 text-primary-foreground/70"
+                }
+              >
+                Video
+              </button>
+              <button
+                type="button"
+                onClick={() => setChatMode("chat")}
+                className={
+                  chatMode === "chat"
+                    ? "relative rounded-[3px] bg-accent px-1.5 py-0.5 text-accent-foreground"
+                    : "relative rounded-[3px] px-1.5 py-0.5 text-primary-foreground/70"
+                }
+              >
+                Chat
+                {chatUnread && (
+                  <span
+                    data-testid="chat-unread"
+                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-attention"
+                  />
+                )}
+              </button>
+            </div>
+          )}
           <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} compact />
           {/* Connect = the remote-in action: teal accent + monitor icon,
               matching the in-tab overlays. 911 is NOT here — it's pinned to
@@ -232,6 +332,9 @@ export function CallTile(): React.JSX.Element | null {
           </button>
         </div>
       )}
+      {/* Inbound-chat chime (Task 9) — hidden; played imperatively from the
+          detection effect above, never autoplayed. */}
+      <audio ref={chimeRef} src="/sounds/chat-message.mp3" preload="auto" className="hidden" />
     </div>
   );
 }
