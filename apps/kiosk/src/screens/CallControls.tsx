@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, MessageSquare } from "lucide-react";
 
 function Ctrl({
   label, onClick, children, variant = "ghost", disabled = false,
@@ -33,7 +33,7 @@ function Ctrl({
 }
 
 export function CallControls({
-  muted, cameraOff, onMute, onCamera, primary, disabled = false,
+  muted, cameraOff, onMute, onCamera, primary, disabled = false, onType,
 }: {
   muted: boolean;
   cameraOff: boolean;
@@ -45,6 +45,11 @@ export function CallControls({
   // muting before the agent answers used to look muted but leave the mic live
   // for the whole call. `primary` (Cancel/End) is NEVER disabled.
   disabled?: boolean;
+  // Opens the in-call chat panel. Optional: Ringing renders CallControls
+  // without it and gets today's Mute/Camera/primary bar unchanged; Connected
+  // passes it and gains a "Type" control. Always enabled — the guest may open
+  // chat any time, even before mic/camera tracks exist.
+  onType?: () => void;
 }) {
   return (
     <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-end gap-3 rounded-pill border border-white/10 bg-call/70 px-3 py-2.5 backdrop-blur-sm">
@@ -54,6 +59,11 @@ export function CallControls({
       <Ctrl label={cameraOff ? "Camera on" : "Camera off"} onClick={onCamera} disabled={disabled}>
         {cameraOff ? <VideoOff /> : <Video />}
       </Ctrl>
+      {onType && (
+        <Ctrl label="Type" onClick={onType}>
+          <MessageSquare />
+        </Ctrl>
+      )}
       <Ctrl label={primary.label} onClick={primary.onClick} variant="end">
         <PhoneOff />
       </Ctrl>

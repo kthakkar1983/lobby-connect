@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { RING_WINDOW_MS, MAX_CALL_DURATION_MS } from "@lc/shared";
+import {
+  RING_WINDOW_MS,
+  MAX_CALL_DURATION_MS,
+  CHAT_PROTOCOL_VERSION,
+  decodeChat,
+  encodeChat,
+  newMessageId,
+  redactCardNumbers,
+  typingExpired,
+} from "@lc/shared";
 
 import * as Sentry from "@sentry/react";
 import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
@@ -26,6 +35,9 @@ export function App() {
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [chatLines, setChatLines] = useState<{ id: string; from: "guest" | "agent"; text: string; ts: number }[]>([]);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const sessionRef = useRef<KioskVideoSession | null>(null);
   const localAudioRef = useRef<MediaStreamTrack | null>(null);
@@ -36,6 +48,9 @@ export function App() {
   const maxCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every teardown to abort an in-flight call setup (see onStartCall).
   const callGenRef = useRef(0);
+  // Timestamp (ms) of the last "typing start" received from the peer; the
+  // watchdog effect below clears a stale indicator if "stop" never arrives.
+  const lastPeerTypingRef = useRef(0);
 
   // Live mirror of the current screen for timer callbacks (avoids stale closures).
   const screenRef = useRef(state.screen);
@@ -45,6 +60,18 @@ export function App() {
   useEffect(() => {
     fetchKioskConfig().then(setConfig).catch(() => {});
     const id = setInterval(() => void sendHeartbeat(), HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // Typing watchdog: clears a stale "peer is typing" indicator if a "stop"
+  // never arrives (e.g. the peer's tab backgrounds mid-type).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (lastPeerTypingRef.current && typingExpired(lastPeerTypingRef.current, Date.now())) {
+        lastPeerTypingRef.current = 0;
+        setPeerTyping(false);
+      }
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -64,6 +91,12 @@ export function App() {
     setMuted(false);
     setCameraOff(false);
     setReconnecting(false);
+    // Chat has no separate provider on the kiosk (unlike the portal's
+    // CallSurfaceProvider) — teardown is the per-call reset point.
+    setChatLines([]);
+    setPeerTyping(false);
+    setChatOpen(false);
+    lastPeerTypingRef.current = 0;
   }, []);
 
   const onStartCall = useCallback(async () => {
@@ -123,6 +156,21 @@ export function App() {
             void teardown();
             if (id) void endCall(id, "failed");
             dispatch({ type: "ERROR" });
+          }
+        },
+        onData: (payload: Uint8Array, fromIdentity: string) => {
+          const env = decodeChat(payload);
+          if (!env) return;
+          if (env.type === "msg") {
+            const from = fromIdentity.startsWith("agent") ? "agent" : "guest";
+            setChatLines((prev) => [...prev, { id: env.id, from, text: env.text, ts: env.ts }]);
+            lastPeerTypingRef.current = 0;
+            setPeerTyping(false);
+            if (from === "agent") setChatOpen(true); // auto-open on the agent's message
+          } else if (env.type === "typing") {
+            const t = env.state === "start";
+            lastPeerTypingRef.current = t ? Date.now() : 0;
+            setPeerTyping(t);
           }
         },
       };
@@ -191,6 +239,19 @@ export function App() {
     setCameraOff(next);
   }, [cameraOff, localVideo]);
 
+  // PCI-critical: redactCardNumbers() runs BEFORE the text is ever encoded or
+  // published, so a real card number can't reach the (self-hosted) LiveKit
+  // data channel even transiently.
+  const sendChat = useCallback((text: string) => {
+    const clean = redactCardNumbers(text);
+    const env = { v: CHAT_PROTOCOL_VERSION, type: "msg" as const, id: newMessageId(), text: clean, ts: Date.now() };
+    sessionRef.current?.sendData(encodeChat(env), true);
+    setChatLines((prev) => [...prev, { id: env.id, from: "guest", text: clean, ts: env.ts }]); // local echo
+  }, []);
+  const sendTyping = useCallback((s: "start" | "stop") => {
+    sessionRef.current?.sendData(encodeChat({ v: CHAT_PROTOCOL_VERSION, type: "typing", state: s, ts: Date.now() }), false);
+  }, []);
+
   if (!config) {
     return (
       <div
@@ -211,7 +272,8 @@ export function App() {
       case "ringing":
         return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
       case "connected":
-        return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd} />;
+        return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd}
+          chatOpen={chatOpen} chatLines={chatLines} peerTyping={peerTyping} onType={() => setChatOpen(true)} onSend={sendChat} onTyping={sendTyping} />;
       case "apology":
         return <Apology message={config.apologyMessage} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
     }

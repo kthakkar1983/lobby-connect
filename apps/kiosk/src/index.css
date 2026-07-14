@@ -145,6 +145,17 @@ html, body, #root {
 @keyframes lc-beacon { 0% { transform: scale(0.7); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
 .lc-beacon-pulse { animation: lc-beacon 4.5s ease-out infinite; }
 
+/* In-call chat "peer is typing" dots (components/TypingIndicator.tsx) — mirror
+   of the portal's globals.css keyframe of the same name. Referenced via
+   Tailwind's arbitrary value (`animate-[lc-typing-dot_...]`), so no companion
+   utility class is declared here. */
+@keyframes lc-typing-dot {
+  0%,
+  60%,
+  100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer, .lc-seam-drift,
   .lc-beacon-pulse {
