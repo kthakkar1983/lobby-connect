@@ -35,4 +35,32 @@ describe("redactCardNumbers", () => {
   it("does not mask a 16-digit run that fails Luhn", () => {
     expect(redactCardNumbers("1234 5678 9012 3456")).toBe("1234 5678 9012 3456");
   });
+
+  it("masks separator variants and PANs glued to expiry/CVV (hardened)", () => {
+    const MASK = "•••• (card number hidden)";
+    // dot-separated card
+    expect(redactCardNumbers("4111.1111.1111.1111")).toBe(MASK);
+    // PAN glued to an expiry (20 digits total — over the 19 whole-run cap)
+    expect(redactCardNumbers("4111 1111 1111 1111 1225")).toBe(MASK);
+    // PAN glued to a CVV (19 digits total, whole run fails Luhn)
+    expect(redactCardNumbers("4111111111111111 737")).toBe(MASK);
+    // leader + PAN (expiry typed first)
+    expect(redactCardNumbers("1225 4111 1111 1111 1111")).toBe(MASK);
+  });
+
+  it("still leaves non-card numeric input untouched after hardening", () => {
+    for (const s of [
+      "1425 Oak Street, Apt 3",
+      "ZIP 94103",
+      "94103-1425",
+      "call me at 415 555 1234",
+      "room 237",
+      "reservation 8825519",
+      "checkout is 07/13/2026",
+      "1234 5678 9012 3456", // 16 digits, fails Luhn — must NOT mask
+      "order 1234 5678 9012", // 12 digits (<13) — must NOT mask
+    ]) {
+      expect(redactCardNumbers(s)).toBe(s);
+    }
+  });
 });
