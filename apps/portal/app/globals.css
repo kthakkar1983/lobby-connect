@@ -188,6 +188,20 @@ body {
   animation: lc-shake 360ms var(--ease-out) both;
 }
 
+/* Typing indicator — three-dot "the other party is typing" bubble (in-call
+   chat, spec 2026-07-13). A gentle bounce-and-fade per dot; components
+   stagger the ripple via a per-dot `animation-delay` and pair the utility
+   with `motion-reduce:animate-none` (dots stay visible, just still) — same
+   idiom as the existing `animate-spin`/`animate-pulse` reduced-motion pairs.
+   Referenced via Tailwind's arbitrary value (`animate-[lc-typing-dot_...]`),
+   so no companion utility class is declared here. */
+@keyframes lc-typing-dot {
+  0%,
+  60%,
+  100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
 /* Accessibility — universal reduced-motion safety net (spec §3.5).
    Neutralizes movement/looping app-wide so no animation (incl. future
    ones) can violate the user's preference. Comprehension cues that are
