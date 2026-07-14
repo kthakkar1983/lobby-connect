@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-07-14)** by `docs/handoffs/2026-07-14-in-call-chat-smoke-complete-handoff.md` — chat is now merged, prod-smoked, and the 3 smoke findings are fixed + verified. This doc is kept for history.
+
 # Handoff — In-Call Kiosk⇄Agent Chat: BUILD COMPLETE, staging smoke + merge pending
 
 **Date:** 2026-07-14
