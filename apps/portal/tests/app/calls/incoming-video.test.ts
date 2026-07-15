@@ -12,6 +12,7 @@ let assignmentRows: Array<{ property_id: string }> = [];
 let availabilityRows: Array<{ property_id: string }> = [];
 const gteSpy = vi.fn();
 const inSpy = vi.fn();
+const eqSpy = vi.fn();
 const callsQuerySpy = vi.fn();
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -31,10 +32,13 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (table === "properties") {
         return { select: () => ({ in: () => Promise.resolve({ data: propertyRows }) }) };
       }
-      // calls: select().eq().eq().eq().in().gte().order()
+      // calls: select().eq().eq().eq().eq().in().gte().order()
       callsQuerySpy();
       const chain = {
-        eq: () => chain,
+        eq: (col: string, val: string) => {
+          eqSpy(col, val);
+          return chain;
+        },
         in: (col: string, vals: string[]) => {
           inSpy(col, vals);
           return chain;
@@ -58,6 +62,7 @@ beforeEach(() => {
   getUser.mockReset();
   gteSpy.mockClear();
   inSpy.mockClear();
+  eqSpy.mockClear();
   callsQuerySpy.mockClear();
   getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   // `status: "AVAILABLE"` = on shift. The `profiles` mock is shared by both reads:
@@ -196,5 +201,15 @@ describe("GET /api/calls/incoming-video", () => {
     availabilityRows = [{ property_id: "prop-9" }];
     await GET(request);
     expect(inSpy).toHaveBeenCalledWith("property_id", ["prop-1"]);
+  });
+
+  // --- Security-critical: an agent-initiated OUTBOUND video call is RINGING too,
+  // but it rings the KIOSK, not this agent. Without the direction filter the
+  // agent's own outbound row would surface right back as an incoming call. The
+  // mock's .eq() is a no-op, so lock the filter by asserting it was applied. ---
+
+  it("filters the RINGING query to direction=INBOUND so an OUTBOUND row never rings the agent", async () => {
+    await GET(request);
+    expect(eqSpy).toHaveBeenCalledWith("direction", "INBOUND");
   });
 });
