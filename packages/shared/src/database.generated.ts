@@ -132,6 +132,7 @@ export type Database = {
           caller_number: string | null;
           channel: string;
           created_at: string;
+          direction: string;
           duration_seconds: number | null;
           emergency_agent_call_sid: string | null;
           emergency_conference_name: string | null;
@@ -155,6 +156,7 @@ export type Database = {
           caller_number?: string | null;
           channel: string;
           created_at?: string;
+          direction?: string;
           duration_seconds?: number | null;
           emergency_agent_call_sid?: string | null;
           emergency_conference_name?: string | null;
@@ -178,6 +180,7 @@ export type Database = {
           caller_number?: string | null;
           channel?: string;
           created_at?: string;
+          direction?: string;
           duration_seconds?: number | null;
           emergency_agent_call_sid?: string | null;
           emergency_conference_name?: string | null;
@@ -333,6 +336,45 @@ export type Database = {
             columns: ["triggered_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      kiosks: {
+        Row: {
+          created_at: string;
+          id: string;
+          last_seen_at: string | null;
+          operator_id: string;
+          property_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          last_seen_at?: string | null;
+          operator_id: string;
+          property_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          last_seen_at?: string | null;
+          operator_id?: string;
+          property_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "kiosks_operator_id_fkey";
+            columns: ["operator_id"];
+            isOneToOne: false;
+            referencedRelation: "operators";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosks_property_id_fkey";
+            columns: ["property_id"];
+            isOneToOne: false;
+            referencedRelation: "properties";
             referencedColumns: ["id"];
           },
         ];

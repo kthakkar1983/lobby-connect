@@ -21,6 +21,7 @@ export type CallState =
   | "COMPLETED"
   | "NO_ANSWER"
   | "FAILED";
+export type CallDirection = "INBOUND" | "OUTBOUND";
 export type ActorType = "USER" | "SYSTEM";
 export type IncidentSeverity = "HIGH";
 export type IncidentKind = "EMERGENCY_911";
@@ -42,9 +43,17 @@ type ColumnOverrides = {
         Update: { role?: Role; status?: ProfileStatus };
       };
       calls: {
-        Row: { channel: CallChannel; state: CallState };
-        Insert: { channel: CallChannel; state: CallState };
-        Update: { channel?: CallChannel; state?: CallState };
+        Row: { channel: CallChannel; state: CallState; direction: CallDirection };
+        Insert: {
+          channel: CallChannel;
+          state: CallState;
+          direction?: CallDirection;
+        };
+        Update: {
+          channel?: CallChannel;
+          state?: CallState;
+          direction?: CallDirection;
+        };
       };
       audit_logs: {
         Row: { actor_type: ActorType };
