@@ -37,6 +37,33 @@ export async function claimCall(
   return !!data && data.length > 0;
 }
 
+/**
+ * Kiosk-side atomic claim of an OUTBOUND call: RINGING -> IN_PROGRESS + answered_at,
+ * scoped to the property + direction. Unlike claimCall it does NOT set
+ * handled_by_user_id — for an outbound call that is already the originating
+ * agent and must be preserved. Returns { channelName, operatorId } on success
+ * (operatorId is needed by the caller to broadcast calls-changed, matching
+ * call-ended's convention of broadcasting by operator_id, not property_id),
+ * or null if not claimed (already answered / cancelled / timed out).
+ */
+export async function claimOutboundByKiosk(
+  admin: SupabaseClient,
+  callId: string,
+  propertyId: string,
+): Promise<{ channelName: string; operatorId: string } | null> {
+  const { data } = await admin
+    .from("calls")
+    .update({ state: "IN_PROGRESS", answered_at: new Date().toISOString() })
+    .eq("id", callId)
+    .eq("property_id", propertyId)
+    .eq("direction", "OUTBOUND")
+    .eq("state", "RINGING")
+    .select("id, agora_channel_name, operator_id");
+  const row = data?.[0];
+  if (!row || !row.agora_channel_name) return null;
+  return { channelName: row.agora_channel_name, operatorId: row.operator_id };
+}
+
 type FinalState = "COMPLETED" | "NO_ANSWER" | "FAILED";
 
 /** The kiosk's end `reason` → finalize state. "cancelled" is a guest who hung up. */
