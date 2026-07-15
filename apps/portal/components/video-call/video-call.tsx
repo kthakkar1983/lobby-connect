@@ -5,6 +5,7 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor, Cor
 import * as Sentry from "@sentry/nextjs";
 import {
   MAX_CALL_DURATION_MS,
+  OUTBOUND_RING_WINDOW_MS,
   CHAT_PROTOCOL_VERSION,
   decodeChat,
   encodeChat,
@@ -49,29 +50,27 @@ export function VideoCall({
   /** Spec D2: hide the guest-video stage (playbook fills it) while the tile is up. */
   collapsed?: boolean;
   /**
-   * Task 12 plumbing only — accepted + defaulted, NOT yet read anywhere in
-   * this component. Task 13 implements the outbound "Calling…" phase these
-   * two props drive (skipping the inbound answer-video claim POST below and
-   * joining LiveKit directly on `channelName` while polling for the kiosk to
-   * pick up, instead). True for an agent-originated call (video-call-host.tsx,
-   * via startOutboundVideo); false/absent for an inbound ring answered from a
-   * property card — behavior unchanged.
+   * Task 13: true for an agent-originated (OUTBOUND) call — the row already
+   * exists as RINGING with its channel name in hand (start-outbound-video), so
+   * the component skips the inbound answer-video claim POST below and instead
+   * joins LiveKit directly on `channelName`, showing a "Calling…" pre-connect
+   * phase until the kiosk answers. False/absent for an inbound ring answered
+   * from a property card — behavior unchanged. Set by video-call-host.tsx (via
+   * startOutboundVideo/registerStartOutbound).
    */
   outbound?: boolean;
   /**
-   * Task 12 plumbing only — see `outbound` above. The LiveKit channel for an
-   * OUTBOUND call, already known before any answer event (the backend
-   * generates it in start-outbound-video). Null for inbound calls, which
-   * fetch their own channelName via the answer-video claim POST instead.
+   * Task 13: the LiveKit channel for an OUTBOUND call, already known before
+   * any answer event (the backend generates it in start-outbound-video) — read
+   * directly when `outbound` is true. Null for inbound calls, which fetch
+   * their own channelName via the answer-video claim POST instead.
    */
   channelName?: string | null;
 }) {
-  // Task 12 plumbing only: accepted + defaulted above, deliberately not read
-  // yet anywhere below (see the prop doc comments). Task 13 wires these into
-  // the outbound "Calling…" phase; the no-op reads keep them from tripping
-  // no-unused-vars in the meantime.
-  void outbound;
-  void channelName;
+  // Task 13: an outbound call starts in the pre-connect "Calling…" phase
+  // (waiting for the kiosk to answer); inbound is implicitly connected the
+  // moment the claim POST below succeeds, so it starts (and stays) "connected".
+  const [phase, setPhase] = useState<"calling" | "connected">(outbound ? "calling" : "connected");
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<"camera" | "mic" | "both" | null>(null);
@@ -178,25 +177,45 @@ export function VideoCall({
     let lkSession: LiveKitCallSession | null = null;
     (async () => {
       try {
-        const ans = await fetch(`/api/calls/${callId}/answer-video`, { method: "POST" });
-        if (cancelled) return;
-        if (!ans.ok) {
-          // A rejection here (duty-gate 403, claim race 409, etc.) used to close
-          // silently — which is exactly what made the stale-heartbeat 403 bug
-          // invisible. The root cause is fixed (duty is raw-status now), but a
-          // future regression must never be silent: capture it before closing.
-          Sentry.captureMessage("video answer rejected", {
-            level: "warning",
-            extra: { callId, status: ans.status },
+        let channel: string | null;
+        if (outbound) {
+          // Agent-originated: start-outbound-video already created the RINGING
+          // row and minted the channel, so there is no kiosk-answers-agent claim
+          // to make here (unlike the inbound branch below) — use the prop and
+          // wait for the kiosk to join.
+          channel = channelName;
+        } else {
+          const ans = await fetch(`/api/calls/${callId}/answer-video`, { method: "POST" });
+          if (cancelled) return;
+          if (!ans.ok) {
+            // A rejection here (duty-gate 403, claim race 409, etc.) used to close
+            // silently — which is exactly what made the stale-heartbeat 403 bug
+            // invisible. The root cause is fixed (duty is raw-status now), but a
+            // future regression must never be silent: capture it before closing.
+            Sentry.captureMessage("video answer rejected", {
+              level: "warning",
+              extra: { callId, status: ans.status },
+            });
+            return onClose();
+          }
+          const claimed = (await ans.json()) as { channelName: string };
+          channel = claimed.channelName;
+        }
+        if (!channel) {
+          // Shouldn't happen — the host always supplies channelName for an
+          // outbound call (start-outbound-video mints it before this mounts).
+          // Fail closed rather than join LiveKit with no channel.
+          Sentry.captureMessage("video call missing channelName at join", {
+            level: "error",
+            extra: { callId, outbound },
           });
           return onClose();
         }
-        const { channelName } = (await ans.json()) as { channelName: string };
 
         // Legacy wire param — the token route still validates uid; LiveKit ignores it.
         const uid = Math.floor(Math.random() * 1_000_000) + 1_000_001;
         const tokRes = await fetch(
-          `/api/video/token?channel=${encodeURIComponent(channelName)}&uid=${uid}`
+          `/api/video/token?channel=${encodeURIComponent(channel)}&uid=${uid}`
         );
         if (cancelled) return;
         if (!tokRes.ok) return onClose();
@@ -210,9 +229,14 @@ export function VideoCall({
             // Task 17: share the guest's remote track with the tile (its own
             // muted <video> face) — additive; the in-tab attach above is unchanged.
             if (!cancelled) publishGuestVideoTrack?.(h.mediaStreamTrack());
+            // Task 13: the kiosk's remote video is the outbound "answered"
+            // signal — clears the "Calling…" phase. No-op for inbound (already
+            // "connected" from mount).
+            if (!cancelled) setPhase("connected");
           },
           onRemoteAudioTrack: (t) => {
             if (!cancelled) setGuestAudioTrack(t);
+            if (!cancelled) setPhase("connected");
           },
           onAudioBlocked: (recover) => {
             audioRecoveryRef.current = () => {
@@ -281,6 +305,25 @@ export function VideoCall({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId]);
+
+  // Task 13: outbound ring window. The agent originated this call and is
+  // waiting for the kiosk to answer; if nobody picks up within
+  // OUTBOUND_RING_WINDOW_MS, end it the same way Cancel does — handleEnd POSTs
+  // end-video, which finalizes a still-RINGING row to NO_ANSWER (Task 8's
+  // generalized end-video handles this; no separate route needed). No-op for
+  // inbound (phase is never "calling"). Flipping to "connected" runs this
+  // effect's cleanup, canceling the pending timer.
+  useEffect(() => {
+    if (!outbound || phase !== "calling") return;
+    const id = setTimeout(() => {
+      void handleEnd();
+    }, OUTBOUND_RING_WINDOW_MS);
+    return () => clearTimeout(id);
+    // handleEnd is a stable function-declaration reference, guarded internally
+    // by finalizingRef (idempotent) — intentionally excluded so this effect
+    // only re-arms on a real outbound/phase change, not every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outbound, phase]);
 
   async function saveNotes(): Promise<boolean> {
     if (!roomNumberRef.current && !notesRef.current) return true; // nothing to save
@@ -413,7 +456,7 @@ export function VideoCall({
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <span className="flex items-center gap-2 text-sm font-medium text-foreground">
           <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
-          On video · {propertyName}
+          {phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
         </span>
       </div>
 
@@ -476,6 +519,27 @@ export function VideoCall({
             >
               <PictureInPicture2 size={14} /> Reopen tile
             </button>
+          )}
+          {/* Task 13: outbound pre-connect phase. An opaque overlay (not a
+              replacement of the stage above) so remoteRef/localRef stay mounted
+              the whole time — onRemoteVideo's attach() needs remoteRef.current to
+              already exist the instant the kiosk joins, which is the same event
+              that clears this phase. */}
+          {phase === "calling" && (
+            <div
+              data-testid="outbound-calling-overlay"
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-[var(--color-call)] px-6 text-center text-white"
+            >
+              <Loader2 size={40} className="animate-spin motion-reduce:animate-none" />
+              <p className="text-lg font-medium">Calling {propertyName}…</p>
+              <button
+                type="button"
+                onClick={() => void handleEnd()}
+                className="rounded-button border border-white/30 px-4 py-2 text-sm font-medium text-white"
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
         {collapsed ? (
