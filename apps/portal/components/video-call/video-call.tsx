@@ -37,6 +37,8 @@ export function VideoCall({
   propertyName,
   propertyId,
   collapsed = false,
+  outbound = false,
+  channelName = null,
 }: {
   callId: string;
   onClose: () => void;
@@ -46,7 +48,30 @@ export function VideoCall({
   propertyId: string | null;
   /** Spec D2: hide the guest-video stage (playbook fills it) while the tile is up. */
   collapsed?: boolean;
+  /**
+   * Task 12 plumbing only — accepted + defaulted, NOT yet read anywhere in
+   * this component. Task 13 implements the outbound "Calling…" phase these
+   * two props drive (skipping the inbound answer-video claim POST below and
+   * joining LiveKit directly on `channelName` while polling for the kiosk to
+   * pick up, instead). True for an agent-originated call (video-call-host.tsx,
+   * via startOutboundVideo); false/absent for an inbound ring answered from a
+   * property card — behavior unchanged.
+   */
+  outbound?: boolean;
+  /**
+   * Task 12 plumbing only — see `outbound` above. The LiveKit channel for an
+   * OUTBOUND call, already known before any answer event (the backend
+   * generates it in start-outbound-video). Null for inbound calls, which
+   * fetch their own channelName via the answer-video claim POST instead.
+   */
+  channelName?: string | null;
 }) {
+  // Task 12 plumbing only: accepted + defaulted above, deliberately not read
+  // yet anywhere below (see the prop doc comments). Task 13 wires these into
+  // the outbound "Calling…" phase; the no-op reads keep them from tripping
+  // no-unused-vars in the meantime.
+  void outbound;
+  void channelName;
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<"camera" | "mic" | "both" | null>(null);

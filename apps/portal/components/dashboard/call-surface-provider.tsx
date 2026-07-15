@@ -82,6 +82,23 @@ export interface RegisteredCallControls {
   sendTyping?: (state: "start" | "stop") => void;
 }
 
+/**
+ * Registered by the video host once it's mounted and ready to originate a
+ * call (Task 12, outbound video). `startOutboundVideo` invokes this AFTER the
+ * backend route returns a callId/channelName, so the host can set its local
+ * `active` state and mount `<VideoCall outbound channelName=...>`. The
+ * registration itself lives in a plain ref (not state, unlike
+ * acceptVideo/registerAcceptVideo) — nothing needs to reactively read "is a
+ * starter registered"; it's only ever invoked imperatively, after the POST
+ * resolves.
+ */
+export type OutboundStarter = (args: {
+  callId: string;
+  channelName: string;
+  propertyId: string;
+  propertyName: string;
+}) => void;
+
 interface CallSurfaceValue extends CallSurfaceSnapshot {
   actions: CallSurfaceActions;
   publishRings: (source: "audio" | "video", rings: IncomingRing[]) => void;
@@ -93,6 +110,25 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   publishActive: (channel: "AUDIO" | "VIDEO", active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
+  /**
+   * Originate an outbound VIDEO call to a property's kiosk — the reverse of
+   * answering an inbound ring (agent-initiated outbound video calls). POSTs
+   * /api/calls/start-outbound-video with `{propertyId}`; on success invokes
+   * the registered OutboundStarter (the video host) so it mounts `<VideoCall>`
+   * in outbound mode. Returns `{ok:false, busy:true}` on a 409 (the property
+   * already has a live call, or the agent is already on one) and `{ok:false}`
+   * on any other non-2xx response or network failure — the caller (a future
+   * property-card "Kiosk" button) surfaces that to the agent. Deliberately a
+   * single one-shot fetch, NOT reliableFetch's retry — like the 911 trigger,
+   * this has a server-side side effect (creates the `calls` row + flips the
+   * agent ON_CALL), so a blind retry risks a double-dial.
+   */
+  startOutboundVideo: (
+    propertyId: string,
+    propertyName: string,
+  ) => Promise<{ ok: boolean; busy?: boolean }>;
+  /** Register the video host's outbound-call starter (Task 12). Null clears it. */
+  registerStartOutbound: (fn: OutboundStarter | null) => void;
   /**
    * Ring keys the LOCAL user has silenced (audio only). The publishers
    * (softphone audio ring / video-host ring) read this and mute their own
@@ -419,6 +455,30 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     [openTileForCall],
   );
 
+  // Outbound-call origination (Task 12). startOutboundRef is a plain ref (not
+  // state, unlike acceptVideoFn): nothing reactively reads "has the host
+  // registered a starter" — it's only ever invoked imperatively below, after
+  // the POST resolves, mirroring connectToProperty's ref-only internals.
+  const startOutboundRef = useRef<OutboundStarter | null>(null);
+  const registerStartOutbound = useCallback((fn: OutboundStarter | null) => {
+    startOutboundRef.current = fn;
+  }, []);
+  const startOutboundVideo = useCallback(
+    async (propertyId: string, propertyName: string): Promise<{ ok: boolean; busy?: boolean }> => {
+      const res = await fetch("/api/calls/start-outbound-video", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId }),
+      }).catch(() => null);
+      if (res && res.status === 409) return { ok: false, busy: true };
+      if (!res || !res.ok) return { ok: false };
+      const { callId, channelName } = (await res.json()) as { callId: string; channelName: string };
+      startOutboundRef.current?.({ callId, channelName, propertyId, propertyName });
+      return { ok: true };
+    },
+    [],
+  );
+
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
   // changes, drop any silenced key that is no longer ringing. A brand-new call
   // gets a new key that isn't silenced, so it rings again. ringKeys is memoized
@@ -469,6 +529,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      startOutboundVideo,
+      registerStartOutbound,
       silencedKeys,
       silenceRing,
       tileMount,
@@ -500,6 +562,8 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      startOutboundVideo,
+      registerStartOutbound,
       silencedKeys,
       silenceRing,
       tileMount,
