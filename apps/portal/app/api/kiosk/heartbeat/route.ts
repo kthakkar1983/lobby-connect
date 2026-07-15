@@ -1,14 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { verifyKioskToken, getKioskConfigSecret } from "@/lib/kiosk/config-token";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { stampKioskLiveness } from "@/lib/kiosk/stamp-liveness";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
   const token = request.headers.get("x-kiosk-token") ?? "";
-  if (!verifyKioskToken(token, getKioskConfigSecret())) {
+  const verified = verifyKioskToken(token, getKioskConfigSecret());
+  if (!verified) {
     return NextResponse.json({ error: "Invalid kiosk token" }, { status: 401 });
   }
-  // v1: liveness is a no-op beyond auth. A kiosks.last_seen_at write slots in here later.
+
+  const admin = createAdminClient();
+  // Best-effort, non-blocking liveness stamp — runs after the response via
+  // after() (waitUntil-backed) so it never delays the 204, and a failure here
+  // must never fail the heartbeat itself.
+  after(() => {
+    void stampKioskLiveness(admin, verified.propertyId).catch(() => {});
+  });
+
   return new NextResponse(null, { status: 204 });
 }
