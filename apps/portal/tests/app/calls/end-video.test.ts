@@ -31,6 +31,10 @@ vi.mock("next/server", async (importOriginal) => {
 
 let callRow: Record<string, unknown> | null = null;
 const callUpdateSpy = vi.fn();
+// Tracks resetPresenceAfterCall's write (admin.from("profiles").update(...)),
+// kept separate from callUpdateSpy so the existing "calls" table assertions
+// stay meaningful now that every successful path also touches "profiles".
+const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
   async (): Promise<{ data: Record<string, unknown> }> => ({
     data: { id: "u1", operator_id: "op-1", role: "AGENT" },
@@ -41,7 +45,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from(table: string) {
       if (table === "profiles") {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => profileFetch() }) }) };
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: () => profileFetch() }) }),
+          update: (v: unknown) => {
+            profileUpdateSpy(v);
+            return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+          },
+        };
       }
       return {
         select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
@@ -64,6 +74,7 @@ function call(id: string) {
 beforeEach(() => {
   getUser.mockReset();
   callUpdateSpy.mockClear();
+  profileUpdateSpy.mockClear();
   broadcastCallsChanged.mockClear();
   sendCallPush.mockClear();
   after.mockClear();
@@ -82,6 +93,7 @@ describe("POST /api/calls/[id]/end-video", () => {
     getUser.mockResolvedValue({ data: { user: null } });
     expect((await call("call-1")).status).toBe(401);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("finalizes an IN_PROGRESS call to COMPLETED with ended_at + duration", async () => {
@@ -96,27 +108,67 @@ describe("POST /api/calls/[id]/end-video", () => {
     );
   });
 
+  it("resets the actor's presence ON_CALL -> AVAILABLE on the IN_PROGRESS (inbound) path (task_71d65b0a)", async () => {
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(profileUpdateSpy).toHaveBeenCalledWith({ status: "AVAILABLE" });
+  });
+
+  it("finalizes a RINGING call (outbound, never answered) to NO_ANSWER with a null duration", async () => {
+    callRow = { ...callRow!, state: "RINGING", answered_at: null };
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(callUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: "NO_ANSWER",
+        ended_at: expect.any(String),
+        duration_seconds: null,
+      }),
+    );
+  });
+
+  it("resets the actor's presence ON_CALL -> AVAILABLE on the RINGING (outbound cancel/timeout) path (task_71d65b0a)", async () => {
+    callRow = { ...callRow!, state: "RINGING", answered_at: null };
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(profileUpdateSpy).toHaveBeenCalledWith({ status: "AVAILABLE" });
+  });
+
+  it("broadcasts but does NOT push on the RINGING path (a never-connected outbound call was never pushed)", async () => {
+    callRow = { ...callRow!, state: "RINGING", answered_at: null };
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(broadcastCallsChanged).toHaveBeenCalledWith("op-1");
+    expect(sendCallPush).not.toHaveBeenCalled();
+  });
+
   it("404 across operators", async () => {
     callRow = { ...callRow!, operator_id: "OTHER" };
     expect((await call("call-1")).status).toBe(404);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 
-  it("is a no-op when the call is already finalized (kiosk won the race)", async () => {
+  it("is a no-op on the call row when already finalized (kiosk won the race), but still resets presence", async () => {
     callRow = { ...callRow!, state: "COMPLETED" };
     const res = await call("call-1");
     expect(res.status).toBe(200);
     expect(callUpdateSpy).not.toHaveBeenCalled();
-    // Broadcast must fire only inside the IN_PROGRESS guard, not on the no-op path.
+    // Broadcast must fire only inside the IN_PROGRESS/RINGING guards, not on the no-op path.
     expect(broadcastCallsChanged).not.toHaveBeenCalled();
     // Push fires from the same guarded after() — must not fire on the no-op path.
     expect(sendCallPush).not.toHaveBeenCalled();
+    // Presence reset is unconditional (task_71d65b0a): the calling agent is done
+    // with the call either way, even when the row was already finalized by the
+    // other side of the race.
+    expect(profileUpdateSpy).toHaveBeenCalledWith({ status: "AVAILABLE" });
   });
 
   it("403 when the caller is an OWNER (read-only role)", async () => {
     profileFetch.mockResolvedValueOnce({ data: { id: "u1", operator_id: "op-1", role: "OWNER" } });
     expect((await call("call-1")).status).toBe(403);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("broadcasts calls-changed with the actor's operatorId on success", async () => {

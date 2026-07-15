@@ -92,6 +92,24 @@ export function resolveFinalState(reason: string | undefined, answered: boolean)
   return base;
 }
 
+/**
+ * Reset a just-finished agent from ON_CALL back to AVAILABLE. Guarded on
+ * status='ON_CALL' so it never clobbers AWAY/BREAK/OFFLINE or a concurrent second call.
+ * Service-role client only (the 0012 column guard blocks user-scoped status writes).
+ * Fixes task_71d65b0a — the video end paths never reset presence, so agents got stuck ON_CALL.
+ */
+export async function resetPresenceAfterCall(admin: SupabaseClient, userId: string | null): Promise<void> {
+  if (!userId) return;
+  // Deliberately value-based (keyed on status='ON_CALL'), NOT ownership-aware: it
+  // doesn't check whether this agent still has another live call. Nothing today
+  // distinguishes AVAILABLE from ON_CALL for correctness (isReachableForDial treats
+  // them alike; the outbound busy-guard is row-based), so a premature flip during
+  // rare two-call concurrency is cosmetic and self-heals within one presence beat.
+  // An ownership-aware version (skip if another active call exists) is a tracked
+  // follow-up for the audio one-call-at-a-time gate (needs a two-pass reaper).
+  await admin.from("profiles").update({ status: "AVAILABLE" }).eq("id", userId).eq("status", "ON_CALL");
+}
+
 /** State-guarded finalize payload (COMPLETED/NO_ANSWER/FAILED). Caller keeps its own `.eq/.in(state)` write guard. */
 export function finalizeCallPayload(
   state: "COMPLETED" | "NO_ANSWER" | "FAILED",

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordHeartbeat } from "@/lib/health/heartbeat";
+import { resetPresenceAfterCall } from "@/lib/voice/call-state";
 import {
   reapCutoffs,
   inProgressIsStale,
@@ -17,6 +18,11 @@ export const runtime = "nodejs";
  * real time; this cron sweeps anything that slips through (e.g. agent + kiosk
  * both gone). AUDIO calls are finalized by Twilio webhooks, so they are never
  * touched here.
+ *
+ * Each row this sweep finalizes also gets its handler's presence reset
+ * ON_CALL -> AVAILABLE (task_71d65b0a) — this is the crash/throttle case the
+ * bug describes: the agent's own client is gone (or backgrounded behind a
+ * foregrounded RustDesk session), so no client-side path ever ran the reset.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   // Fail closed: the cron must present the secret. An unset secret is a
@@ -39,18 +45,19 @@ export async function GET(request: Request): Promise<NextResponse> {
   // IN_PROGRESS so the reaper-vs-realtime finalize race stays first-writer-wins.
   const { data: inProgressRows } = await admin
     .from("calls")
-    .select("id, created_at, answered_at")
+    .select("id, created_at, answered_at, handled_by_user_id")
     .eq("channel", "VIDEO")
     .eq("state", "IN_PROGRESS");
   const staleInProgress = ((inProgressRows ?? []) as Array<{
     id: string;
     created_at: string;
     answered_at: string | null;
+    handled_by_user_id: string | null;
   }>).filter((row) => inProgressIsStale(row, now));
 
   await Promise.all(
-    staleInProgress.map((row) =>
-      admin
+    staleInProgress.map(async (row) => {
+      await admin
         .from("calls")
         .update({
           state: "FAILED",
@@ -60,18 +67,39 @@ export async function GET(request: Request): Promise<NextResponse> {
           notes: "Auto-closed by reaper: kiosk disconnected mid-call.",
         })
         .eq("id", row.id)
-        .eq("state", "IN_PROGRESS"),
-    ),
+        .eq("state", "IN_PROGRESS");
+      // Best-effort: a failed reset is not retried (the row is already finalized,
+      // so the next run won't re-select it) and the softphone heartbeat self-heals it.
+      await resetPresenceAfterCall(admin, row.handled_by_user_id ?? null);
+    }),
   );
 
-  // Video calls stuck ringing far past the 120s window → kiosk died before the
-  // agent answered. Close as NO_ANSWER (no duration: never connected).
-  await admin
+  // Video calls stuck ringing far past the 120s window → the kiosk died before
+  // the agent answered (inbound), or an outbound call's ring was simply never
+  // answered and the agent's own end-video cancel never ran either. Fetch
+  // candidates (need handled_by_user_id for the presence reset below) and close
+  // each as NO_ANSWER (no duration: never connected). Inbound rows are unclaimed
+  // while RINGING (handled_by_user_id is null), so the reset only ever does
+  // real work for outbound rows, where it's set at creation.
+  const { data: ringingRows } = await admin
     .from("calls")
-    .update({ state: "NO_ANSWER", ended_at: endedAt })
+    .select("id, handled_by_user_id")
     .eq("channel", "VIDEO")
     .eq("state", "RINGING")
     .lt("ring_started_at", ringingBefore);
+
+  await Promise.all(
+    ((ringingRows ?? []) as Array<{ id: string; handled_by_user_id: string | null }>).map(
+      async (row) => {
+        await admin
+          .from("calls")
+          .update({ state: "NO_ANSWER", ended_at: endedAt })
+          .eq("id", row.id)
+          .eq("state", "RINGING");
+        await resetPresenceAfterCall(admin, row.handled_by_user_id ?? null);
+      },
+    ),
+  );
 
   // Self-report cron liveness for /status (per operator — multi-tenant-safe).
   const { data: operators } = await admin.from("operators").select("id");
