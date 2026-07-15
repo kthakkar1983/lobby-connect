@@ -1,5 +1,6 @@
 export type KioskScreen =
   | "home"
+  | "incoming"
   | "ringing"
   | "connected"
   | "apology";
@@ -18,7 +19,10 @@ export type KioskAction =
   | { type: "CANCEL" }
   | { type: "END_CALL" }
   | { type: "DISMISS_APOLOGY" }
-  | { type: "ERROR" };
+  | { type: "ERROR" }
+  | { type: "INCOMING_CALL"; callId: string; channelName: string }
+  | { type: "ANSWER" }
+  | { type: "DROP" };
 
 export function initialState(): KioskState {
   return { screen: "home", callId: null, channelName: null };
@@ -41,6 +45,11 @@ export function shouldFireRingTimeout(screen: KioskScreen): boolean {
  */
 export function shouldEndForMaxDuration(screen: KioskScreen): boolean {
   return screen === "connected";
+}
+
+/** True while a post-drop tap lockout is still in effect. */
+export function isLockedOut(lockedUntilMs: number | null, nowMs: number): boolean {
+  return lockedUntilMs != null && nowMs < lockedUntilMs;
 }
 
 function home(): KioskState {
@@ -71,6 +80,17 @@ export function reduce(state: KioskState, action: KioskAction): KioskState {
       return home();
     case "ERROR":
       return { ...state, screen: "apology" };
+    case "INCOMING_CALL":
+      // Only ring an idle kiosk; ignore if mid-call (an active call owns the screen).
+      return state.screen === "home"
+        ? { screen: "incoming", callId: action.callId, channelName: action.channelName }
+        : state;
+    case "ANSWER":
+      // Tap Answer -> reuse the "ringing" connecting screen; AGENT_JOINED -> connected.
+      return state.screen === "incoming" ? { ...state, screen: "ringing" } : state;
+    case "DROP":
+      // Terminal mid-call drop -> home (App layers the 10s tap lockout separately).
+      return initialState();
     default:
       return state;
   }
