@@ -8,6 +8,7 @@ const base: RecentCall = {
   id: "c1",
   channel: "VIDEO",
   state: "COMPLETED",
+  direction: "INBOUND",
   room_number: "705",
   caller_number: null,
   ring_started_at: "2026-06-17T05:32:00Z",
@@ -72,5 +73,20 @@ describe("RecentCallRow", () => {
 
     await user.click(screen.getByRole("button"));
     expect(screen.queryByText("Handled by")).toBeNull();
+  });
+
+  it("gives an inbound NO_ANSWER call the attention/blaze dot (unchanged default)", () => {
+    const { container } = renderRow({ ...base, state: "NO_ANSWER", direction: "INBOUND" });
+    const dot = container.querySelector(".rounded-full");
+    expect(dot).toBeTruthy();
+    expect(dot?.className).toContain("bg-attention");
+  });
+
+  it("gives an OUTBOUND NO_ANSWER call a muted dot, not the attention/blaze one", () => {
+    const { container } = renderRow({ ...base, state: "NO_ANSWER", direction: "OUTBOUND" });
+    const dot = container.querySelector(".rounded-full");
+    expect(dot).toBeTruthy();
+    expect(dot?.className).not.toContain("bg-attention");
+    expect(dot?.className).toContain("bg-muted-foreground/40");
   });
 });

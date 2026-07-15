@@ -88,7 +88,7 @@ export default async function AdminOverviewPage() {
     supabase
       .from("calls")
       .select(
-        "id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id"
+        "id, property_id, channel, state, direction, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id"
       )
       .eq("operator_id", actor.operator_id)
       .gte("ring_started_at", since)
@@ -161,6 +161,7 @@ export default async function AdminOverviewPage() {
     id: c.id,
     channel: c.channel,
     state: c.state,
+    direction: c.direction,
     room_number: c.room_number,
     caller_number: c.caller_number,
     ring_started_at: c.ring_started_at,

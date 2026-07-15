@@ -41,7 +41,7 @@ export default async function AgentDashboardPage() {
   const [{ data: raw }, { data: kioskRows }] = await Promise.all([
     supabase
       .from("calls")
-      .select("id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes")
+      .select("id, property_id, channel, state, direction, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes")
       .eq("handled_by_user_id", actor.id)
       .gte("ring_started_at", since)
       .order("ring_started_at", { ascending: false }),
@@ -66,6 +66,7 @@ export default async function AgentDashboardPage() {
     id: c.id,
     channel: c.channel,
     state: c.state,
+    direction: c.direction,
     room_number: c.room_number,
     caller_number: c.caller_number,
     ring_started_at: c.ring_started_at,

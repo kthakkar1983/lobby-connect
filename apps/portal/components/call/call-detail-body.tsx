@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Siren } from "lucide-react";
 import type { Route } from "next";
-import type { CallState } from "@lc/shared";
+import type { CallState, CallDirection } from "@lc/shared";
 import { SectionCard } from "@/components/owner/section-card";
 import { formatCallTime, formatDuration } from "@/lib/owner/format";
 
@@ -9,6 +9,7 @@ export type CallDetail = {
   readonly id: string;
   readonly channel: string; // "AUDIO" | "VIDEO"
   readonly state: CallState;
+  readonly direction: CallDirection;
   readonly caller_number: string | null;
   readonly room_number: string | null;
   readonly ring_started_at: string;

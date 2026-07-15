@@ -37,13 +37,18 @@ export default async function AdminCallsPage({
 
   let q = supabase
     .from("calls")
-    .select("id, created_at, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url")
+    .select("id, created_at, property_id, channel, state, direction, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url")
     .eq("operator_id", actor.operator_id)
     .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(PAGE_SIZE);
   if (cursor) q = q.or(keysetOrFilter(cursor));
   if (activeProperty) q = q.eq("property_id", activeProperty);
   if (activeChannel) q = q.eq("channel", activeChannel);
-  if (activeOutcome) q = q.in("state", statesForOutcome(activeOutcome));
+  if (activeOutcome) {
+    q = q.in("state", statesForOutcome(activeOutcome));
+    // An OUTBOUND NO_ANSWER (agent-placed call-back the guest didn't pick up) is not
+    // a "missed" guest call — exclude it from the missed filter's result set.
+    if (activeOutcome === "missed") q = q.eq("direction", "INBOUND");
+  }
 
   const { data: calls } = await q;
   const rows = calls ?? [];
@@ -67,7 +72,7 @@ export default async function AdminCallsPage({
         c.room_number ? `Room ${c.room_number}` : null,
       ].filter(Boolean).join(" · "),
       detail: {
-        id: c.id, channel: c.channel, state: c.state, caller_number: c.caller_number, room_number: c.room_number,
+        id: c.id, channel: c.channel, state: c.state, direction: c.direction, caller_number: c.caller_number, room_number: c.room_number,
         ring_started_at: c.ring_started_at, duration_seconds: c.duration_seconds, notes: c.notes, recording_url: c.recording_url,
         propertyName: nameById.get(c.property_id) ?? "—", timeZone: tz,
         handlerName: c.handled_by_user_id ? (handlerName.get(c.handled_by_user_id) ?? "—") : "Unanswered",

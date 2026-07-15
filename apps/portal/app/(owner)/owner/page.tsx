@@ -117,7 +117,7 @@ async function SingleHotel({
     supabase
       .from("calls")
       .select(
-        "id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, recording_url, handled_by_user_id",
+        "id, channel, state, direction, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, recording_url, handled_by_user_id",
       )
       .eq("property_id", property.id)
       .gte("ring_started_at", since)
@@ -137,6 +137,7 @@ async function SingleHotel({
     ring_started_at: c.ring_started_at,
     timeZone: property.timezone,
     state: c.state,
+    direction: c.direction,
     channel: c.channel,
     answered_at: c.answered_at,
   }));
@@ -151,6 +152,7 @@ async function SingleHotel({
       id: c.id,
       channel: c.channel,
       state: c.state,
+      direction: c.direction,
       caller_number: c.caller_number,
       room_number: c.room_number,
       ring_started_at: c.ring_started_at,

@@ -18,7 +18,7 @@ export default async function OwnerCallDetailPage({
   const { data: call } = await supabase
     .from("calls")
     .select(
-      "id, property_id, channel, state, caller_number, room_number, ring_started_at, duration_seconds, handled_by_user_id, notes, recording_url",
+      "id, property_id, channel, state, direction, caller_number, room_number, ring_started_at, duration_seconds, handled_by_user_id, notes, recording_url",
     )
     .eq("id", id)
     .maybeSingle();
@@ -51,6 +51,7 @@ export default async function OwnerCallDetailPage({
     id: call.id,
     channel: call.channel,
     state: call.state,
+    direction: call.direction,
     caller_number: call.caller_number,
     room_number: call.room_number,
     ring_started_at: call.ring_started_at,
@@ -75,7 +76,7 @@ export default async function OwnerCallDetailPage({
         <h1 className="font-display text-3xl text-foreground">
           {call.channel === "VIDEO" ? "Video call" : "Phone call"}
         </h1>
-        <StatusPill kind="call" status={call.state} />
+        <StatusPill kind="call" status={call.state} direction={call.direction} />
       </div>
 
       <CallDetailBody data={detail} incidentHref={incident?.id ? `/owner/incidents/${incident.id}` : null} />
