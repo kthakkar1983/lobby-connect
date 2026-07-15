@@ -6,6 +6,7 @@ import {
   sumTodayDurationSeconds,
   avgCallLengthSeconds,
   countByOutcome,
+  outcomeDotClass,
   splitByChannel,
   splitTodayByChannel,
   hourlyVolume,
@@ -113,6 +114,28 @@ describe("countByOutcome", () => {
   it("is all zero for empty", () => {
     expect(countByOutcome([], NOW)).toEqual({ answered: 0, missed: 0, failed: 0 });
   });
+  it("excludes an OUTBOUND NO_ANSWER from missed (agent call-back the guest didn't pick up)", () => {
+    const items: OutcomeCall[] = [
+      { ring_started_at: "2026-06-08T01:05:00Z", state: "NO_ANSWER", timeZone: "America/Chicago", direction: "OUTBOUND" },
+      { ring_started_at: "2026-06-08T01:06:00Z", state: "NO_ANSWER", timeZone: "America/Chicago", direction: "INBOUND" },
+      { ring_started_at: "2026-06-08T01:07:00Z", state: "NO_ANSWER", timeZone: "America/Chicago" }, // no direction -> defaults INBOUND
+    ];
+    expect(countByOutcome(items, NOW)).toEqual({ answered: 0, missed: 2, failed: 0 });
+  });
+});
+
+describe("outcomeDotClass", () => {
+  it("mirrors the original inbound (default) mapping byte-for-byte", () => {
+    expect(outcomeDotClass("COMPLETED")).toBe("bg-live");
+    expect(outcomeDotClass("NO_ANSWER")).toBe("bg-attention");
+    expect(outcomeDotClass("NO_ANSWER", "INBOUND")).toBe("bg-attention");
+    expect(outcomeDotClass("FAILED")).toBe("bg-muted-foreground");
+    expect(outcomeDotClass("RINGING")).toBe("bg-live");
+    expect(outcomeDotClass("IN_PROGRESS")).toBe("bg-live");
+  });
+  it("gives an outbound NO_ANSWER a quiet dot, not attention/blaze", () => {
+    expect(outcomeDotClass("NO_ANSWER", "OUTBOUND")).toBe("bg-muted-foreground/40");
+  });
 });
 
 describe("splitByChannel", () => {
@@ -152,6 +175,14 @@ describe("hourlyVolume", () => {
     const buckets = hourlyVolume([], NOW);
     expect(buckets).toHaveLength(24);
     expect(buckets.every((b, i) => b.hour === i && b.audio === 0 && b.video === 0 && b.missed === 0)).toBe(true);
+  });
+  it("excludes an OUTBOUND NO_ANSWER from the missed series", () => {
+    const items: HourlyCall[] = [
+      { ring_started_at: "2026-06-08T01:00:00Z", channel: "VIDEO", state: "NO_ANSWER", timeZone: "America/Chicago", direction: "OUTBOUND" }, // 20:00 CT
+      { ring_started_at: "2026-06-08T01:05:00Z", channel: "AUDIO", state: "NO_ANSWER", timeZone: "America/Chicago" }, // 20:05 CT, no direction -> INBOUND
+    ];
+    const buckets = hourlyVolume(items, NOW);
+    expect(buckets[20]).toEqual({ hour: 20, audio: 0, video: 0, missed: 1 });
   });
 });
 

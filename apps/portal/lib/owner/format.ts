@@ -1,4 +1,4 @@
-import type { CallState, IncidentStatus, ProfileStatus } from "@lc/shared";
+import type { CallState, CallDirection, IncidentStatus, ProfileStatus } from "@lc/shared";
 
 const CALL_STATE_LABELS: Record<CallState, string> = {
   RINGING: "Ringing",
@@ -8,8 +8,15 @@ const CALL_STATE_LABELS: Record<CallState, string> = {
   FAILED: "Failed",
 };
 
-export function callStateLabel(state: CallState): string {
-  return CALL_STATE_LABELS[state];
+/**
+ * Owner/admin/agent-facing label for a call's state. An OUTBOUND NO_ANSWER (an
+ * agent-placed call-back the guest didn't pick up) reads "No answer", not "Missed" —
+ * "Missed" implies a guest tried to reach the front desk and couldn't. `direction`
+ * defaults to "INBOUND" so every existing caller stays byte-identical.
+ */
+export function callStateLabel(state: CallState, direction: CallDirection = "INBOUND"): string {
+  if (state === "NO_ANSWER" && direction === "OUTBOUND") return "No answer";
+  return CALL_STATE_LABELS[state] ?? state;
 }
 
 export function incidentStatusLabel(status: IncidentStatus): string {

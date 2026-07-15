@@ -1,4 +1,4 @@
-import type { CallState, CallChannel } from "@lc/shared";
+import type { CallState, CallChannel, CallDirection } from "@lc/shared";
 
 function localDateKey(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -71,19 +71,39 @@ export function avgCallLengthSeconds(items: ReadonlyArray<AnsweredDurationCall>,
   return Math.round(total / qualifying.length);
 }
 
-export type OutcomeCall = DatedCall & { readonly state: CallState };
+export type OutcomeCall = DatedCall & { readonly state: CallState; readonly direction?: CallDirection };
 export type OutcomeCounts = { answered: number; missed: number; failed: number };
 
-/** Today's calls bucketed by terminal state. Live states (RINGING/IN_PROGRESS) are not outcomes. */
+/**
+ * Today's calls bucketed by terminal state. Live states (RINGING/IN_PROGRESS) are not outcomes.
+ * An OUTBOUND NO_ANSWER (agent-placed call-back the guest didn't pick up) is not a "missed"
+ * guest call, so it's excluded from `missed`. `direction` defaults to INBOUND (omitted ==
+ * INBOUND) so every existing caller stays byte-identical.
+ */
 export function countByOutcome(items: ReadonlyArray<OutcomeCall>, now: Date): OutcomeCounts {
   const counts: OutcomeCounts = { answered: 0, missed: 0, failed: 0 };
   for (const c of items) {
     if (!isToday(c.ring_started_at, c.timeZone, now)) continue;
     if (c.state === "COMPLETED") counts.answered++;
-    else if (c.state === "NO_ANSWER") counts.missed++;
+    else if (c.state === "NO_ANSWER" && c.direction !== "OUTBOUND") counts.missed++;
     else if (c.state === "FAILED") counts.failed++;
   }
   return counts;
+}
+
+/**
+ * Dot color for a call's outcome (used as the channel-icon-adjacent status dot on
+ * dashboard/owner call rows). Mirrors `callPill`'s direction-awareness: an OUTBOUND
+ * NO_ANSWER is not a "missed" guest call, so it gets a quiet dot instead of the
+ * attention/blaze one. `direction` defaults to INBOUND, preserving the original
+ * mapping byte-for-byte for every existing caller.
+ */
+export function outcomeDotClass(state: CallState, direction: CallDirection = "INBOUND"): string {
+  if (state === "NO_ANSWER" && direction === "OUTBOUND") return "bg-muted-foreground/40";
+  if (state === "COMPLETED") return "bg-live"; // answered
+  if (state === "NO_ANSWER") return "bg-attention"; // missed
+  if (state === "FAILED") return "bg-muted-foreground"; // system failure
+  return "bg-live"; // RINGING / IN_PROGRESS — still live
 }
 
 export type ChannelCall = { readonly channel: CallChannel };
@@ -100,7 +120,7 @@ export function splitByChannel(items: ReadonlyArray<ChannelCall>): ChannelCounts
 }
 
 export type DatedChannelCall = DatedCall & { readonly channel: CallChannel };
-export type HourlyCall = DatedChannelCall & { readonly state: CallState };
+export type HourlyCall = DatedChannelCall & { readonly state: CallState; readonly direction?: CallDirection };
 export type HourBucket = { hour: number; audio: number; video: number; missed: number };
 
 /**
@@ -108,10 +128,12 @@ export type HourBucket = { hour: number; audio: number; video: number; missed: n
  * three disjoint outcome series for the grouped hourly chart:
  *   - audio  = answered phone calls (COMPLETED + AUDIO)
  *   - video  = answered video calls (COMPLETED + VIDEO)
- *   - missed = unanswered calls (NO_ANSWER, either channel)
+ *   - missed = unanswered INBOUND calls (NO_ANSWER, either channel); an OUTBOUND NO_ANSWER
+ *     (agent-placed call-back the guest didn't pick up) is excluded — not a "missed" guest call
  * FAILED (a system error, surfaced on phone-health) and still-live calls are excluded, so a
  * missed call is counted once in `missed` — never double-counted in its channel. Each call is
  * bucketed in its own property timezone ("volume by hotel-local hour"). Always 24 buckets.
+ * `direction` defaults to INBOUND (omitted == INBOUND) so every existing caller is unaffected.
  */
 export function hourlyVolume(items: ReadonlyArray<HourlyCall>, now: Date): HourBucket[] {
   const buckets: HourBucket[] = Array.from({ length: 24 }, (_, hour) => ({ hour, audio: 0, video: 0, missed: 0 }));
@@ -119,7 +141,7 @@ export function hourlyVolume(items: ReadonlyArray<HourlyCall>, now: Date): HourB
     if (!isToday(c.ring_started_at, c.timeZone, now)) continue;
     const bucket = buckets[localHour(c.ring_started_at, c.timeZone)];
     if (!bucket) continue; // unreachable: localHour is always 0-23
-    if (c.state === "NO_ANSWER") bucket.missed++;
+    if (c.state === "NO_ANSWER" && c.direction !== "OUTBOUND") bucket.missed++;
     else if (c.state === "COMPLETED" && c.channel === "AUDIO") bucket.audio++;
     else if (c.state === "COMPLETED" && c.channel === "VIDEO") bucket.video++;
   }
