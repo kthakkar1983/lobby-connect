@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   RING_WINDOW_MS,
+  RECONNECT_WINDOW_MS,
   MAX_CALL_DURATION_MS,
   CHAT_PROTOCOL_VERSION,
   decodeChat,
@@ -11,7 +12,7 @@ import {
 } from "@lc/shared";
 
 import * as Sentry from "@sentry/react";
-import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
+import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration, isLockedOut } from "./state/call-machine";
 import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat, fetchIncomingCall, answerCall } from "./lib/portal-api";
 import { joinLiveKit } from "./lib/video/livekit";
 import type { KioskVideoSession, VideoTrackHandle } from "./lib/video/types";
@@ -48,6 +49,10 @@ export function App() {
   const [chatLines, setChatLines] = useState<{ id: string; from: "guest" | "agent"; text: string; ts: number }[]>([]);
   const [peerTyping, setPeerTyping] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Post-terminal-drop tap lockout (10s): set when a CONNECTED call's video
+  // session drops terminally, so a returning guest can't re-tap and race the
+  // agent's immediate call-back. null = not locked out.
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
   const sessionRef = useRef<KioskVideoSession | null>(null);
   const localAudioRef = useRef<MediaStreamTrack | null>(null);
@@ -111,6 +116,16 @@ export function App() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Auto-clears the tap lockout without waiting for a user gesture: schedules
+  // exactly the remaining time (not the full window), so a re-render mid-lockout
+  // can't push the expiry back out.
+  useEffect(() => {
+    if (lockedUntil == null) return;
+    const ms = Math.max(0, lockedUntil - Date.now());
+    const t = setTimeout(() => setLockedUntil(null), ms);
+    return () => clearTimeout(t);
+  }, [lockedUntil]);
 
   const teardown = useCallback(async () => {
     // Invalidate any in-flight call setup: if the guest cancels during the async
@@ -177,12 +192,21 @@ export function App() {
       } else if (outcome === "restored") {
         setReconnecting(false);
       } else if (outcome === "terminal") {
-        // SDK gave up. Close the call and fall through to the apology screen.
+        // SDK gave up. A drop from a LIVE (connected) call returns home with a
+        // brief tap lockout so a re-tapping guest can't step on the agent's
+        // immediate call-back; a pre-connect terminal failure (still ringing)
+        // keeps the existing apology behavior.
         setReconnecting(false);
         const id = callIdRef.current;
+        const wasConnected = screenRef.current === "connected";
         void teardown();
         if (id) void endCall(id, "failed");
-        dispatch({ type: "ERROR" });
+        if (wasConnected) {
+          setLockedUntil(Date.now() + RECONNECT_WINDOW_MS); // Home shows reconnecting + disabled tap; poll still runs
+          dispatch({ type: "DROP" }); // -> home
+        } else {
+          dispatch({ type: "ERROR" }); // pre-connect failure -> apology (unchanged)
+        }
       }
     },
     onData: (payload: Uint8Array, fromIdentity: string) => {
@@ -204,6 +228,9 @@ export function App() {
   }), [teardown]);
 
   const onStartCall = useCallback(async () => {
+    // A returning guest re-tapping during the post-drop lockout must not start
+    // a fresh call and race the agent's immediate call-back.
+    if (isLockedOut(lockedUntil, Date.now())) return;
     // Unlock audio output on this tap so the agent's audio plays even after the
     // cold join chain (keeps the guest screen prompt-free).
     unlockAudioPlayback();
@@ -253,7 +280,7 @@ export function App() {
       if (id) void endCall(id, "failed");
       dispatch({ type: "ERROR" });
     }
-  }, [teardown, buildJoinCallbacks]);
+  }, [teardown, buildJoinCallbacks, lockedUntil]);
 
   // The answer side of an agent-initiated OUTBOUND call: the reverse of
   // onStartCall (claim instead of create, join instead of dial). callId/
@@ -383,7 +410,7 @@ export function App() {
   const screen = (() => {
     switch (state.screen) {
       case "home":
-        return <Home config={config} onCall={onStartCall} />;
+        return <Home config={config} onCall={onStartCall} lockedOut={isLockedOut(lockedUntil, Date.now())} />;
       case "incoming":
         return <IncomingCall onAnswer={onAnswer} />;
       case "ringing":
