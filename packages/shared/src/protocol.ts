@@ -102,6 +102,21 @@ export const SHIFT_ABANDON_AFTER_MS = SESSION_MAX_MS;
  */
 export const MAX_SHIFT_MS = 10 * 60 * 60 * 1000;
 
+/** Outbound (agent -> kiosk) ring window. Shorter than the 120s inbound window —
+ *  the agent shouldn't stare at "Calling…". At timeout the row finalizes NO_ANSWER. */
+export const OUTBOUND_RING_WINDOW_SECONDS = 30;
+export const OUTBOUND_RING_WINDOW_MS = OUTBOUND_RING_WINDOW_SECONDS * 1000;
+
+/** A kiosk whose last heartbeat/poll is older than this reads OFFLINE.
+ *  ~90s survives one missed 30s heartbeat. Distinct signal from PRESENCE_STALE_AFTER_MS
+ *  (kiosk device liveness vs agent-browser presence). */
+export const KIOSK_STALE_AFTER_MS = 90_000;
+
+/** Post-call reconnect window. The kiosk disables tap-to-call for this long after a
+ *  terminal drop (calm "reconnecting" message) and the agent's "Call back" shortcut is
+ *  visible for the same span — paired so the agent has right-of-way to reconnect. */
+export const RECONNECT_WINDOW_MS = 10_000;
+
 // The reaper must outlast the ring window, or a still-ringing call could be reaped
 // mid-window. TypeScript can't compare number *values* at the type level, so guard
 // at module load; protocol.test.ts pins the same invariant.
@@ -128,4 +143,13 @@ if (SHIFT_ABANDON_AFTER_MS < PRESENCE_STALE_AFTER_MS) {
 // protocol.test.ts pins the same invariant.
 if (MAX_SHIFT_MS <= PRESENCE_STALE_AFTER_MS) {
   throw new Error("protocol: MAX_SHIFT_MS must exceed PRESENCE_STALE_AFTER_MS");
+}
+
+// The outbound ring window must stay under the reaper's ringing backstop, or a
+// still-ringing outbound call could be reaped mid-window. protocol.test.ts pins
+// the same invariant.
+if (OUTBOUND_RING_WINDOW_MS >= REAP_RINGING_AFTER_MS) {
+  throw new Error(
+    "OUTBOUND_RING_WINDOW_MS must be under REAP_RINGING_AFTER_MS (the reaper is the backstop)",
+  );
 }

@@ -12,6 +12,10 @@ import {
   SHIFT_CAP_EPSILON_MS,
   SHIFT_ABANDON_AFTER_MS,
   MAX_SHIFT_MS,
+  OUTBOUND_RING_WINDOW_SECONDS,
+  OUTBOUND_RING_WINDOW_MS,
+  KIOSK_STALE_AFTER_MS,
+  RECONNECT_WINDOW_MS,
 } from "../src/protocol";
 
 const VIDEO_TOKEN_TTL_MS = 3_600_000; // video/token mints a 3600s join token, no renewal
@@ -75,5 +79,22 @@ describe("app-level max-shift cap (the free-tier session-cap stand-in)", () => {
     // It must outlast the 90s read-time reachability staleness. Same guard runs at
     // module load.
     expect(MAX_SHIFT_MS).toBeGreaterThan(PRESENCE_STALE_AFTER_MS);
+  });
+});
+
+describe("outbound + liveness protocol constants", () => {
+  it("outbound ring window is 30s and shorter than the inbound window", () => {
+    expect(OUTBOUND_RING_WINDOW_SECONDS).toBe(30);
+    expect(OUTBOUND_RING_WINDOW_MS).toBe(30_000);
+    expect(OUTBOUND_RING_WINDOW_MS).toBeLessThan(RING_WINDOW_MS);
+  });
+  it("outbound ring window is under the reaper ringing backstop", () => {
+    expect(OUTBOUND_RING_WINDOW_MS).toBeLessThan(REAP_RINGING_AFTER_MS);
+  });
+  it("kiosk staleness is 90s (survives one missed 30s heartbeat)", () => {
+    expect(KIOSK_STALE_AFTER_MS).toBe(90_000);
+  });
+  it("reconnect window is 10s", () => {
+    expect(RECONNECT_WINDOW_MS).toBe(10_000);
   });
 });
