@@ -94,19 +94,33 @@ export function resolveFinalState(reason: string | undefined, answered: boolean)
 
 /**
  * Reset a just-finished agent from ON_CALL back to AVAILABLE. Guarded on
- * status='ON_CALL' so it never clobbers AWAY/BREAK/OFFLINE or a concurrent second call.
+ * status='ON_CALL' so it never clobbers AWAY/BREAK/OFFLINE.
  * Service-role client only (the 0012 column guard blocks user-scoped status writes).
  * Fixes task_71d65b0a — the video end paths never reset presence, so agents got stuck ON_CALL.
  */
 export async function resetPresenceAfterCall(admin: SupabaseClient, userId: string | null): Promise<void> {
   if (!userId) return;
-  // Deliberately value-based (keyed on status='ON_CALL'), NOT ownership-aware: it
-  // doesn't check whether this agent still has another live call. Nothing today
-  // distinguishes AVAILABLE from ON_CALL for correctness (isReachableForDial treats
-  // them alike; the outbound busy-guard is row-based), so a premature flip during
-  // rare two-call concurrency is cosmetic and self-heals within one presence beat.
-  // An ownership-aware version (skip if another active call exists) is a tracked
-  // follow-up for the audio one-call-at-a-time gate (needs a two-pass reaper).
+  // Ownership-aware: only flip back to AVAILABLE when this agent has NO OTHER live
+  // call. An agent can briefly hold two concurrent calls — the video answer/originate
+  // paths are one-call-gated, but the audio dial is not, so an audio Twilio call can
+  // overlap a video call. Ending or reaping one must not prematurely clear ON_CALL
+  // while the other is still live. Both callers (end-video, the reaper) finalize the
+  // current call BEFORE calling this, so the just-ended row is already terminal and
+  // can't self-match. This is what makes ON_CALL load-bearing for the
+  // one-call-at-a-time gate. Still guarded on status='ON_CALL' so it never clobbers
+  // AWAY/BREAK/OFFLINE.
+  //
+  // Reaper caveat: this MUST NOT be called per-row inside a concurrent map — two
+  // stale rows for the same agent could each observe the other still-live (finalize
+  // writes not yet committed) and both skip, re-stranding the agent ON_CALL. The
+  // reaper finalizes every row first, then calls this once per distinct handler.
+  const { data: stillActive } = await admin
+    .from("calls")
+    .select("id")
+    .eq("handled_by_user_id", userId)
+    .in("state", ACTIVE_CALL_STATES)
+    .limit(1);
+  if (stillActive && stillActive.length > 0) return;
   await admin.from("profiles").update({ status: "AVAILABLE" }).eq("id", userId).eq("status", "ON_CALL");
 }
 

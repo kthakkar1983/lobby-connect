@@ -14,6 +14,12 @@ const presenceUpdateSpy = vi.fn();
 let inProgressRows: Array<Record<string, unknown>> = [];
 let ringingRows: Array<Record<string, unknown>> = [];
 const heartbeatSpy = vi.fn();
+// The ownership query resetPresenceAfterCall runs before each reset ("does this
+// handler still have another live call?"). Default empty -> every reset proceeds.
+let ownershipRows: Array<{ id: string }> = [];
+// Records the interleaving of finalize writes vs presence resets, so a test can
+// assert the reaper runs in two ordered passes (finalize ALL, then reset).
+const order: string[] = [];
 
 vi.mock("@/lib/health/heartbeat", () => ({
   recordHeartbeat: (...args: unknown[]) => {
@@ -36,15 +42,19 @@ function callsUpdateChain(payload: Record<string, unknown>) {
     },
     then: (resolve: (v: unknown) => void) => {
       callsUpdates.push(rec);
+      order.push(`finalize:${String(rec.payload.state)}`);
       resolve({ error: null });
     },
   };
   return builder;
 }
 
-// admin.from("calls").select(...) — the two sweeps' candidate fetches, keyed by
-// the `state` filter each chain accumulates so IN_PROGRESS and RINGING each get
-// served their own row set.
+// admin.from("calls").select(...) — serves two shapes off one builder:
+//   candidate fetches: .eq("state", X)[.lt(...)] awaited directly -> rows by state
+//   ownership query:   .eq("handled_by_user_id").in("state", [...]).limit(1)
+// The ownership query terminates in .limit() (a real Promise), so it never hits
+// the thenable `then` and never lands in callsSelects — keeping the candidate-fetch
+// assertions clean.
 function callsSelectChain(fields: string) {
   const rec: SelectRec = { fields, filters: {} };
   const builder: Record<string, unknown> = {
@@ -56,6 +66,11 @@ function callsSelectChain(fields: string) {
       rec.filters[`${k}__lt`] = v;
       return builder;
     },
+    in: (k: string, v: unknown) => {
+      rec.filters[`${k}__in`] = v;
+      return builder;
+    },
+    limit: () => Promise.resolve({ data: ownershipRows }),
     then: (resolve: (v: unknown) => void) => {
       callsSelects.push(rec);
       const data = rec.filters.state === "IN_PROGRESS" ? inProgressRows : ringingRows;
@@ -76,6 +91,7 @@ function profilesUpdateChain(payload: Record<string, unknown>) {
     },
     then: (resolve: (v: unknown) => void) => {
       presenceUpdateSpy(payload, filters);
+      order.push(`reset:${String(filters.id)}`);
       resolve({ error: null });
     },
   };
@@ -114,6 +130,8 @@ const twoHoursAgo = () => new Date(Date.now() - 120 * 60_000).toISOString();
 beforeEach(() => {
   callsUpdates.length = 0;
   callsSelects.length = 0;
+  order.length = 0;
+  ownershipRows = [];
   presenceUpdateSpy.mockClear();
   heartbeatSpy.mockClear();
   process.env.CRON_SECRET = "s3cret";
@@ -220,6 +238,48 @@ describe("GET /api/cron/reap-stale-calls", () => {
     expect(presenceUpdateSpy).toHaveBeenCalledWith(
       { status: "AVAILABLE" },
       { id: "agent-1", status: "ON_CALL" },
+    );
+  });
+
+  it("finalizes every stale row before any presence reset (two passes, not per-row interleave)", async () => {
+    // Default fixture: one IN_PROGRESS (agent-1) + one RINGING (agent-2), both reset.
+    await GET(req());
+    const finalizeIdx = order.flatMap((o, i) => (o.startsWith("finalize:") ? [i] : []));
+    const resetIdx = order.flatMap((o, i) => (o.startsWith("reset:") ? [i] : []));
+    expect(finalizeIdx.length).toBeGreaterThan(0);
+    expect(resetIdx.length).toBeGreaterThan(0);
+    // A per-row map (finalize-then-reset per row) interleaves a reset between the
+    // two finalizes; two passes put EVERY finalize before EVERY reset. Requiring
+    // the ownership check to see the whole finalized set is what stops two stale
+    // rows for one agent from each seeing the other still-live and both skipping.
+    expect(Math.max(...finalizeIdx)).toBeLessThan(Math.min(...resetIdx));
+  });
+
+  it("resets a handler owning two stale rows exactly once (deduped across both sweeps)", async () => {
+    // Same agent stranded across both a reaped IN_PROGRESS and a reaped RINGING row.
+    inProgressRows = [
+      { id: "c1", created_at: fortyMinAgo(), answered_at: fortyMinAgo(), handled_by_user_id: "agent-dup" },
+    ];
+    ringingRows = [{ id: "r1", handled_by_user_id: "agent-dup" }];
+    await GET(req());
+    const dupResets = presenceUpdateSpy.mock.calls.filter(
+      ([, filters]) => (filters as Record<string, unknown>).id === "agent-dup",
+    );
+    // A per-row reset would fire twice (once per sweep); the two-pass dedupe fires once.
+    expect(dupResets).toHaveLength(1);
+  });
+
+  it("does NOT reset a handler who still has another live (non-stale) call", async () => {
+    inProgressRows = [
+      { id: "c1", created_at: fortyMinAgo(), answered_at: fortyMinAgo(), handled_by_user_id: "agent-busy" },
+    ];
+    ringingRows = [];
+    // The ownership check finds a still-live call the sweep did not finalize.
+    ownershipRows = [{ id: "still-live" }];
+    await GET(req());
+    expect(presenceUpdateSpy).not.toHaveBeenCalledWith(
+      { status: "AVAILABLE" },
+      expect.objectContaining({ id: "agent-busy" }),
     );
   });
 

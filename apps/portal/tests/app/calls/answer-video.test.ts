@@ -32,6 +32,9 @@ vi.mock("next/server", async (importOriginal) => {
 let callRow: Record<string, unknown> | null = null;
 // Controls what the guarded UPDATE returns — default winner (one row claimed).
 let callUpdateResult: Array<{ id: string }> = [{ id: "call-1" }];
+// Controls the "already on a call" guard query (calls the agent already handles).
+// Default empty — the agent is free to answer.
+let existingActiveRows: Array<{ id: string }> = [];
 const callUpdateSpy = vi.fn();
 const profileUpdateSpy = vi.fn();
 const profileFetch = vi.fn(
@@ -57,8 +60,21 @@ vi.mock("@/lib/supabase/admin", () => ({
           update: (v: unknown) => { profileUpdateSpy(v); return { eq: () => Promise.resolve({ error: null }) }; },
         };
       }
+      // Unified calls select chain serves two callers off the same object:
+      //   fetchOperatorCall → .select().eq("id").maybeSingle() → { data: callRow }
+      //   one-call guard    → .select("id").eq().in().neq().limit() → { data: existingActiveRows }
+      // Each terminal method resolves independently, so the two chains never collide.
       return {
-        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
+        select: () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain: Record<string, any> = {};
+          chain.eq = () => chain;
+          chain.in = () => chain;
+          chain.neq = () => chain;
+          chain.limit = () => Promise.resolve({ data: existingActiveRows });
+          chain.maybeSingle = () => Promise.resolve({ data: callRow });
+          return chain;
+        },
         // Chain: .update().eq("id").eq("state","RINGING").select("id") → { data: callUpdateResult }
         update: (v: unknown) => { callUpdateSpy(v); return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: callUpdateResult, error: null }) }) }) }; },
       };
@@ -89,6 +105,7 @@ beforeEach(() => {
     property_id: "prop-1",
   };
   callUpdateResult = [{ id: "call-1" }];
+  existingActiveRows = [];
 });
 
 describe("POST /api/calls/[id]/answer-video", () => {
@@ -109,6 +126,17 @@ describe("POST /api/calls/[id]/answer-video", () => {
     callRow = { ...callRow!, state: "IN_PROGRESS" };
     expect((await call("call-1")).status).toBe(409);
     expect(callUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it("409 when the agent is already on another live call (one call at a time)", async () => {
+    existingActiveRows = [{ id: "other-live-call" }];
+    const res = await call("call-1");
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("You are already on a call");
+    // Guard runs before the claim — the agent must not be pinned to a 2nd call,
+    // and the answered call must stay RINGING for whoever is actually free.
+    expect(callUpdateSpy).not.toHaveBeenCalled();
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("404 across operators", async () => {

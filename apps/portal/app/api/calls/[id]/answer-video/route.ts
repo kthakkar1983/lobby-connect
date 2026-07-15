@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canAnswer, claimCall } from "@/lib/voice/call-state";
+import { canAnswer, claimCall, ACTIVE_CALL_STATES } from "@/lib/voice/call-state";
 import { requireApiActor, fetchOperatorCall } from "@/lib/auth/api-actor";
 import { requireOnDuty } from "@/lib/shifts/gate";
 import { broadcastCallsChanged } from "@/lib/realtime/broadcast";
@@ -35,6 +35,25 @@ export async function POST(
 
   if (!canAnswer(call.state)) {
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
+  }
+
+  // One call at a time — a human handles one guest at a time (mirrors
+  // start-outbound-video's row-based guard). Keys on live call ROWS
+  // (handled_by_user_id), not profiles.status, so a stale ON_CALL from a missed
+  // presence reset (task_71d65b0a) can't false-block. `.neq("id", id)` excludes
+  // the call being answered: an inbound RINGING row is unclaimed (handled_by null)
+  // so it wouldn't match anyway, but the exclusion keeps the guard exactly "any
+  // OTHER active call". Best-effort app-layer guard (same TOCTOU caveat as
+  // start-outbound): the claimCall UPDATE below is the atomic per-call backstop.
+  const { data: existingActive } = await admin
+    .from("calls")
+    .select("id")
+    .eq("handled_by_user_id", actor.userId)
+    .in("state", ACTIVE_CALL_STATES)
+    .neq("id", id)
+    .limit(1);
+  if (existingActive && existingActive.length > 0) {
+    return NextResponse.json({ error: "You are already on a call" }, { status: 409 });
   }
 
   const won = await claimCall(admin, id, actor.userId);

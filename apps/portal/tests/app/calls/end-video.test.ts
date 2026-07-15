@@ -30,6 +30,9 @@ vi.mock("next/server", async (importOriginal) => {
 });
 
 let callRow: Record<string, unknown> | null = null;
+// Controls resetPresenceAfterCall's ownership query (this agent's OTHER live
+// calls). Default empty — the reset proceeds ON_CALL -> AVAILABLE.
+let otherActiveCalls: Array<{ id: string }> = [];
 const callUpdateSpy = vi.fn();
 // Tracks resetPresenceAfterCall's write (admin.from("profiles").update(...)),
 // kept separate from callUpdateSpy so the existing "calls" table assertions
@@ -53,8 +56,19 @@ vi.mock("@/lib/supabase/admin", () => ({
           },
         };
       }
+      // Unified calls select chain serves two callers off one object:
+      //   fetchOperatorCall              → .select().eq("id").maybeSingle() → callRow
+      //   resetPresenceAfterCall ownership → .select("id").eq().in().limit() → otherActiveCalls
       return {
-        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: callRow }) }) }),
+        select: () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain: Record<string, any> = {};
+          chain.eq = () => chain;
+          chain.in = () => chain;
+          chain.limit = () => Promise.resolve({ data: otherActiveCalls });
+          chain.maybeSingle = () => Promise.resolve({ data: callRow });
+          return chain;
+        },
         update: (v: unknown) => {
           callUpdateSpy(v);
           return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) };
@@ -86,6 +100,7 @@ beforeEach(() => {
     answered_at: "2026-06-06T06:00:00.000Z",
     property_id: "prop-1",
   };
+  otherActiveCalls = [];
 });
 
 describe("POST /api/calls/[id]/end-video", () => {
@@ -112,6 +127,17 @@ describe("POST /api/calls/[id]/end-video", () => {
     const res = await call("call-1");
     expect(res.status).toBe(200);
     expect(profileUpdateSpy).toHaveBeenCalledWith({ status: "AVAILABLE" });
+  });
+
+  it("does NOT reset presence when the agent still has another live call (stays ON_CALL)", async () => {
+    // The ended call is finalized above, but a concurrent live call (e.g. an
+    // overlapping audio Twilio call) keeps the agent ON_CALL — resetPresenceAfterCall
+    // is ownership-aware, so ending one call can't prematurely clear the other.
+    otherActiveCalls = [{ id: "other-live-call" }];
+    const res = await call("call-1");
+    expect(res.status).toBe(200);
+    expect(callUpdateSpy).toHaveBeenCalled(); // the current call was still finalized
+    expect(profileUpdateSpy).not.toHaveBeenCalled();
   });
 
   it("finalizes a RINGING call (outbound, never answered) to NO_ANSWER with a null duration", async () => {
