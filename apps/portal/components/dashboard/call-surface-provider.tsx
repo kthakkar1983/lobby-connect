@@ -7,6 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { RECONNECT_WINDOW_MS } from "@lc/shared";
 import { openCallTile, type CallTileHandle } from "@/lib/duty-tile/call-tile-manager";
 import { CallTile } from "@/components/call-tile/call-tile";
 import {
@@ -33,6 +34,15 @@ export interface ActiveCallInfo {
   answeredAt: number;
   /** Hotel-local timezone (audio: from the answered route) — the tile's clock face. */
   timeZone: string | null;
+}
+
+/**
+ * The property a just-ended call was with, kept around for RECONNECT_WINDOW_MS
+ * (Task 15). See CallSurfaceValue.recentlyEnded for the full rationale.
+ */
+export interface RecentlyEndedCall {
+  propertyId: string;
+  propertyName: string;
 }
 
 export interface ChatLine {
@@ -129,6 +139,18 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   ) => Promise<{ ok: boolean; busy?: boolean }>;
   /** Register the video host's outbound-call starter (Task 12). Null clears it. */
   registerStartOutbound: (fn: OutboundStarter | null) => void;
+  /**
+   * The property whose call just ended, kept for RECONNECT_WINDOW_MS — the
+   * drop-moment complement to the property-card "Kiosk" button (Task 14):
+   * right after a call ends, redialing the SAME property is one click away
+   * via `startOutboundVideo(recentlyEnded.propertyId, recentlyEnded.propertyName)`.
+   * Set only when the ended call carried a propertyId (a video ring, like
+   * audio's TwiML Parameter, can arrive with none — see ActiveCallInfo above);
+   * cleared early the instant a NEW call goes active, since there's nothing
+   * left to "call back" to while already on a call. Drives the Task-15
+   * `<CallBackShortcut>`.
+   */
+  recentlyEnded: RecentlyEndedCall | null;
   /**
    * Ring keys the LOCAL user has silenced (audio only). The publishers
    * (softphone audio ring / video-host ring) read this and mute their own
@@ -520,6 +542,42 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     }
   }, [active, closeTile]);
 
+  // Recently-ended call (Task 15): the drop-moment complement to the
+  // property-card "Kiosk" button (Task 14) — right after a call ends, the
+  // SAME property is one click away via startOutboundVideo. Needs the EDGE
+  // (active went from a call to null), not just "active is null", so it can
+  // capture which property just hung up — a dedicated prevActiveRef, updated
+  // at the top of THIS effect, does that. (The sibling `activeRef` above is
+  // no substitute: its own effect already updates it to the NEW value before
+  // this effect body runs, so reading it here would see "now", not "before".)
+  //
+  // Cleared early the instant a NEW call goes active (whether that's a fresh
+  // answer or another outbound dial) — the shortcut is meaningless mid-call,
+  // and without this a call-B-overwrites-call-A transition (no intervening
+  // null; see the prewarm tests above) would otherwise leave a stale pill
+  // pointing at call A's property while the agent is on a call with B.
+  //
+  // The 10s window (RECONNECT_WINDOW_MS, packages/shared/src/protocol.ts) is
+  // the outbound twin of the kiosk's own post-drop tap lockout — paired so
+  // the agent has right-of-way to reconnect while the kiosk is still showing
+  // its calm "reconnecting" message.
+  const [recentlyEnded, setRecentlyEnded] = useState<RecentlyEndedCall | null>(null);
+  const prevActiveRef = useRef<ActiveCallInfo | null>(null);
+  useEffect(() => {
+    const prev = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (active) {
+      setRecentlyEnded(null); // a new call preempts any pending "call back" pill
+      return;
+    }
+    if (prev && prev.propertyId) {
+      const { propertyId, propertyName } = prev;
+      setRecentlyEnded({ propertyId, propertyName });
+      const id = setTimeout(() => setRecentlyEnded(null), RECONNECT_WINDOW_MS);
+      return () => clearTimeout(id);
+    }
+  }, [active]);
+
   const value = useMemo<CallSurfaceValue>(
     () => ({
       rings: [...audioRings, ...videoRings],
@@ -531,6 +589,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       startOutboundVideo,
       registerStartOutbound,
+      recentlyEnded,
       silencedKeys,
       silenceRing,
       tileMount,
@@ -564,6 +623,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       registerAcceptVideo,
       startOutboundVideo,
       registerStartOutbound,
+      recentlyEnded,
       silencedKeys,
       silenceRing,
       tileMount,
