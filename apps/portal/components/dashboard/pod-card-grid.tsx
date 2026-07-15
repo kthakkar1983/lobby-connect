@@ -7,6 +7,7 @@ import { BellOff } from "lucide-react";
 import { useCallSurface, type IncomingRing } from "@/components/dashboard/call-surface-provider";
 import { ConnectButton } from "@/components/dashboard/connect-button";
 import { useDutyOptional } from "@/components/dashboard/duty-provider";
+import { KioskCallButton } from "@/components/dashboard/kiosk-call-button";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { Button } from "@/components/ui/button";
 
@@ -117,7 +118,20 @@ export function PodCardGrid({
             key={property.id}
             property={property}
             canAnswer={canAnswerByProperty ? (canAnswerByProperty[property.id] ?? false) : true}
-            connectSlot={connectFor ? connectFor(property.id) : <ConnectButton propertyId={property.id} />}
+            connectSlot={
+              connectFor ? (
+                connectFor(property.id)
+              ) : (
+                <div className="flex items-center gap-2">
+                  <ConnectButton propertyId={property.id} />
+                  <KioskCallButton
+                    propertyId={property.id}
+                    propertyName={property.name}
+                    kioskOnline={property.kioskOnline}
+                  />
+                </div>
+              )
+            }
             footerSlot={footerFor ? footerFor(property.id) : null}
           />
         ))}

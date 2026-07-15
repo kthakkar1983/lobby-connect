@@ -28,6 +28,7 @@ const p1: PropertyCardData = {
   callsTonight: 2,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 /** Probe publisher: exposes buttons that call the context's publish/register APIs

@@ -53,6 +53,7 @@ const p1: PropertyCardData = {
   callsTonight: 2,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 const activeCall: ActiveCallInfo = {
