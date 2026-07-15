@@ -33,6 +33,18 @@ const HEARTBEAT_MS = 30_000;
 // unauthenticated kiosk has no push channel to target, so it must discover its
 // own ring (mirrors the agent-side incoming-video poll's role, reversed).
 const DISCOVERY_POLL_MS = 3_000;
+// Answer-path "agent didn't join" watchdog. onAnswer joins a room the agent is
+// ALREADY in, so — unlike onStartCall — it arms no ring timeout. But if the
+// agent tore down (Cancel / the 30s outbound window) in the sliver between the
+// kiosk's claim and its join, the kiosk joins an EMPTY room: no remote track so
+// onAgentJoined never fires, and no co-present peer so onAgentLeft never fires
+// — leaving the kiosk hung on the connecting screen. This watchdog, armed AFTER
+// the join commits, recovers to apology -> home. ~12s because it starts only
+// once the (possibly cold-slow) join is done, by which point a genuinely-present
+// agent's already-published tracks subscribe within a couple seconds; 12s clears
+// a jittery-but-healthy subscribe without false-firing while still rescuing a
+// truly empty room. onAgentJoined clears it the instant the agent's video lands.
+const ANSWER_JOIN_WATCHDOG_MS = 12_000;
 
 export function App() {
   // Pin the app to the visual viewport so the iPad keyboard shrinks the call
@@ -160,9 +172,11 @@ export function App() {
   const buildJoinCallbacks = useCallback((aborted: () => boolean) => ({
     onRemoteVideo: (h: VideoTrackHandle | null) => setRemoteVideo(h),
     onAgentJoined: () => {
-      // Call connected — cancel the no-answer ring timer so it can't fire
-      // mid-call and tear down a live session. (onAnswer never arms this
-      // timer, so this is a harmless no-op on that path.)
+      // Call connected — cancel whichever timer is armed so it can't fire
+      // mid-call and tear down a live session: onStartCall's no-answer ring
+      // timeout, or onAnswer's agent-didn't-join watchdog. Both live in
+      // timeoutRef (one call at a time — the reducer never lets both setups run
+      // at once), so this single clear covers both paths.
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -337,10 +351,22 @@ export function App() {
       sessionRef.current = session;
       localAudioRef.current = session.localAudioTrack;
       setLocalVideo(session.localVideo);
-      // No CALL_STARTED, no ring timeout: the agent is already in the room —
-      // buildJoinCallbacks' onAgentJoined fires off the existing video track
-      // (joinLiveKit subscribes to tracks already published when it connects)
-      // and drives ringing -> connected, same as the guest-dialed path.
+      // No CALL_STARTED: the agent is already in the room, so onAgentJoined
+      // (buildJoinCallbacks) fires off their already-published video track and
+      // drives ringing -> connected, same as the guest-dialed path — and clears
+      // the timer below the instant it does.
+      //
+      // Agent-didn't-join watchdog (see ANSWER_JOIN_WATCHDOG_MS): if their track
+      // never subscribes, they left in the claim -> join sliver and we're alone
+      // in an empty room. Mirror onStartCall's ring-timeout body exactly — close
+      // the row (idempotent: the finalize is state-guarded, so an already-ended
+      // row no-ops), leave the room, and fall to apology -> home.
+      timeoutRef.current = setTimeout(() => {
+        if (!shouldFireRingTimeout(screenRef.current)) return;
+        if (callIdRef.current) void endCall(callIdRef.current, "no-answer");
+        void teardown();
+        dispatch({ type: "RING_TIMEOUT" });
+      }, ANSWER_JOIN_WATCHDOG_MS);
     } catch {
       if (aborted()) return; // teardown already ran (cancel); don't override with apology
       const id = callIdRef.current;

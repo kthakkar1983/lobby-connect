@@ -213,4 +213,66 @@ describe("kiosk incoming-call discovery poll + Answer flow", () => {
     });
     await waitFor(() => expect(video.joinLiveKit).toHaveBeenCalledTimes(1));
   });
+
+  // Regression: onAnswer joins a room the agent is ALREADY in, so — unlike
+  // onStartCall — it arms no ring timeout of its own. If the agent tore down
+  // between the kiosk's claim and its join (Cancel / the 30s outbound
+  // no-answer window — see video-call-outbound.test.tsx), the kiosk joins an
+  // EMPTY room: no remote track means onAgentJoined never fires, and no
+  // co-present peer means onAgentLeft never fires either — without a watchdog
+  // the kiosk would hang forever on the "ringing" (connecting) screen. This
+  // drives exactly that: the join resolves, but neither onAgentJoined nor
+  // onRemoteVideo is EVER invoked (that omission IS the empty room), and
+  // asserts the kiosk recovers instead of hanging.
+  //
+  // The watchdog's setTimeout is captured by its 12000ms delay rather than
+  // importing ANSWER_JOIN_WATCHDOG_MS — App.tsx deliberately doesn't export it
+  // (an export alongside the App component would trip
+  // react-refresh/only-export-components) — mirroring
+  // video-call-outbound.test.tsx's setTimeout-spy capture of
+  // OUTBOUND_RING_WINDOW_MS. (The healthy "onAgentJoined clears it" path is
+  // already covered: shouldFireRingTimeout's screen-guard is unit-tested
+  // directly in tests/state/call-machine.test.ts, and this file's "Answer
+  // claims the call..." test above already exercises the shared
+  // buildJoinCallbacks clearTimeout wiring on connect.)
+  it("recovers to apology if the agent already left before the kiosk's join lands (empty room)", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    api.answerCall.mockResolvedValue({ channelName: "ch-1" });
+    api.fetchVideoToken.mockResolvedValue({
+      provider: "livekit",
+      url: "wss://lk",
+      channelName: "ch-1",
+      token: "jwt-1",
+    });
+    const session = fakeSession();
+    video.joinLiveKit.mockResolvedValue(session);
+
+    render(<App />);
+
+    const answerBtn = await screen.findByRole("button", { name: /answer/i });
+    fireEvent.click(answerBtn);
+
+    await waitFor(() => expect(video.joinLiveKit).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("ringing")).toBeTruthy();
+
+    // The watchdog arms right after the join commits. Deliberately never fire
+    // onAgentJoined/onRemoteVideo from here on — that's the empty room.
+    await waitFor(() => expect(setTimeoutSpy.mock.calls.some((c) => c[1] === 12_000)).toBe(true));
+    const watchdogCall = setTimeoutSpy.mock.calls.find((c) => c[1] === 12_000);
+    const fireWatchdog = watchdogCall![0] as () => void;
+
+    await act(async () => {
+      fireWatchdog();
+      await Promise.resolve();
+    });
+
+    // Leaves the connecting screen instead of hanging forever: falls to
+    // apology (the same outcome onStartCall's ring timeout produces on a real
+    // no-answer), closes the row as "no-answer", and tears the session down.
+    expect(await screen.findByText("apology")).toBeTruthy();
+    expect(api.endCall).toHaveBeenCalledWith("call-1", "no-answer");
+    expect(session.leave).toHaveBeenCalled();
+
+    setTimeoutSpy.mockRestore();
+  });
 });
