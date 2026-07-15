@@ -6,7 +6,9 @@ import {
   classifyHeartbeat,
   classifyProbe,
   classifyErrorCount,
+  type SignalStatus,
 } from "@/lib/status/signals";
+import { isKioskOnline } from "@/lib/kiosk/liveness";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusCard } from "./status-card";
 
@@ -52,6 +54,17 @@ export default async function AdminStatusPage() {
   );
   const now = Date.now();
 
+  // Kiosk liveness: fleet-wide online/offline rollup for this operator.
+  const { data: kioskRows } = await supabase
+    .from("kiosks")
+    .select("property_id, last_seen_at")
+    .eq("operator_id", actor.operator_id);
+  const kiosks = kioskRows ?? [];
+  const onlineCount = kiosks.filter((k) => isKioskOnline(k.last_seen_at, now)).length;
+  const totalKiosks = kiosks.length;
+  const kioskStatus: SignalStatus =
+    totalKiosks === 0 ? "unknown" : onlineCount === totalKiosks ? "ok" : "warn";
+
   return (
     <div className="flex w-full max-w-4xl flex-col gap-4 p-6">
       <AutoRefresh />
@@ -71,6 +84,13 @@ export default async function AdminStatusPage() {
               : `${errorCount} unresolved`
           }
           href={sentryUrl}
+        />
+        <StatusCard
+          label="Kiosks"
+          status={kioskStatus}
+          value={
+            totalKiosks === 0 ? "None configured" : `${onlineCount}/${totalKiosks} online`
+          }
         />
         {SIGNAL_SPECS.map((spec) => {
           const last = lastBySignal.get(spec.signal) ?? null;
