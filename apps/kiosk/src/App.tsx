@@ -12,7 +12,7 @@ import {
 
 import * as Sentry from "@sentry/react";
 import { reduce, initialState, shouldFireRingTimeout, shouldEndForMaxDuration } from "./state/call-machine";
-import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat } from "./lib/portal-api";
+import { fetchKioskConfig, startCall, endCall, fetchVideoToken, sendHeartbeat, fetchIncomingCall, answerCall } from "./lib/portal-api";
 import { joinLiveKit } from "./lib/video/livekit";
 import type { KioskVideoSession, VideoTrackHandle } from "./lib/video/types";
 import { unlockAudioPlayback } from "./lib/audio-unlock";
@@ -22,11 +22,16 @@ import type { KioskConfig } from "./types";
 import { SeamShimmer } from "./components/brand";
 import { copy } from "./lib/copy";
 import { Home } from "./screens/Home";
+import { IncomingCall } from "./screens/IncomingCall";
 import { Ringing } from "./screens/Ringing";
 import { Connected } from "./screens/Connected";
 import { Apology } from "./screens/Apology";
 
 const HEARTBEAT_MS = 30_000;
+// Home-only discovery poll for an agent-initiated OUTBOUND call: an
+// unauthenticated kiosk has no push channel to target, so it must discover its
+// own ring (mirrors the agent-side incoming-video poll's role, reversed).
+const DISCOVERY_POLL_MS = 3_000;
 
 export function App() {
   // Pin the app to the visual viewport so the iPad keyboard shrinks the call
@@ -68,6 +73,33 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
+  // Home-only incoming-call discovery poll (~3s): while idle, ask the portal
+  // whether an agent has placed an OUTBOUND call to this property. Gated on
+  // state.screen so it starts/stops as the kiosk enters/leaves Home — the
+  // reducer's own INCOMING_CALL guard (home-only) would ignore a stray result
+  // anyway, but tearing the interval down keeps a mid-call kiosk from polling
+  // at all. `active` guards a poll that resolves after this effect's own
+  // cleanup already ran (e.g. the screen changed mid-request).
+  useEffect(() => {
+    if (state.screen !== "home") return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const call = await fetchIncomingCall();
+        if (!active || !call) return;
+        dispatch({ type: "INCOMING_CALL", callId: call.callId, channelName: call.channelName });
+      } catch {
+        // Best-effort discovery poll — a transient failure just waits for the next tick.
+      }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), DISCOVERY_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [state.screen]);
+
   // Typing watchdog: clears a stale "peer is typing" indicator if a "stop"
   // never arrives (e.g. the peer's tab backgrounds mid-type).
   useEffect(() => {
@@ -104,6 +136,73 @@ export function App() {
     lastPeerTypingRef.current = 0;
   }, []);
 
+  // The LiveKit join callbacks are identical whichever direction started the
+  // call (guest-dialed via onStartCall, or agent-dialed and answered via
+  // onAnswer) — both just need a live room. Hoisted out of onStartCall so
+  // onAnswer can reuse the EXACT same callback bodies instead of a parallel
+  // copy; `aborted` is the one thing that's per-attempt (closes over that
+  // call's own callGenRef generation), so it's threaded in as a parameter.
+  const buildJoinCallbacks = useCallback((aborted: () => boolean) => ({
+    onRemoteVideo: (h: VideoTrackHandle | null) => setRemoteVideo(h),
+    onAgentJoined: () => {
+      // Call connected — cancel the no-answer ring timer so it can't fire
+      // mid-call and tear down a live session. (onAnswer never arms this
+      // timer, so this is a harmless no-op on that path.)
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      dispatch({ type: "AGENT_JOINED" });
+      // Arm the max-duration cost cap. If the guest walks away mid-call, this
+      // ends it (leave the room + close the row) instead of letting the room
+      // bill on to the 1h token expiry. The guard keeps a late fire inert.
+      maxCallTimeoutRef.current = setTimeout(() => {
+        if (!shouldEndForMaxDuration(screenRef.current)) return;
+        Sentry.captureMessage("kiosk call hit max-duration cap; ending", { level: "warning" });
+        if (callIdRef.current) void endCall(callIdRef.current, "completed");
+        void teardown();
+        dispatch({ type: "END_CALL" });
+      }, MAX_CALL_DURATION_MS);
+    },
+    onAgentLeft: () => {
+      void teardown();
+      void endCall(callIdRef.current!, "completed");
+      dispatch({ type: "END_CALL" });
+    },
+    onConnectionStateChange: (cur: string, _prev: string, reason?: string) => {
+      const outcome = interpretConnectionState(cur, reason);
+      if (outcome === "lost") {
+        // SDK is retrying — show the overlay, don't tear down yet.
+        setReconnecting(true);
+      } else if (outcome === "restored") {
+        setReconnecting(false);
+      } else if (outcome === "terminal") {
+        // SDK gave up. Close the call and fall through to the apology screen.
+        setReconnecting(false);
+        const id = callIdRef.current;
+        void teardown();
+        if (id) void endCall(id, "failed");
+        dispatch({ type: "ERROR" });
+      }
+    },
+    onData: (payload: Uint8Array, fromIdentity: string) => {
+      if (aborted()) return; // ignore late packets after teardown (mirrors the portal's cancelled guard)
+      const env = decodeChat(payload);
+      if (!env) return;
+      if (env.type === "msg") {
+        const from = fromIdentity.startsWith("agent") ? "agent" : "guest";
+        setChatLines((prev) => [...prev, { id: env.id, from, text: env.text, ts: env.ts }]);
+        lastPeerTypingRef.current = 0;
+        setPeerTyping(false);
+        if (from === "agent") setChatOpen(true); // auto-open on the agent's message
+      } else if (env.type === "typing") {
+        const t = env.state === "start";
+        lastPeerTypingRef.current = t ? Date.now() : 0;
+        setPeerTyping(t);
+      }
+    },
+  }), [teardown]);
+
   const onStartCall = useCallback(async () => {
     // Unlock audio output on this tap so the agent's audio plays even after the
     // cold join chain (keeps the guest screen prompt-free).
@@ -121,65 +220,7 @@ export function App() {
       const uid = Math.floor(Math.random() * 1_000_000) + 1;
       const tok = await fetchVideoToken(channelName, uid);
       if (aborted()) { void endCall(callId, "cancelled"); return; }
-      const callbacks = {
-        onRemoteVideo: (h: VideoTrackHandle | null) => setRemoteVideo(h),
-        onAgentJoined: () => {
-          // Call connected — cancel the no-answer ring timer so it can't fire
-          // mid-call and tear down a live session.
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-          }
-          dispatch({ type: "AGENT_JOINED" });
-          // Arm the max-duration cost cap. If the guest walks away mid-call, this
-          // ends it (leave the room + close the row) instead of letting the room
-          // bill on to the 1h token expiry. The guard keeps a late fire inert.
-          maxCallTimeoutRef.current = setTimeout(() => {
-            if (!shouldEndForMaxDuration(screenRef.current)) return;
-            Sentry.captureMessage("kiosk call hit max-duration cap; ending", { level: "warning" });
-            if (callIdRef.current) void endCall(callIdRef.current, "completed");
-            void teardown();
-            dispatch({ type: "END_CALL" });
-          }, MAX_CALL_DURATION_MS);
-        },
-        onAgentLeft: () => {
-          void teardown();
-          void endCall(callIdRef.current!, "completed");
-          dispatch({ type: "END_CALL" });
-        },
-        onConnectionStateChange: (cur: string, _prev: string, reason?: string) => {
-          const outcome = interpretConnectionState(cur, reason);
-          if (outcome === "lost") {
-            // SDK is retrying — show the overlay, don't tear down yet.
-            setReconnecting(true);
-          } else if (outcome === "restored") {
-            setReconnecting(false);
-          } else if (outcome === "terminal") {
-            // SDK gave up. Close the call and fall through to the apology screen.
-            setReconnecting(false);
-            const id = callIdRef.current;
-            void teardown();
-            if (id) void endCall(id, "failed");
-            dispatch({ type: "ERROR" });
-          }
-        },
-        onData: (payload: Uint8Array, fromIdentity: string) => {
-          if (aborted()) return; // ignore late packets after teardown (mirrors the portal's cancelled guard)
-          const env = decodeChat(payload);
-          if (!env) return;
-          if (env.type === "msg") {
-            const from = fromIdentity.startsWith("agent") ? "agent" : "guest";
-            setChatLines((prev) => [...prev, { id: env.id, from, text: env.text, ts: env.ts }]);
-            lastPeerTypingRef.current = 0;
-            setPeerTyping(false);
-            if (from === "agent") setChatOpen(true); // auto-open on the agent's message
-          } else if (env.type === "typing") {
-            const t = env.state === "start";
-            lastPeerTypingRef.current = t ? Date.now() : 0;
-            setPeerTyping(t);
-          }
-        },
-      };
+      const callbacks = buildJoinCallbacks(aborted);
       const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
       // Cancelled while joining? Leave the channel we just joined and close the
       // call instead of committing to it behind the guest's back.
@@ -212,7 +253,75 @@ export function App() {
       if (id) void endCall(id, "failed");
       dispatch({ type: "ERROR" });
     }
-  }, [teardown]);
+  }, [teardown, buildJoinCallbacks]);
+
+  // The answer side of an agent-initiated OUTBOUND call: the reverse of
+  // onStartCall (claim instead of create, join instead of dial). callId/
+  // channelName are already known (INCOMING_CALL stored them from the discovery
+  // poll). callIdRef is set synchronously up front so onCancel (wired to the
+  // reused Ringing screen) can close THIS call if the guest backs out
+  // mid-claim/join.
+  const onAnswer = useCallback(async () => {
+    unlockAudioPlayback();
+    // Member access (not destructured from `state` as a whole) so the deps
+    // array below can list the two primitive fields onAnswer actually reads,
+    // matching exhaustive-deps rather than recreating on every screen change.
+    const callId = state.callId;
+    const channelName = state.channelName;
+    if (!callId || !channelName) return; // defensive: reducer only reaches "incoming" with both set
+    const gen = ++callGenRef.current; // this attempt's token; teardown() bumps it to abort
+    const aborted = () => callGenRef.current !== gen;
+    callIdRef.current = callId;
+    // Dispatch ANSWER SYNCHRONOUSLY, before the first await — exactly as
+    // onStartCall dispatches TAP_CALL before its own first await. This unmounts
+    // the IncomingCall Answer button (incoming -> ringing) immediately, so a
+    // second tap physically can't re-enter and start a competing generation.
+    // WITHOUT this the button stays mounted for the whole answerCall round-trip:
+    // a double-tap then makes tap#1 win the server claim (RINGING -> IN_PROGRESS,
+    // agent already in the room) but bail on its now-stale aborted() check —
+    // never joining — while tap#2 gets the 409 and returns home. Net: an
+    // orphaned IN_PROGRESS call the kiosk never joined (the exact orphan class
+    // the 0016 index + reaper + kiosk catch-leak fix exist to prevent).
+    dispatch({ type: "ANSWER" });
+    try {
+      const claimed = await answerCall(callId);
+      if (aborted()) return; // guest tapped Cancel on the reused Ringing screen mid-claim
+      if (!claimed) {
+        // Gone: the agent cancelled, the call timed out, or a lost race (409).
+        // Nothing to close — it was never ours to end. Roll the optimistically
+        // shown ringing screen back to home (a brief "connecting" flash on this
+        // rare path is fine, mirroring onStartCall's dispatch-then-bail).
+        dispatch({ type: "END_CALL" });
+        return;
+      }
+      // Legacy wire param — the token route still validates uid; LiveKit ignores it.
+      const uid = Math.floor(Math.random() * 1_000_000) + 1;
+      const tok = await fetchVideoToken(claimed.channelName, uid);
+      if (aborted()) return;
+      const callbacks = buildJoinCallbacks(aborted);
+      const session = await joinLiveKit({ url: tok.url, token: tok.token, ...callbacks });
+      // Cancelled while joining? Leave the channel we just joined — onCancel
+      // already closed the call server-side, so there's nothing left to do
+      // here but not commit the session behind the guest's back.
+      if (aborted()) {
+        await session.leave();
+        return;
+      }
+      sessionRef.current = session;
+      localAudioRef.current = session.localAudioTrack;
+      setLocalVideo(session.localVideo);
+      // No CALL_STARTED, no ring timeout: the agent is already in the room —
+      // buildJoinCallbacks' onAgentJoined fires off the existing video track
+      // (joinLiveKit subscribes to tracks already published when it connects)
+      // and drives ringing -> connected, same as the guest-dialed path.
+    } catch {
+      if (aborted()) return; // teardown already ran (cancel); don't override with apology
+      const id = callIdRef.current;
+      await teardown();
+      if (id) void endCall(id, "failed");
+      dispatch({ type: "ERROR" });
+    }
+  }, [state.callId, state.channelName, teardown, buildJoinCallbacks]);
 
   const onEnd = useCallback(async () => {
     // End locally first — leave the room + return home immediately — then notify the
@@ -275,6 +384,8 @@ export function App() {
     switch (state.screen) {
       case "home":
         return <Home config={config} onCall={onStartCall} />;
+      case "incoming":
+        return <IncomingCall onAnswer={onAnswer} />;
       case "ringing":
         return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
       case "connected":

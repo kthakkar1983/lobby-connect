@@ -45,3 +45,33 @@ export async function sendHeartbeat(): Promise<void> {
     headers: headers(),
   }).catch(() => {});
 }
+
+/**
+ * The kiosk's discovery poll (~3s while idle on Home) for an agent-initiated
+ * OUTBOUND call — the reverse of the agent's incoming-video poll/push. An
+ * unauthenticated kiosk has no push channel to target, so it must discover its
+ * own ring. Swallows every failure to `null` (network hiccup or no ringing
+ * call) rather than throwing, so a bad tick just waits for the next poll
+ * instead of surfacing an error from a background loop.
+ */
+export async function fetchIncomingCall(): Promise<CallStartResult | null> {
+  const res = await fetch(`${getPortalApiBase()}/api/kiosk/incoming-call`, { headers: headers() }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return (await res.json()) as CallStartResult | null;
+}
+
+/**
+ * Claim an agent-initiated OUTBOUND call (RINGING -> IN_PROGRESS) in response
+ * to the guest tapping Answer. `null` covers the "gone" case — the agent
+ * cancelled, the call timed out, or a double-tap lost the race (server 409) —
+ * as well as a network failure; the caller treats both the same (return home).
+ */
+export async function answerCall(callId: string): Promise<{ channelName: string } | null> {
+  const res = await fetch(`${getPortalApiBase()}/api/kiosk/answer-call`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ callId }),
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return (await res.json()) as { channelName: string };
+}

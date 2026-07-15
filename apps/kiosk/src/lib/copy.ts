@@ -5,6 +5,11 @@
  */
 export const copy = {
   loading: "Getting things ready…",
+  incoming: {
+    title: "The front desk is calling",
+    subtitle: "Tap Answer to connect",
+    answer: "Answer",
+  },
   ringing: {
     title: "Ringing the front desk…",
     subtitle: "Someone's almost there",
