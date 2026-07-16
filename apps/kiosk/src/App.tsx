@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import {
   RING_WINDOW_MS,
   RECONNECT_WINDOW_MS,
@@ -29,9 +29,11 @@ import { Connected } from "./screens/Connected";
 import { Apology } from "./screens/Apology";
 
 const HEARTBEAT_MS = 30_000;
-// Home-only discovery poll for an agent-initiated OUTBOUND call: an
-// unauthenticated kiosk has no push channel to target, so it must discover its
-// own ring (mirrors the agent-side incoming-video poll's role, reversed).
+// Discovery poll for an agent-initiated OUTBOUND call: an unauthenticated kiosk
+// has no push channel to target, so it must discover its own ring (mirrors the
+// agent-side incoming-video poll's role, reversed). Runs while idle on Home
+// (to find a ring) AND while the incoming screen is up (to notice that ring
+// going away — see the effect below).
 const DISCOVERY_POLL_MS = 3_000;
 // Answer-path "agent didn't join" watchdog. onAnswer joins a room the agent is
 // ALREADY in, so — unlike onStartCall — it arms no ring timeout. But if the
@@ -78,6 +80,10 @@ export function App() {
   // Timestamp (ms) of the last "typing start" received from the peer; the
   // watchdog effect below clears a stale indicator if "stop" never arrives.
   const lastPeerTypingRef = useRef(0);
+  // The incoming-call ringtone element (always mounted, hidden). Rung while the
+  // "front desk is calling" screen is up so a guest is drawn to the kiosk on an
+  // agent-initiated OUTBOUND call, mirroring the agent's own incoming ring.
+  const ringRef = useRef<HTMLAudioElement>(null);
 
   // Live mirror of the current screen for timer callbacks (avoids stale closures).
   const screenRef = useRef(state.screen);
@@ -90,21 +96,36 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Home-only incoming-call discovery poll (~3s): while idle, ask the portal
-  // whether an agent has placed an OUTBOUND call to this property. Gated on
-  // state.screen so it starts/stops as the kiosk enters/leaves Home — the
-  // reducer's own INCOMING_CALL guard (home-only) would ignore a stray result
-  // anyway, but tearing the interval down keeps a mid-call kiosk from polling
-  // at all. `active` guards a poll that resolves after this effect's own
-  // cleanup already ran (e.g. the screen changed mid-request).
+  // Incoming-call discovery poll (~3s), active on Home AND on the incoming
+  // "front desk is calling" screen:
+  //   - On Home it discovers an agent-initiated OUTBOUND call and rings.
+  //   - On the incoming screen it watches for that SAME call going away — agent
+  //     cancelled, the 30s no-answer window lapsed, or it was answered elsewhere
+  //     — and returns the kiosk home. WITHOUT this, the incoming screen had no
+  //     poll and no timer, so a call the agent already gave up on left the kiosk
+  //     stuck on "Answer" indefinitely (it only cleared when someone tapped
+  //     Answer and got a 409). A CONFIRMED-idle poll expires it; a transient
+  //     `error` is ignored (wait for the next tick) so a blip can't drop a live
+  //     ring. Gated on state.screen so the interval tears down once a call
+  //     actually connects. `active` guards a poll that resolves after this
+  //     effect's own cleanup already ran (e.g. the screen changed mid-request).
   useEffect(() => {
-    if (state.screen !== "home") return;
+    const onHome = state.screen === "home";
+    const onIncoming = state.screen === "incoming";
+    if (!onHome && !onIncoming) return;
     let active = true;
     const poll = async () => {
       try {
-        const call = await fetchIncomingCall();
-        if (!active || !call) return;
-        dispatch({ type: "INCOMING_CALL", callId: call.callId, channelName: call.channelName });
+        const result = await fetchIncomingCall();
+        if (!active || !result) return;
+        if (onHome) {
+          if (result.status === "ringing") {
+            dispatch({ type: "INCOMING_CALL", callId: result.call.callId, channelName: result.call.channelName });
+          }
+        } else if (result.status === "idle") {
+          // Confirmed gone (not a transient error) -> leave the dead ring.
+          dispatch({ type: "INCOMING_EXPIRED" });
+        }
       } catch {
         // Best-effort discovery poll — a transient failure just waits for the next tick.
       }
@@ -116,6 +137,57 @@ export function App() {
       clearInterval(id);
     };
   }, [state.screen]);
+
+  // Ring the kiosk audibly while the "front desk is calling" (incoming) screen
+  // is up, and stop the instant it leaves (answered -> ringing, or the call went
+  // away -> home). Best-effort: play() is a no-op-catch while autoplay is still
+  // locked (the primer below unlocks it on the first touch) — the visual screen
+  // shows regardless. Runs on state.screen; the element is always mounted (see
+  // the render), so ringRef is set even before config loads.
+  useEffect(() => {
+    const el = ringRef.current;
+    if (!el) return;
+    if (state.screen === "incoming") {
+      try {
+        void Promise.resolve(el.play()).catch(() => {});
+      } catch {
+        /* jsdom / autoplay-blocked — the primer + best-effort retry cover it */
+      }
+    } else {
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch {
+        /* jsdom */
+      }
+    }
+  }, [state.screen]);
+
+  // Unlock ring autoplay: browsers block audio.play() until the page has seen a
+  // user gesture. Priming the element (play -> immediately pause) inside a touch
+  // unlocks it so a later programmatic ring actually sounds — the kiosk is an
+  // unattended device that may not have been touched since load. Primes on every
+  // touch (re-arming across iOS audio suspensions); a no-op while already
+  // playing, and skipped during a live call so it can never blip over call audio.
+  useEffect(() => {
+    const prime = () => {
+      if (screenRef.current === "connected" || screenRef.current === "ringing") return;
+      const el = ringRef.current;
+      if (!el || !el.paused) return;
+      try {
+        void Promise.resolve(el.play())
+          .then(() => {
+            el.pause();
+            el.currentTime = 0;
+          })
+          .catch(() => {});
+      } catch {
+        /* jsdom / autoplay-blocked */
+      }
+    };
+    window.addEventListener("pointerdown", prime);
+    return () => window.removeEventListener("pointerdown", prime);
+  }, []);
 
   // Typing watchdog: clears a stale "peer is typing" indicator if a "stop"
   // never arrives (e.g. the peer's tab backgrounds mid-type).
@@ -420,8 +492,13 @@ export function App() {
     sessionRef.current?.sendData(encodeChat({ v: CHAT_PROTOCOL_VERSION, type: "typing", state: s, ts: Date.now() }), false);
   }, []);
 
+  // Structured (not an early return) so the ring <audio> below stays mounted
+  // even while the loading screen shows — the ring effect needs ringRef set
+  // before config loads. `config` is const, so its non-null narrowing holds
+  // inside the screen IIFE closure.
+  let body: ReactNode;
   if (!config) {
-    return (
+    body = (
       <div
         className="flex h-full flex-col items-center justify-center gap-5"
         role="status"
@@ -431,28 +508,36 @@ export function App() {
         <p className="text-sm text-muted-foreground">{copy.loading}</p>
       </div>
     );
+  } else {
+    const screen = (() => {
+      switch (state.screen) {
+        case "home":
+          return <Home config={config} onCall={onStartCall} lockedOut={isLockedOut(lockedUntil, Date.now())} />;
+        case "incoming":
+          return <IncomingCall onAnswer={onAnswer} />;
+        case "ringing":
+          return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
+        case "connected":
+          return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd}
+            chatOpen={chatOpen} chatLines={chatLines} peerTyping={peerTyping} onType={() => setChatOpen(true)} onSend={sendChat} onTyping={sendTyping} />;
+        case "apology":
+          return <Apology message={config.apologyMessage} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
+      }
+    })();
+    body = (
+      <>
+        {screen}
+        {reconnecting && <ReconnectingOverlay />}
+      </>
+    );
   }
-
-  const screen = (() => {
-    switch (state.screen) {
-      case "home":
-        return <Home config={config} onCall={onStartCall} lockedOut={isLockedOut(lockedUntil, Date.now())} />;
-      case "incoming":
-        return <IncomingCall onAnswer={onAnswer} />;
-      case "ringing":
-        return <Ringing localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onCancel={onCancel} />;
-      case "connected":
-        return <Connected remoteVideo={remoteVideo} localVideo={localVideo} muted={muted} cameraOff={cameraOff} onMute={toggleMute} onCamera={toggleCamera} onEnd={onEnd}
-          chatOpen={chatOpen} chatLines={chatLines} peerTyping={peerTyping} onType={() => setChatOpen(true)} onSend={sendChat} onTyping={sendTyping} />;
-      case "apology":
-        return <Apology message={config.apologyMessage} onDone={() => dispatch({ type: "DISMISS_APOLOGY" })} />;
-    }
-  })();
 
   return (
     <>
-      {screen}
-      {reconnecting && <ReconnectingOverlay />}
+      {body}
+      {/* Always mounted (even under the loading screen) so the ring effect can
+          reach it. Hidden — display:none does not stop audio playback. */}
+      <audio ref={ringRef} src="/sounds/ring.mp3" loop preload="auto" className="hidden" aria-hidden data-testid="kiosk-ringtone" />
     </>
   );
 }

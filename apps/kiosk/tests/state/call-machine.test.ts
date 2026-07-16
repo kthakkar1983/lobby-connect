@@ -134,6 +134,17 @@ describe("outbound incoming-call transitions", () => {
     const connected: KioskState = { screen: "connected", callId: "x", channelName: "call_x" };
     expect(reduce(connected, { type: "DROP" })).toEqual(initialState());
   });
+
+  it("INCOMING_EXPIRED returns incoming -> home (the ring went away: agent cancel / 30s no-answer)", () => {
+    const incoming: KioskState = { screen: "incoming", callId: "c1", channelName: "call_abc" };
+    expect(reduce(incoming, { type: "INCOMING_EXPIRED" })).toEqual(initialState());
+  });
+  it("INCOMING_EXPIRED is a no-op off the incoming screen (a late poll must not drop a live call)", () => {
+    const connected: KioskState = { screen: "connected", callId: "x", channelName: "call_x" };
+    expect(reduce(connected, { type: "INCOMING_EXPIRED" })).toEqual(connected);
+    const ringing: KioskState = { screen: "ringing", callId: "x", channelName: "call_x" };
+    expect(reduce(ringing, { type: "INCOMING_EXPIRED" })).toEqual(ringing);
+  });
 });
 
 describe("isLockedOut", () => {

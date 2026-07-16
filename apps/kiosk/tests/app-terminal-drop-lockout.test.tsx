@@ -89,7 +89,7 @@ describe("kiosk terminal-drop tap lockout (Task 11)", () => {
     api.sendHeartbeat.mockResolvedValue(undefined);
     // No ring until a test arms one — otherwise the initial home-poll would
     // immediately flip to "incoming" before the guest ever taps to call out.
-    api.fetchIncomingCall.mockResolvedValue(null);
+    api.fetchIncomingCall.mockResolvedValue({ status: "idle" });
     api.fetchVideoToken.mockResolvedValue({
       provider: "livekit",
       url: "wss://lk",
@@ -143,7 +143,7 @@ describe("kiosk terminal-drop tap lockout (Task 11)", () => {
     // re-arms on the return-to-home transition below) with an agent
     // call-back — sidesteps waiting out the real 3s interval, mirroring
     // app-incoming-answer.test.tsx's "immediate first tick" trick.
-    api.fetchIncomingCall.mockResolvedValue({ callId: "call-2", channelName: "ch-2" });
+    api.fetchIncomingCall.mockResolvedValue({ status: "ringing", call: { callId: "call-2", channelName: "ch-2" } });
 
     act(() => opts.onConnectionStateChange("DISCONNECTED", "CONNECTED", "UNKNOWN"));
 

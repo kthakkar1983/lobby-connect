@@ -91,7 +91,10 @@ describe("kiosk incoming-call discovery poll + Answer flow", () => {
     api.endCall.mockResolvedValue(undefined);
     // The poll's "immediate first tick" (no need to wait out the real 3s
     // interval — see App.tsx's discovery-poll effect) finds a ringing call.
-    api.fetchIncomingCall.mockResolvedValue({ callId: "call-1", channelName: "ch-1" });
+    api.fetchIncomingCall.mockResolvedValue({
+      status: "ringing",
+      call: { callId: "call-1", channelName: "ch-1" },
+    });
   });
 
   it("polls fetchIncomingCall while idle on Home and renders the IncomingCall screen", async () => {
@@ -103,6 +106,16 @@ describe("kiosk incoming-call discovery poll + Answer flow", () => {
     // here (that's the reducer's own INCOMING_CALL home-only guard, covered in
     // tests/state/call-machine.test.ts), but this confirms the discovery path
     // itself is wired end to end.
+  });
+
+  it("plays the incoming ring audibly while the front desk is calling", async () => {
+    // The kiosk rings on an agent-initiated OUTBOUND call, mirroring the agent's
+    // own incoming ring. Autoplay is stubbed in jsdom (tests/setup.ts); the ring
+    // actually sounding is a live-smoke concern, but this guards the wiring so a
+    // regression can't silently mute the kiosk.
+    render(<App />);
+    expect(await screen.findByText(/the front desk is calling/i)).toBeTruthy();
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
   });
 
   it("Answer claims the call, joins the same LiveKit room, and proceeds to connected", async () => {
@@ -147,13 +160,15 @@ describe("kiosk incoming-call discovery poll + Answer flow", () => {
   });
 
   it("a gone/claimed-elsewhere call (answerCall -> null) returns home without joining", async () => {
-    // First poll tick discovers the call (so Answer is tappable); once the
-    // claim fails and the reducer returns home, the effect re-arms and polls
-    // again — resolve every poll after the first to "nothing ringing" so the
-    // screen doesn't immediately cycle back to "incoming".
+    // Poll keeps returning the ringing call so the kiosk stays on the incoming
+    // screen (the Home tick + the immediate re-poll on entering incoming) long
+    // enough to tap Answer; the "gone" here is discovered by answerCall -> null
+    // (a lost race / just-cancelled claim), NOT by the poll. Once onAnswer
+    // returns home, a confirmed-idle poll keeps it there (no cycle back).
     api.fetchIncomingCall
-      .mockResolvedValueOnce({ callId: "call-1", channelName: "ch-1" })
-      .mockResolvedValue(null);
+      .mockResolvedValueOnce({ status: "ringing", call: { callId: "call-1", channelName: "ch-1" } })
+      .mockResolvedValueOnce({ status: "ringing", call: { callId: "call-1", channelName: "ch-1" } })
+      .mockResolvedValue({ status: "idle" });
     api.answerCall.mockResolvedValue(null);
 
     render(<App />);
@@ -165,6 +180,47 @@ describe("kiosk incoming-call discovery poll + Answer flow", () => {
     expect(await screen.findByText("home")).toBeTruthy();
     expect(api.fetchVideoToken).not.toHaveBeenCalled();
     expect(video.joinLiveKit).not.toHaveBeenCalled();
+  });
+
+  // Regression for the smoke failure: the agent's 30s outbound window lapses (or
+  // the agent cancels) while the kiosk sits on the incoming "Answer" screen. The
+  // server finalizes the call, but the OLD kiosk had no way to notice — its
+  // discovery poll ran ONLY while idle on Home, so entering the incoming screen
+  // tore the poll down and the kiosk hung there indefinitely, returning home only
+  // if someone pressed Answer (which then 409'd). The fix keeps the poll running
+  // on the incoming screen; a CONFIRMED-idle result (the call is gone) returns
+  // home on its own — no tap.
+  it("returns home on its own when the ring goes away while on the incoming screen (no Answer tap)", async () => {
+    api.fetchIncomingCall
+      .mockResolvedValueOnce({ status: "ringing", call: { callId: "call-1", channelName: "ch-1" } })
+      .mockResolvedValue({ status: "idle" });
+
+    render(<App />);
+
+    // Returns to Home entirely on its own — the previous behavior hung on incoming.
+    expect(await screen.findByText("home")).toBeTruthy();
+    expect(api.answerCall).not.toHaveBeenCalled();
+    // Proof it actually kept polling FROM the incoming screen (the old code
+    // stopped polling the instant it left Home — which is exactly why it hung).
+    expect(api.fetchIncomingCall.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  // A dropped poll must NOT be read as "call gone": only a confirmed-idle (200 +
+  // empty body) result expires the incoming screen. A transient error keeps the
+  // ring up and waits for the next tick, so a single network blip can't silence a
+  // live ring.
+  it("stays on the incoming screen through a transient poll error (only a confirmed idle expires it)", async () => {
+    api.fetchIncomingCall
+      .mockResolvedValueOnce({ status: "ringing", call: { callId: "call-1", channelName: "ch-1" } })
+      .mockResolvedValue({ status: "error" });
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: /answer/i })).toBeTruthy();
+    // Let the immediate re-poll(s) run — an error must not (wrongly) expire it.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole("button", { name: /answer/i })).toBeTruthy();
+    expect(screen.queryByText("home")).toBeNull();
   });
 
   // Regression: onAnswer must dispatch ANSWER (incoming -> ringing) SYNCHRONOUSLY

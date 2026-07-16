@@ -47,17 +47,35 @@ export async function sendHeartbeat(): Promise<void> {
 }
 
 /**
- * The kiosk's discovery poll (~3s while idle on Home) for an agent-initiated
- * OUTBOUND call — the reverse of the agent's incoming-video poll/push. An
- * unauthenticated kiosk has no push channel to target, so it must discover its
- * own ring. Swallows every failure to `null` (network hiccup or no ringing
- * call) rather than throwing, so a bad tick just waits for the next poll
- * instead of surfacing an error from a background loop.
+ * The result of one incoming-call discovery poll. Deliberately DISCRIMINATED so
+ * a caller can tell the call is genuinely gone (`idle` — a 200 with an empty
+ * body) apart from a request that merely failed (`error` — network / 5xx). That
+ * distinction is load-bearing on the incoming screen: `idle` returns the kiosk
+ * home, but `error` must be ignored so a single transient blip can't silence a
+ * live ring (or hang the kiosk on a dead one).
  */
-export async function fetchIncomingCall(): Promise<CallStartResult | null> {
-  const res = await fetch(`${getPortalApiBase()}/api/kiosk/incoming-call`, { headers: headers() }).catch(() => null);
-  if (!res || !res.ok) return null;
-  return (await res.json()) as CallStartResult | null;
+export type IncomingPoll =
+  | { status: "ringing"; call: CallStartResult }
+  | { status: "idle" }
+  | { status: "error" };
+
+/**
+ * The kiosk's discovery poll (~3s) for an agent-initiated OUTBOUND call — the
+ * reverse of the agent's incoming-video poll/push. An unauthenticated kiosk has
+ * no push channel to target, so it must discover its own ring. Never throws:
+ * any failure (missing token, network hiccup, 5xx, malformed body) collapses to
+ * `{ status: "error" }` so a bad tick just waits for the next poll instead of
+ * surfacing an error from a background loop.
+ */
+export async function fetchIncomingCall(): Promise<IncomingPoll> {
+  try {
+    const res = await fetch(`${getPortalApiBase()}/api/kiosk/incoming-call`, { headers: headers() }).catch(() => null);
+    if (!res || !res.ok) return { status: "error" };
+    const call = (await res.json()) as CallStartResult | null;
+    return call ? { status: "ringing", call } : { status: "idle" };
+  } catch {
+    return { status: "error" };
+  }
 }
 
 /**
