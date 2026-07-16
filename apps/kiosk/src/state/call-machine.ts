@@ -21,6 +21,7 @@ export type KioskAction =
   | { type: "DISMISS_APOLOGY" }
   | { type: "ERROR" }
   | { type: "INCOMING_CALL"; callId: string; channelName: string }
+  | { type: "INCOMING_EXPIRED" }
   | { type: "ANSWER" }
   | { type: "DROP" };
 
@@ -85,6 +86,13 @@ export function reduce(state: KioskState, action: KioskAction): KioskState {
       return state.screen === "home"
         ? { screen: "incoming", callId: action.callId, channelName: action.channelName }
         : state;
+    case "INCOMING_EXPIRED":
+      // The agent-initiated call we were ringing went away (agent cancelled, the
+      // 30s no-answer window lapsed, or it was answered elsewhere). Return home
+      // instead of hanging on a dead ring. Guarded to the incoming screen so a
+      // late poll result can't reset a call that has since progressed (e.g. the
+      // guest already tapped Answer -> ringing).
+      return state.screen === "incoming" ? home() : state;
     case "ANSWER":
       // Tap Answer -> reuse the "ringing" connecting screen; AGENT_JOINED -> connected.
       return state.screen === "incoming" ? { ...state, screen: "ringing" } : state;
