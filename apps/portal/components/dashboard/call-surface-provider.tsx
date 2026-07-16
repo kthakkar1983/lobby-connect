@@ -7,6 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { RECONNECT_WINDOW_MS } from "@lc/shared";
 import { openCallTile, type CallTileHandle } from "@/lib/duty-tile/call-tile-manager";
 import { CallTile } from "@/components/call-tile/call-tile";
 import {
@@ -33,6 +34,15 @@ export interface ActiveCallInfo {
   answeredAt: number;
   /** Hotel-local timezone (audio: from the answered route) — the tile's clock face. */
   timeZone: string | null;
+}
+
+/**
+ * The property a just-ended call was with, kept around for RECONNECT_WINDOW_MS
+ * (Task 15). See CallSurfaceValue.recentlyEnded for the full rationale.
+ */
+export interface RecentlyEndedCall {
+  propertyId: string;
+  propertyName: string;
 }
 
 export interface ChatLine {
@@ -82,6 +92,23 @@ export interface RegisteredCallControls {
   sendTyping?: (state: "start" | "stop") => void;
 }
 
+/**
+ * Registered by the video host once it's mounted and ready to originate a
+ * call (Task 12, outbound video). `startOutboundVideo` invokes this AFTER the
+ * backend route returns a callId/channelName, so the host can set its local
+ * `active` state and mount `<VideoCall outbound channelName=...>`. The
+ * registration itself lives in a plain ref (not state, unlike
+ * acceptVideo/registerAcceptVideo) — nothing needs to reactively read "is a
+ * starter registered"; it's only ever invoked imperatively, after the POST
+ * resolves.
+ */
+export type OutboundStarter = (args: {
+  callId: string;
+  channelName: string;
+  propertyId: string;
+  propertyName: string;
+}) => void;
+
 interface CallSurfaceValue extends CallSurfaceSnapshot {
   actions: CallSurfaceActions;
   publishRings: (source: "audio" | "video", rings: IncomingRing[]) => void;
@@ -93,6 +120,37 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
   publishActive: (channel: "AUDIO" | "VIDEO", active: ActiveCallInfo | null) => void;
   registerAcceptAudio: (fn: (() => void) | null) => void;
   registerAcceptVideo: (fn: ((callId: string) => void) | null) => void;
+  /**
+   * Originate an outbound VIDEO call to a property's kiosk — the reverse of
+   * answering an inbound ring (agent-initiated outbound video calls). POSTs
+   * /api/calls/start-outbound-video with `{propertyId}`; on success invokes
+   * the registered OutboundStarter (the video host) so it mounts `<VideoCall>`
+   * in outbound mode. Returns `{ok:false, busy:true}` on a 409 (the property
+   * already has a live call, or the agent is already on one) and `{ok:false}`
+   * on any other non-2xx response or network failure — the caller (a future
+   * property-card "Kiosk" button) surfaces that to the agent. Deliberately a
+   * single one-shot fetch, NOT reliableFetch's retry — like the 911 trigger,
+   * this has a server-side side effect (creates the `calls` row + flips the
+   * agent ON_CALL), so a blind retry risks a double-dial.
+   */
+  startOutboundVideo: (
+    propertyId: string,
+    propertyName: string,
+  ) => Promise<{ ok: boolean; busy?: boolean }>;
+  /** Register the video host's outbound-call starter (Task 12). Null clears it. */
+  registerStartOutbound: (fn: OutboundStarter | null) => void;
+  /**
+   * The property whose call just ended, kept for RECONNECT_WINDOW_MS — the
+   * drop-moment complement to the property-card "Kiosk" button (Task 14):
+   * right after a call ends, redialing the SAME property is one click away
+   * via `startOutboundVideo(recentlyEnded.propertyId, recentlyEnded.propertyName)`.
+   * Set only when the ended call carried a propertyId (a video ring, like
+   * audio's TwiML Parameter, can arrive with none — see ActiveCallInfo above);
+   * cleared early the instant a NEW call goes active, since there's nothing
+   * left to "call back" to while already on a call. Drives the Task-15
+   * `<CallBackShortcut>`.
+   */
+  recentlyEnded: RecentlyEndedCall | null;
   /**
    * Ring keys the LOCAL user has silenced (audio only). The publishers
    * (softphone audio ring / video-host ring) read this and mute their own
@@ -419,6 +477,30 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     [openTileForCall],
   );
 
+  // Outbound-call origination (Task 12). startOutboundRef is a plain ref (not
+  // state, unlike acceptVideoFn): nothing reactively reads "has the host
+  // registered a starter" — it's only ever invoked imperatively below, after
+  // the POST resolves, mirroring connectToProperty's ref-only internals.
+  const startOutboundRef = useRef<OutboundStarter | null>(null);
+  const registerStartOutbound = useCallback((fn: OutboundStarter | null) => {
+    startOutboundRef.current = fn;
+  }, []);
+  const startOutboundVideo = useCallback(
+    async (propertyId: string, propertyName: string): Promise<{ ok: boolean; busy?: boolean }> => {
+      const res = await fetch("/api/calls/start-outbound-video", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId }),
+      }).catch(() => null);
+      if (res && res.status === 409) return { ok: false, busy: true };
+      if (!res || !res.ok) return { ok: false };
+      const { callId, channelName } = (await res.json()) as { callId: string; channelName: string };
+      startOutboundRef.current?.({ callId, channelName, propertyId, propertyName });
+      return { ok: true };
+    },
+    [],
+  );
+
   // Auto-reset + no unbounded growth: whenever the set of currently-ringing keys
   // changes, drop any silenced key that is no longer ringing. A brand-new call
   // gets a new key that isn't silenced, so it rings again. ringKeys is memoized
@@ -460,6 +542,42 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
     }
   }, [active, closeTile]);
 
+  // Recently-ended call (Task 15): the drop-moment complement to the
+  // property-card "Kiosk" button (Task 14) — right after a call ends, the
+  // SAME property is one click away via startOutboundVideo. Needs the EDGE
+  // (active went from a call to null), not just "active is null", so it can
+  // capture which property just hung up — a dedicated prevActiveRef, updated
+  // at the top of THIS effect, does that. (The sibling `activeRef` above is
+  // no substitute: its own effect already updates it to the NEW value before
+  // this effect body runs, so reading it here would see "now", not "before".)
+  //
+  // Cleared early the instant a NEW call goes active (whether that's a fresh
+  // answer or another outbound dial) — the shortcut is meaningless mid-call,
+  // and without this a call-B-overwrites-call-A transition (no intervening
+  // null; see the prewarm tests above) would otherwise leave a stale pill
+  // pointing at call A's property while the agent is on a call with B.
+  //
+  // The 10s window (RECONNECT_WINDOW_MS, packages/shared/src/protocol.ts) is
+  // the outbound twin of the kiosk's own post-drop tap lockout — paired so
+  // the agent has right-of-way to reconnect while the kiosk is still showing
+  // its calm "reconnecting" message.
+  const [recentlyEnded, setRecentlyEnded] = useState<RecentlyEndedCall | null>(null);
+  const prevActiveRef = useRef<ActiveCallInfo | null>(null);
+  useEffect(() => {
+    const prev = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (active) {
+      setRecentlyEnded(null); // a new call preempts any pending "call back" pill
+      return;
+    }
+    if (prev && prev.propertyId) {
+      const { propertyId, propertyName } = prev;
+      setRecentlyEnded({ propertyId, propertyName });
+      const id = setTimeout(() => setRecentlyEnded(null), RECONNECT_WINDOW_MS);
+      return () => clearTimeout(id);
+    }
+  }, [active]);
+
   const value = useMemo<CallSurfaceValue>(
     () => ({
       rings: [...audioRings, ...videoRings],
@@ -469,6 +587,9 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      startOutboundVideo,
+      registerStartOutbound,
+      recentlyEnded,
       silencedKeys,
       silenceRing,
       tileMount,
@@ -500,6 +621,9 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
       publishActive,
       registerAcceptAudio,
       registerAcceptVideo,
+      startOutboundVideo,
+      registerStartOutbound,
+      recentlyEnded,
       silencedKeys,
       silenceRing,
       tileMount,

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
+import { CallBackShortcut } from "@/components/dashboard/call-back-shortcut";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DutyControl } from "@/components/dashboard/duty-control";
 import { Softphone } from "@/components/softphone/softphone";
@@ -28,6 +29,13 @@ const HOME: Record<Role, Route> = { AGENT: "/agent", ADMIN: "/admin" };
  * push/ring layer + the ringing property cards (dashboard-first answering,
  * spec §3.1/§3.4) now cover the "call is ringing while I'm elsewhere" case, so
  * no route-agnostic in-app toast is needed anymore.
+ *
+ * Task 15: `<CallBackShortcut>` is agent-only (the spec's drop-moment
+ * complement to the agent's own property-card "Kiosk" button) — `role` is
+ * plumbed into this component already, so the gate is a plain prop check
+ * rather than a second duty/role lookup. Mounted alongside `VideoCallHost`
+ * so it's present on every agent route, matching the softphone/video host's
+ * always-mounted, route-agnostic lifecycle.
  */
 export function DashboardWorkspace({
   role,
@@ -88,6 +96,7 @@ export function DashboardWorkspace({
           <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>
+      {role === "AGENT" ? <CallBackShortcut /> : null}
     </div>
   );
 }

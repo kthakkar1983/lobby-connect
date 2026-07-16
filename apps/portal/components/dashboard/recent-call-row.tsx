@@ -2,8 +2,9 @@
 
 import { useId, useState } from "react";
 import { Phone, Video, StickyNote, ChevronDown } from "lucide-react";
-import type { CallState } from "@lc/shared";
+import type { CallState, CallDirection } from "@lc/shared";
 import { formatDuration, formatTimeOnly, formatCallTime } from "@/lib/owner/format";
+import { outcomeDotClass } from "@/lib/dashboard/calls";
 import { CHANNEL_COLOR, asChannel } from "@/lib/dashboard/channel-colors";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ export type RecentCall = {
   readonly id: string;
   readonly channel: string; // "AUDIO" | "VIDEO"
   readonly state: CallState;
+  readonly direction: CallDirection;
   readonly room_number: string | null;
   readonly caller_number: string | null;
   readonly ring_started_at: string;
@@ -22,13 +24,6 @@ export type RecentCall = {
    *  view (every call is the agent's own). */
   readonly handlerName?: string | null;
 };
-
-function outcomeDotClass(state: CallState): string {
-  if (state === "COMPLETED") return "bg-live"; // answered
-  if (state === "NO_ANSWER") return "bg-attention"; // missed
-  if (state === "FAILED") return "bg-muted-foreground"; // system failure
-  return "bg-live"; // RINGING / IN_PROGRESS — still live
-}
 
 function DetailField({ label, value }: { readonly label: string; readonly value: string }) {
   return (
@@ -69,7 +64,7 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
           aria-label={CHANNEL_COLOR[channel].label}
         />
         <span
-          className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(call.state))}
+          className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", outcomeDotClass(call.state, call.direction))}
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 truncate text-foreground">{call.propertyName}</span>

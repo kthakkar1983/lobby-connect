@@ -11,6 +11,7 @@ import { useCallSurface } from "@/components/dashboard/call-surface-provider";
 import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { cardLiveState, type CardLiveState } from "@/lib/dashboard/pods";
 import { formatTimeOnly } from "@/lib/owner/format";
+import { cn } from "@/lib/utils";
 
 export interface PropertyCardData {
   id: string;
@@ -19,6 +20,10 @@ export interface PropertyCardData {
   callsTonight: number;
   lastCallAt: string | null;
   openIncidents: number;
+  /** Task 14 (outbound-video-calls plan): drives the kiosk-liveness dot next
+   *  to the name + the KioskCallButton's disabled/label state. Pages compute
+   *  this via isKioskOnline (lib/kiosk/liveness.ts) against kiosks.last_seen_at. */
+  kioskOnline: boolean;
 }
 
 const STATE_LINE: Record<CardLiveState, string> = {
@@ -84,7 +89,17 @@ export function PropertyCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-foreground">{property.name}</h3>
+          <h3 className="flex items-center gap-2 font-semibold text-foreground">
+            {property.name}
+            <span
+              className={cn(
+                "inline-block h-2 w-2 rounded-full",
+                property.kioskOnline ? "bg-live" : "bg-muted-foreground/40",
+              )}
+              title={property.kioskOnline ? "Kiosk online" : "Kiosk offline"}
+              aria-hidden="true"
+            />
+          </h3>
           <p className={`text-sm ${ringing ? "font-medium text-live-foreground" : "text-muted-foreground"}`}>
             {STATE_LINE[state]}
             {ringing && ring

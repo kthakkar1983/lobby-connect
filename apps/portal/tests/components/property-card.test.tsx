@@ -30,6 +30,7 @@ const p1: PropertyCardData = {
   callsTonight: 2,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 const p2: PropertyCardData = {
@@ -39,6 +40,7 @@ const p2: PropertyCardData = {
   callsTonight: 0,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 /** Probe publisher: exposes buttons that call the context's publish/register APIs
@@ -358,5 +360,25 @@ describe("PropertyCard", () => {
 
     expect(screen.queryByRole("button", { name: "Covering toggle stub" })).toBeNull();
     expect(container).not.toBeNull();
+  });
+
+  it("Task 14: shows a mint 'Kiosk online' dot next to the name when kioskOnline is true", () => {
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={{ ...p1, kioskOnline: true }} />
+      </CallSurfaceProvider>,
+    );
+    const dot = screen.getByTitle("Kiosk online");
+    expect(dot.className).toContain("bg-live");
+  });
+
+  it("Task 14: shows a muted 'Kiosk offline' dot next to the name when kioskOnline is false", () => {
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={{ ...p1, kioskOnline: false }} />
+      </CallSurfaceProvider>,
+    );
+    const dot = screen.getByTitle("Kiosk offline");
+    expect(dot.className).toContain("bg-muted-foreground/40");
   });
 });

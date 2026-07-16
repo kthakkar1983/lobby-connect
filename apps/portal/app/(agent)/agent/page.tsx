@@ -21,6 +21,7 @@ import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-ca
 import { AutoRefresh } from "@/components/auto-refresh";
 import { PodCardGrid } from "@/components/dashboard/pod-card-grid";
 import type { PropertyCardData } from "@/components/dashboard/property-card";
+import { isKioskOnline } from "@/lib/kiosk/liveness";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
@@ -37,12 +38,17 @@ export default async function AgentDashboardPage() {
   // RLS scopes agents to the calls they personally handled (see 0004 calls_select);
   // a 48h window covers "today" in every covered timezone.
   const since = new Date(now.getTime() - 48 * 3600_000).toISOString();
-  const { data: raw } = await supabase
-    .from("calls")
-    .select("id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes")
-    .eq("handled_by_user_id", actor.id)
-    .gte("ring_started_at", since)
-    .order("ring_started_at", { ascending: false });
+  const [{ data: raw }, { data: kioskRows }] = await Promise.all([
+    supabase
+      .from("calls")
+      .select("id, property_id, channel, state, direction, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes")
+      .eq("handled_by_user_id", actor.id)
+      .gte("ring_started_at", since)
+      .order("ring_started_at", { ascending: false }),
+    // Task 14: per-property kiosk liveness for the Kiosk button/dot
+    // (kiosks_select_operator RLS — operator-scoped, mirrors the calls read).
+    supabase.from("kiosks").select("property_id, last_seen_at").eq("operator_id", actor.operator_id),
+  ]);
 
   const calls = (raw ?? []).map((c) => ({
     ...c,
@@ -60,6 +66,7 @@ export default async function AgentDashboardPage() {
     id: c.id,
     channel: c.channel,
     state: c.state,
+    direction: c.direction,
     room_number: c.room_number,
     caller_number: c.caller_number,
     ring_started_at: c.ring_started_at,
@@ -69,6 +76,7 @@ export default async function AgentDashboardPage() {
     timeZone: c.timeZone,
   }));
 
+  const kioskSeenAt = new Map((kioskRows ?? []).map((k) => [k.property_id, k.last_seen_at]));
   const cards: PropertyCardData[] = covered.map((p) => {
     const propCalls = calls.filter((c) => c.property_id === p.id);
     const today = propCalls.filter((c) => isTodayInZone(c.ring_started_at, p.timeZone, now));
@@ -79,6 +87,7 @@ export default async function AgentDashboardPage() {
       callsTonight: today.length,
       lastCallAt: propCalls[0]?.ring_started_at ?? null,
       openIncidents: 0, // agent RLS has no incident read; admin scope fills this (Task 9)
+      kioskOnline: isKioskOnline(kioskSeenAt.get(p.id) ?? null, now.getTime()),
     };
   });
 

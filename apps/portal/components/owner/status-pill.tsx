@@ -1,13 +1,13 @@
-import type { CallState, IncidentStatus } from "@lc/shared";
+import type { CallState, CallDirection, IncidentStatus } from "@lc/shared";
 import { callPill, incidentPill } from "@/lib/owner/status-pill";
 import { cn } from "@/lib/utils";
 
 type Props =
-  | { readonly kind: "call"; readonly status: CallState }
+  | { readonly kind: "call"; readonly status: CallState; readonly direction?: CallDirection }
   | { readonly kind: "incident"; readonly status: IncidentStatus };
 
 export function StatusPill(props: Props) {
-  const pill = props.kind === "call" ? callPill(props.status) : incidentPill(props.status);
+  const pill = props.kind === "call" ? callPill(props.status, props.direction) : incidentPill(props.status);
   return (
     <span
       className={cn(

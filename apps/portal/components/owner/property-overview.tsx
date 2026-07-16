@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { Route } from "next";
-import type { ProfileStatus, CallState, CallChannel } from "@lc/shared";
+import type { ProfileStatus, CallState, CallChannel, CallDirection } from "@lc/shared";
 import { Card } from "@/components/ui/card";
 import { DashTile } from "@/components/dashboard/dash-tile";
 import { HourlyVolumeChart, HourlyLegend } from "@/components/dashboard/channel-viz";
@@ -14,6 +14,7 @@ const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] 
 
 export type OverviewCall = DatedCall & {
   readonly state: CallState;
+  readonly direction: CallDirection;
   readonly channel: CallChannel;
   readonly answered_at: string | null;
 };

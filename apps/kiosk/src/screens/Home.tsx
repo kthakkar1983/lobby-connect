@@ -2,6 +2,7 @@ import { Video } from "lucide-react";
 import type { KioskConfig } from "../types";
 import { FloatingPaths } from "../components/floating-paths";
 import { greetingForHour } from "@lc/shared";
+import { copy } from "../lib/copy";
 
 function InfoItem({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
@@ -15,7 +16,18 @@ function InfoItem({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export function Home({ config, onCall }: { config: KioskConfig; onCall: () => void }) {
+export function Home({
+  config,
+  onCall,
+  lockedOut = false,
+}: {
+  config: KioskConfig;
+  onCall: () => void;
+  /** True during the post-terminal-drop 10s tap lockout (App.tsx): disables
+   *  tap-to-call and shows a calm reconnecting message, while the incoming
+   *  poll keeps running underneath so an agent call-back still lands. */
+  lockedOut?: boolean;
+}) {
   const hasInfo =
     config.checkinTime || config.checkoutTime || config.wifiNetwork ||
     config.wifiPassword || config.breakfastHours;
@@ -28,16 +40,30 @@ export function Home({ config, onCall }: { config: KioskConfig; onCall: () => vo
     <div
       role="button"
       tabIndex={0}
-      onClick={onCall}
+      onClick={lockedOut ? undefined : onCall}
       onKeyDown={(e) => {
+        if (lockedOut) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onCall();
         }
       }}
+      aria-disabled={lockedOut}
       aria-label="Tap to connect with the front desk"
       className="relative flex h-full w-full cursor-pointer text-left transition-transform active:scale-[0.997]"
     >
+      {lockedOut ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="absolute inset-x-0 top-8 z-30 flex justify-center px-6"
+        >
+          <span className="max-w-[36ch] rounded-pill bg-ink/95 px-6 py-3 text-center font-mono text-sm text-white shadow-lg">
+            {copy.home.reconnecting}
+          </span>
+        </div>
+      ) : null}
+
       {/* LEFT — navy, animated invitation (50%) */}
       <div
         className="relative flex flex-[0_0_50%] flex-col overflow-hidden px-12 py-11 text-white"

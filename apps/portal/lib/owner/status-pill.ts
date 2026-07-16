@@ -1,4 +1,4 @@
-import type { CallState, IncidentStatus } from "@lc/shared";
+import type { CallState, CallDirection, IncidentStatus } from "@lc/shared";
 import { callStateLabel, incidentStatusLabel } from "./format";
 
 export type Pill = { readonly label: string; readonly className: string };
@@ -11,8 +11,23 @@ const CALL_PILL_CLASS: Record<CallState, string> = {
   FAILED: "bg-muted text-muted-foreground",
 };
 
-export function callPill(state: CallState): Pill {
-  return { label: callStateLabel(state), className: CALL_PILL_CLASS[state] };
+/**
+ * Status pill for a call. An OUTBOUND NO_ANSWER (agent-placed call-back the guest
+ * didn't pick up) gets a neutral pill + "No answer" label, not the blaze/attention
+ * "Missed" pill — that implies a guest couldn't reach the front desk. `direction`
+ * defaults to "INBOUND" so every existing caller stays byte-identical.
+ *
+ * The label is ALWAYS delegated to callStateLabel(state, direction) — the single
+ * source of the "No answer" string — so this function only owns the className
+ * branch (the neutral vs. blaze decision). Do not re-inline the label here.
+ */
+export function callPill(state: CallState, direction: CallDirection = "INBOUND"): Pill {
+  const label = callStateLabel(state, direction);
+  const className =
+    state === "NO_ANSWER" && direction === "OUTBOUND"
+      ? "bg-muted text-muted-foreground"
+      : CALL_PILL_CLASS[state];
+  return { label, className };
 }
 
 export function incidentPill(status: IncidentStatus): Pill {

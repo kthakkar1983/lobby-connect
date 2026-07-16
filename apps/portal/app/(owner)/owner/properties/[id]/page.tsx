@@ -75,7 +75,7 @@ export default async function OwnerPropertyDetailPage({
 
   const { data: recent } = await supabase
     .from("calls")
-    .select("id, channel, state, ring_started_at, duration_seconds, room_number, caller_number, notes, recording_url, handled_by_user_id")
+    .select("id, channel, state, direction, ring_started_at, duration_seconds, room_number, caller_number, notes, recording_url, handled_by_user_id")
     .eq("property_id", id)
     .order("ring_started_at", { ascending: false })
     .limit(5);
@@ -170,6 +170,7 @@ export default async function OwnerPropertyDetailPage({
                   id: c.id,
                   channel: c.channel,
                   state: c.state,
+                  direction: c.direction,
                   caller_number: c.caller_number,
                   room_number: c.room_number,
                   ring_started_at: c.ring_started_at,

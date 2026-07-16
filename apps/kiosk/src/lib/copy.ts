@@ -5,6 +5,17 @@
  */
 export const copy = {
   loading: "Getting things ready…",
+  home: {
+    // Shown on Home during the post-terminal-drop tap lockout (App.tsx):
+    // the agent may be calling right back, so tap-to-call is briefly
+    // disabled while the incoming poll keeps listening for that call-back.
+    reconnecting: "Reconnecting you to the front desk — one moment.",
+  },
+  incoming: {
+    title: "The front desk is calling",
+    subtitle: "Tap Answer to connect",
+    answer: "Answer",
+  },
   ringing: {
     title: "Ringing the front desk…",
     subtitle: "Someone's almost there",

@@ -4,6 +4,7 @@ import {
   reduce,
   shouldFireRingTimeout,
   shouldEndForMaxDuration,
+  isLockedOut,
   type KioskState,
 } from "@/state/call-machine";
 
@@ -99,5 +100,52 @@ describe("shouldEndForMaxDuration (connected-call cost cap guard)", () => {
     expect(shouldEndForMaxDuration("ringing")).toBe(false);
     expect(shouldEndForMaxDuration("home")).toBe(false);
     expect(shouldEndForMaxDuration("apology")).toBe(false);
+  });
+});
+
+describe("outbound incoming-call transitions", () => {
+  it("INCOMING_CALL moves home -> incoming and stores the call", () => {
+    const s = reduce(initialState(), { type: "INCOMING_CALL", callId: "c1", channelName: "call_abc" });
+    expect(s.screen).toBe("incoming");
+    expect(s.callId).toBe("c1");
+    expect(s.channelName).toBe("call_abc");
+  });
+  it("INCOMING_CALL is ignored when not on home (already in a call)", () => {
+    const connected: KioskState = { screen: "connected", callId: "x", channelName: "call_x" };
+    const s = reduce(connected, { type: "INCOMING_CALL", callId: "c2", channelName: "call_y" });
+    expect(s).toEqual(connected);
+  });
+  it("ANSWER moves incoming -> ringing (the connecting screen), keeping the call", () => {
+    const incoming: KioskState = { screen: "incoming", callId: "c1", channelName: "call_abc" };
+    const s = reduce(incoming, { type: "ANSWER" });
+    expect(s.screen).toBe("ringing");
+    expect(s.callId).toBe("c1");
+    expect(s.channelName).toBe("call_abc");
+  });
+  it("ANSWER is a no-op unless on the incoming screen", () => {
+    const home = initialState();
+    expect(reduce(home, { type: "ANSWER" })).toEqual(home);
+  });
+  it("AGENT_JOINED still moves ringing -> connected (reused for the answer path)", () => {
+    const ringing: KioskState = { screen: "ringing", callId: "c1", channelName: "call_abc" };
+    expect(reduce(ringing, { type: "AGENT_JOINED" }).screen).toBe("connected");
+  });
+  it("DROP returns to home from any state", () => {
+    const connected: KioskState = { screen: "connected", callId: "x", channelName: "call_x" };
+    expect(reduce(connected, { type: "DROP" })).toEqual(initialState());
+  });
+});
+
+describe("isLockedOut", () => {
+  const NOW = 1_000_000;
+  it("no lockout timestamp -> not locked", () => {
+    expect(isLockedOut(null, NOW)).toBe(false);
+  });
+  it("before the lockout expiry -> locked", () => {
+    expect(isLockedOut(NOW + 5_000, NOW)).toBe(true);
+  });
+  it("at/after expiry -> not locked", () => {
+    expect(isLockedOut(NOW, NOW)).toBe(false);
+    expect(isLockedOut(NOW - 1, NOW)).toBe(false);
   });
 });

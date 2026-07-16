@@ -94,6 +94,10 @@ export async function GET(_request: Request): Promise<NextResponse> {
     .eq("operator_id", actor.operatorId)
     .eq("channel", "VIDEO")
     .eq("state", "RINGING")
+    // Agent-initiated outbound calls (start-outbound-video) are RINGING too, but
+    // ring the KIOSK, not this agent — without this filter the originating
+    // agent's own outbound row would surface right back as an incoming call.
+    .eq("direction", "INBOUND")
     .in("property_id", targetPropertyIds)
     .gte("ring_started_at", ringingSince)
     .order("ring_started_at", { ascending: true });

@@ -26,6 +26,7 @@ const grandHotel: PropertyCardData = {
   callsTonight: 2,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 const riversideInn: PropertyCardData = {
@@ -35,6 +36,7 @@ const riversideInn: PropertyCardData = {
   callsTonight: 0,
   lastCallAt: null,
   openIncidents: 0,
+  kioskOnline: true,
 };
 
 const dilnoza = {

@@ -23,6 +23,7 @@ import {
 } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
+import { isKioskOnline } from "@/lib/kiosk/liveness";
 import { presenceDotClass, formatDuration } from "@/lib/owner/format";
 import { effectivePresence } from "@/lib/voice/presence";
 import { groupPodsByAgent } from "@/lib/dashboard/pods";
@@ -48,6 +49,7 @@ export default async function AdminOverviewPage() {
     { data: avail },
     { data: assigns },
     { data: rawCalls },
+    { data: kioskRows },
   ] = await Promise.all([
     supabase
       .from("properties")
@@ -86,11 +88,14 @@ export default async function AdminOverviewPage() {
     supabase
       .from("calls")
       .select(
-        "id, property_id, channel, state, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id"
+        "id, property_id, channel, state, direction, ring_started_at, answered_at, duration_seconds, room_number, caller_number, notes, handled_by_user_id"
       )
       .eq("operator_id", actor.operator_id)
       .gte("ring_started_at", since)
       .order("ring_started_at", { ascending: false }),
+    // Task 14: per-property kiosk liveness for the fleet cards' Kiosk
+    // button/dot (kiosks_select_operator RLS — operator-scoped).
+    supabase.from("kiosks").select("property_id, last_seen_at").eq("operator_id", actor.operator_id),
   ]);
 
   const props = properties ?? [];
@@ -156,6 +161,7 @@ export default async function AdminOverviewPage() {
     id: c.id,
     channel: c.channel,
     state: c.state,
+    direction: c.direction,
     room_number: c.room_number,
     caller_number: c.caller_number,
     ring_started_at: c.ring_started_at,
@@ -192,6 +198,7 @@ export default async function AdminOverviewPage() {
   // Tonight stats mirror the agent dashboard's per-property derivation
   // (Task 8): each property's own calls, filtered to "today" in its own
   // timezone via isTodayInZone.
+  const kioskSeenAt = new Map((kioskRows ?? []).map((k) => [k.property_id, k.last_seen_at]));
   const cardByProperty = new Map<string, PropertyCardData>(
     props.map((p) => {
       const propCalls = calls.filter((c) => c.property_id === p.id);
@@ -205,6 +212,7 @@ export default async function AdminOverviewPage() {
           callsTonight: today.length,
           lastCallAt: propCalls[0]?.ring_started_at ?? null,
           openIncidents: openIncidentCountByProperty.get(p.id) ?? 0,
+          kioskOnline: isKioskOnline(kioskSeenAt.get(p.id) ?? null, now.getTime()),
         },
       ];
     })

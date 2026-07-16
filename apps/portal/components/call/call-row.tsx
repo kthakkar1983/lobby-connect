@@ -40,7 +40,7 @@ export function CallRow({ call }: { readonly call: CallRowData }) {
             <span className="font-medium text-foreground">
               {formatTimeOnly(detail.ring_started_at, detail.timeZone)}
             </span>
-            <StatusPill kind="call" status={detail.state} />
+            <StatusPill kind="call" status={detail.state} direction={detail.direction} />
           </span>
           <span className="mt-0.5 block truncate text-xs text-text-muted">
             {secondary}

@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
-import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
-import {
-  useIncomingVideoCalls,
-  type IncomingVideoCall,
-} from "@/lib/hooks/use-incoming-video-calls";
+import { useCallSurfaceOptional, type OutboundStarter } from "@/components/dashboard/call-surface-provider";
+import { useIncomingVideoCalls } from "@/lib/hooks/use-incoming-video-calls";
 import { unlockAudioPlayback } from "@/lib/video/audio-unlock";
 
 // LiveKit is a client-only SDK (touches window/WebRTC on import), so load the
@@ -17,13 +14,35 @@ const VideoCall = dynamic(() => import("./video-call").then((m) => m.VideoCall),
 });
 
 /**
+ * The host's locally-active video call — either an accepted INBOUND ring
+ * (built from an IncomingVideoCall) or an agent-originated OUTBOUND call
+ * (Task 12, via startOutboundVideo/registerStartOutbound). `outbound` and
+ * `channelName` are the two fields VideoCall's outbound "Calling…" phase
+ * (Task 13) will read; they're inert plumbing here.
+ *
+ * For inbound, `channelName` is deliberately `null` below even though
+ * IncomingVideoCall already carries the real agora_channel_name: VideoCall
+ * re-fetches its own channelName via the answer-video claim POST, and
+ * threading the real value through here could silently paper over a future
+ * Task-13 bug that skips that claim on the outbound branch by mistake.
+ */
+type ActiveVideoCall = {
+  id: string;
+  propertyId: string | null;
+  propertyName: string;
+  timezone: string | null;
+  outbound: boolean;
+  channelName: string | null;
+};
+
+/**
  * Headless video-call host: detects incoming video calls (via the extracted
  * hook), PUBLISHES the ring set into the CallSurfaceProvider so the property
  * cards can show + answer it, and mounts the full-screen VideoCall once a call
  * is accepted from a card. No visible banner of its own.
  */
 export function VideoCallHost({ operatorId }: { operatorId: string }) {
-  const [active, setActive] = useState<IncomingVideoCall | null>(null);
+  const [active, setActive] = useState<ActiveVideoCall | null>(null);
   const surface = useCallSurfaceOptional();
   // Read the silenced set as a plain value (never depend on `surface` itself)
   // and pass it into the hook so a silenced video ring mutes the audio ringer
@@ -77,13 +96,47 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
     // this used to live on the banner's Accept button.
     unlockAudioPlayback();
     answeredAtRef.current = Date.now();
-    setActive(call);
+    setActive({
+      id: call.id,
+      propertyId: call.propertyId,
+      propertyName: call.propertyName,
+      timezone: call.timezone,
+      outbound: false,
+      channelName: null,
+    });
   }, []);
   useEffect(() => {
     if (!registerAcceptVideo) return;
     registerAcceptVideo(acceptVideoForCards);
     return () => registerAcceptVideo(null);
   }, [registerAcceptVideo, acceptVideoForCards]);
+
+  // Task 12: register this host as the outbound-call starter so
+  // startOutboundVideo (called from a future property-card "Kiosk" button,
+  // Task 14) can hand off the backend's {callId, channelName} and mount
+  // <VideoCall> in outbound mode. Mirrors the registerAcceptVideo effect
+  // above; identity-stable ([]-deps — writes only setActive/answeredAtRef,
+  // both stable), so it registers once and doesn't churn on every render.
+  const startOutboundForHost = useCallback<OutboundStarter>(
+    ({ callId, channelName, propertyId, propertyName }) => {
+      answeredAtRef.current = Date.now();
+      setActive({
+        id: callId,
+        propertyId,
+        propertyName,
+        timezone: null,
+        outbound: true,
+        channelName,
+      });
+    },
+    [],
+  );
+  const registerStartOutbound = surface?.registerStartOutbound;
+  useEffect(() => {
+    if (!registerStartOutbound) return;
+    registerStartOutbound(startOutboundForHost);
+    return () => registerStartOutbound(null);
+  }, [registerStartOutbound, startOutboundForHost]);
 
   // Review fold-in I-1: publish VIDEO active-call info so the tile's
   // auto-close/reopen (which key off CallSurfaceProvider's `active`) actually
@@ -114,6 +167,8 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
       callId={active.id}
       propertyName={active.propertyName}
       propertyId={active.propertyId}
+      outbound={active.outbound}
+      channelName={active.channelName}
       onClose={() => setActive(null)}
       collapsed={surface?.tileMount != null}
     />

@@ -48,7 +48,7 @@ export default async function OwnerCallsPage({
   let callsQuery = supabase
     .from("calls")
     .select(
-      "id, created_at, property_id, channel, state, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
+      "id, created_at, property_id, channel, state, direction, ring_started_at, duration_seconds, handled_by_user_id, room_number, caller_number, notes, recording_url",
     )
     // created_at is index-backed and monotonic with ring_started_at at insert.
     // id tiebreaker gives a stable total order for keyset pagination.
@@ -73,6 +73,9 @@ export default async function OwnerCallsPage({
 
   if (activeOutcome) {
     callsQuery = callsQuery.in("state", statesForOutcome(activeOutcome));
+    // An OUTBOUND NO_ANSWER (agent-placed call-back the guest didn't pick up) is not
+    // a "missed" guest call — exclude it from the missed filter's result set.
+    if (activeOutcome === "missed") callsQuery = callsQuery.eq("direction", "INBOUND");
   }
 
   const { data: calls } = await callsQuery;
@@ -140,6 +143,7 @@ export default async function OwnerCallsPage({
         id: c.id,
         channel: c.channel,
         state: c.state,
+        direction: c.direction,
         caller_number: c.caller_number,
         room_number: c.room_number,
         ring_started_at: c.ring_started_at,
