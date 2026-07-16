@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { X } from "lucide-react";
 import { shouldSendTyping } from "@lc/shared";
 import type { VideoTrackHandle } from "../lib/video/types";
 import { CallControls } from "./CallControls";
@@ -24,7 +25,7 @@ interface ChatLine {
 
 export function Connected({
   remoteVideo, localVideo, muted, cameraOff, onMute, onCamera, onEnd,
-  chatOpen, chatLines, peerTyping, onType, onSend, onTyping,
+  chatOpen, chatLines, peerTyping, onType, onSend, onTyping, onCloseChat,
 }: {
   remoteVideo: VideoTrackHandle | null;
   localVideo: VideoTrackHandle | null;
@@ -39,6 +40,7 @@ export function Connected({
   onType: () => void;
   onSend: (text: string) => void;
   onTyping: (state: "start" | "stop") => void;
+  onCloseChat: () => void;
 }) {
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
@@ -85,7 +87,7 @@ export function Connected({
       </div>
 
       {chatOpen && (
-        <ChatPanel lines={chatLines} peerTyping={peerTyping} onSend={onSend} onTyping={onTyping} />
+        <ChatPanel lines={chatLines} peerTyping={peerTyping} onSend={onSend} onTyping={onTyping} onClose={onCloseChat} />
       )}
     </div>
   );
@@ -104,12 +106,13 @@ export function Connected({
  * (left-aligned, navy).
  */
 function ChatPanel({
-  lines, peerTyping, onSend, onTyping,
+  lines, peerTyping, onSend, onTyping, onClose,
 }: {
   lines: ChatLine[];
   peerTyping: boolean;
   onSend: (text: string) => void;
   onTyping: (state: "start" | "stop") => void;
+  onClose: () => void;
 }) {
   const [value, setValue] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
@@ -149,6 +152,17 @@ function ChatPanel({
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col border-l border-border bg-card">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        <span className="font-label text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Chat</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close chat"
+          className="grid size-9 place-items-center rounded-pill text-muted-foreground transition-transform hover:bg-muted active:scale-95"
+        >
+          <X className="size-5" />
+        </button>
+      </div>
       <div ref={threadRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-4">
         {lines.map((line) => (
           <div
