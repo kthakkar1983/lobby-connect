@@ -828,11 +828,19 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     await waitFor(() => screen.getByText("Not accepting calls"));
     await waitFor(() => {
       const posts = presencePosts();
-      expect(posts.length).toBe(1);
-      const body = JSON.parse((posts[0]?.[1] as RequestInit).body as string) as {
-        status: string;
-      };
-      expect(body.status).toBe("AWAY");
+      expect(posts.length).toBeGreaterThan(0);
+      // Every beat after the resync must carry the resynced accepting=false (AWAY),
+      // never the pre-resync accepting default (AVAILABLE). Assert on all posts
+      // rather than an exact count of 1: a timing-raced extra AWAY beat is still
+      // correct behaviour, whereas `expect(length).toBe(1)` inside waitFor was
+      // flaky — the counter only grows, so an overshoot to 2 could never settle
+      // back to 1 (CI failure 2026-07-16).
+      for (const post of posts) {
+        const body = JSON.parse((post[1] as RequestInit).body as string) as {
+          status: string;
+        };
+        expect(body.status).toBe("AWAY");
+      }
     });
   });
 });
