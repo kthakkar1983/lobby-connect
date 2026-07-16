@@ -129,6 +129,22 @@ describe("kiosk in-call chat (Tasks 11+12)", () => {
     expect(screen.getByPlaceholderText(/type a message/i)).toBeTruthy();
   });
 
+  it("the guest can close the chat panel; a later agent message re-opens it (never muted)", async () => {
+    const opts = await connectCall();
+
+    // Open chat via the Type control, then close it with the panel's X.
+    fireEvent.click(screen.getByRole("button", { name: "Type" }));
+    expect(await screen.findByPlaceholderText(/type a message/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /close chat/i }));
+    await waitFor(() => expect(screen.queryByPlaceholderText(/type a message/i)).toBeNull());
+
+    // Closing only collapses the panel — a new agent message still re-surfaces it.
+    const env = { v: 1, type: "msg" as const, id: "m2", text: "are you still there?", ts: Date.now() };
+    act(() => opts.onData?.(encodeChat(env), "agent-7"));
+    expect(await screen.findByText("are you still there?")).toBeTruthy();
+  });
+
   it("redacts a Luhn-valid card number before it ever reaches sendData", async () => {
     const sendData = vi.fn();
     await connectCall(sendData);
