@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { pathTiming } from "../lib/floating-path-timing";
+import { pathTexture, pathTiming } from "../lib/floating-path-timing";
 
 /**
  * Animated "connection lines" — the kiosk copy of the portal's sign-in
@@ -24,6 +24,7 @@ export function FloatingPaths({
 }) {
   const paths = Array.from({ length: 36 }, (_, i) => {
     const { durationSec, delaySec } = pathTiming(i, position);
+    const { widthMul, opacityMul } = pathTexture(i, position);
     return {
       id: i,
       d: `M-${380 - i * 5 * position} -${189 + i * 6}C-${
@@ -33,8 +34,10 @@ export function FloatingPaths({
       } ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${
         684 - i * 5 * position
       } ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`,
-      width: 0.5 + i * 0.03,
-      opacity: 0.1 + i * 0.03,
+      // Base ramps (0.5 + i*0.03 width, 0.1 + i*0.03 opacity) wobbled per-path
+      // so the fan reads organic instead of machined — geometry unchanged.
+      width: (0.5 + i * 0.03) * widthMul,
+      opacity: (0.1 + i * 0.03) * opacityMul,
       durationSec,
       delaySec,
     };
