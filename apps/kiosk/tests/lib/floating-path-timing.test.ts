@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pathTiming } from "@/lib/floating-path-timing";
+import { pathTexture, pathTiming } from "@/lib/floating-path-timing";
 
 // The kiosk's FloatingPaths renders two SVG instances (position 1 and -1), 36
 // paths each = 72 lines. `pathTiming` replaces the shipped
@@ -51,5 +51,41 @@ describe("pathTiming", () => {
     // identical period so they moved as one. Distinct periods break that.
     const durations = everyPath().map(({ index, position }) => pathTiming(index, position).durationSec);
     expect(new Set(durations).size).toBe(durations.length);
+  });
+});
+
+// `pathTexture` breaks the machined look: the shipped width ramp (0.5 + i*0.03)
+// and opacity ramp (0.1 + i*0.03) are perfectly linear, so the fan reads as
+// uniform even frozen. A small per-path multiplier wobbles each line's weight
+// and brightness around its ramp value — visible at a glance, at any speed —
+// WITHOUT touching geometry, spacing, or direction.
+describe("pathTexture", () => {
+  it("is deterministic — identical inputs give identical output", () => {
+    expect(pathTexture(7, 1)).toEqual(pathTexture(7, 1));
+  });
+
+  it("keeps the width multiplier within +/-25%", () => {
+    for (const { index, position } of everyPath()) {
+      const { widthMul } = pathTexture(index, position);
+      expect(widthMul).toBeGreaterThanOrEqual(0.75);
+      expect(widthMul).toBeLessThanOrEqual(1.25);
+    }
+  });
+
+  it("keeps the opacity multiplier within +/-20% (faint lines never vanish, bright never blow out)", () => {
+    for (const { index, position } of everyPath()) {
+      const { opacityMul } = pathTexture(index, position);
+      expect(opacityMul).toBeGreaterThanOrEqual(0.8);
+      expect(opacityMul).toBeLessThanOrEqual(1.2);
+    }
+  });
+
+  it("actually varies the ramps — not a constant multiplier", () => {
+    // If every multiplier were 1.0 the texture would be a no-op. Assert real
+    // spread across the field (distinct values), which is what breaks uniformity.
+    const widths = everyPath().map(({ index, position }) => pathTexture(index, position).widthMul);
+    const opacities = everyPath().map(({ index, position }) => pathTexture(index, position).opacityMul);
+    expect(new Set(widths).size).toBeGreaterThan(60);
+    expect(new Set(opacities).size).toBeGreaterThan(60);
   });
 });
