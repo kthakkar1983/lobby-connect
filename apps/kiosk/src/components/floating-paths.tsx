@@ -1,19 +1,10 @@
 import { motion, useReducedMotion } from "motion/react";
 
-import { pathTexture } from "../lib/floating-path-texture";
-
 /**
  * Animated "connection lines" — the kiosk copy of the portal's sign-in
- * `components/brand/floating-paths.tsx` (same geometry and motion), so the
- * kiosk's navy panels match the login screen. The kiosk is a separate build
- * graph, so the component is duplicated rather than imported.
- *
- * Per-path `pathTexture` wobbles each line's stroke width (+/-25%) and opacity
- * (+/-20%) around the base ramps so the fan reads organic instead of machined.
- * That is STATIC per-path variation only — the `motion` animation below is
- * untouched, so smoothness is identical to the plain version (the pure-CSS
- * stroke-dash rewrite was reverted for juddering; see memory
- * kiosk-css-animation-reverted).
+ * `components/brand/floating-paths.tsx` (same geometry, widths, opacities, and
+ * motion), so the kiosk's navy panels match the login screen exactly. The kiosk
+ * is a separate build graph, so the component is duplicated rather than imported.
  *
  * Colour comes from the parent via `currentColor` (set a brand text token through
  * `className`); durations are deterministic (no SSR here, but kept identical);
@@ -29,22 +20,17 @@ export function FloatingPaths({
 }) {
   const reduceMotion = useReducedMotion();
 
-  const paths = Array.from({ length: 36 }, (_, i) => {
-    const { widthMul, opacityMul } = pathTexture(i, position);
-    return {
-      id: i,
-      d: `M-${380 - i * 5 * position} -${189 + i * 6}C-${
-        380 - i * 5 * position
-      } -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${
-        152 - i * 5 * position
-      } ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${
-        684 - i * 5 * position
-      } ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`,
-      // Base ramps wobbled per-path (organic, not machined) — static only.
-      width: (0.5 + i * 0.03) * widthMul,
-      opacity: (0.1 + i * 0.03) * opacityMul,
-    };
-  });
+  const paths = Array.from({ length: 36 }, (_, i) => ({
+    id: i,
+    d: `M-${380 - i * 5 * position} -${189 + i * 6}C-${
+      380 - i * 5 * position
+    } -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${
+      152 - i * 5 * position
+    } ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${
+      684 - i * 5 * position
+    } ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`,
+    width: 0.5 + i * 0.03,
+  }));
 
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
@@ -55,7 +41,7 @@ export function FloatingPaths({
             d={path.d}
             stroke="currentColor"
             strokeWidth={path.width}
-            strokeOpacity={path.opacity}
+            strokeOpacity={0.1 + path.id * 0.03}
             initial={{ pathLength: 0.3, opacity: 0.6 }}
             animate={
               reduceMotion
