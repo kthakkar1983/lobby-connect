@@ -1,5 +1,7 @@
 # Outbound Video Calls (+ kiosk liveness) Implementation Plan
 
+> **STATUS: COMPLETE — shipped to prod 2026-07-16.** Built subagent-driven (18 tasks + opus whole-branch = SHIP), merged to `main`, and the real-iPad prod smoke walked + closed. The smoke found one real bug (kiosk hung on the incoming "Answer" screen at the agent's 30s no-answer — its Home-gated poll cleared the interval on entering `incoming`), fixed in merge `8ee3ae5` (discriminated `{ringing|idle|error}` poll + guarded `INCOMING_EXPIRED`); a kiosk incoming ring was added in the same merge. Two unrelated finds also shipped (`e2385fa`): the prod sign-out `0.0.0.0:3000` redirect ([[route-handler-request-url-box]]) + a kiosk chat close button. All Kumar-verified live. Also fixes `task_71d65b0a` (presence stuck ON_CALL after a video call) via the generalized `end-video` presence reset. Tag: `plan-outbound-video-calls-complete` (@ `8ee3ae5`, the fix merge that made the feature actually-working). Handoff: `docs/handoffs/2026-07-16-outbound-video-smoke-fixes-shipped-handoff.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let an agent start a video call *to* a property's lobby kiosk (call-back flow), reusing the existing kiosk⇄agent LiveKit stack with the originator reversed; fold in kiosk liveness and fix the tracked presence-reset bug (`task_71d65b0a`).
@@ -1780,9 +1782,9 @@ The LiveKit reverse-connect + kiosk poll can only be verified running. Deploy th
 
 - [ ] **Step 7: Liveness offline.** Power off / sleep the iPad → within ~90s the property-card dot goes **muted** and the Kiosk button greys with "Offline"; the admin status page **Kiosks** tile flips to **blaze** with a reduced count.
 
-- [ ] **Step 8: Presence-bug regression.** Run a normal **inbound** guest call → answer → hang up → confirm the agent is no longer stuck ON_CALL (the `task_71d65b0a` fix).
+- [x] **Step 8: Presence-bug regression.** Run a normal **inbound** guest call → answer → hang up → confirm the agent is no longer stuck ON_CALL (the `task_71d65b0a` fix).
 
-- [ ] **Step 9: Record results** in a handoff (`docs/handoffs/2026-07-15-outbound-video-calls-*.md`) and, once green, merge `--no-ff` to `main` (Coolify auto-deploys prod `lc-portal-prod`/`lc-kiosk-prod`; apply 0022/0023 to **prod** Supabase via MCP + enter nothing else — the blue-green standby stays frozen). Re-run the prod smoke on the real pilot iPad.
+- [x] **Step 9: Record results** in a handoff (`docs/handoffs/2026-07-15-outbound-video-calls-*.md`) and, once green, merge `--no-ff` to `main` (Coolify auto-deploys prod `lc-portal-prod`/`lc-kiosk-prod`; apply 0022/0023 to **prod** Supabase via MCP + enter nothing else — the blue-green standby stays frozen). Re-run the prod smoke on the real pilot iPad.
 
 ---
 
