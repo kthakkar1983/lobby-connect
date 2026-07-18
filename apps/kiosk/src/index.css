@@ -165,23 +165,6 @@ html, body {
 @keyframes lc-beacon { 0% { transform: scale(0.7); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
 .lc-beacon-pulse { animation: lc-beacon 4.5s ease-out infinite; }
 
-/* Brand "connection lines" — the flowing stroke on the navy panels
-   (components/floating-paths.tsx). Each <path> is normalised via pathLength=1,
-   so one keyframe drives all of them: a half-visible dash (dasharray period 1.0)
-   travels one full period (dashoffset 0 -> -1) while its length and opacity
-   gently pulse. The 0% and 100% frames are visually identical (same dasharray,
-   dashoffset differing by exactly one period, same opacity) so the loop is
-   seamless — no snap. Per-path period + phase come from --lc-dur / --lc-delay. */
-@keyframes lc-floating-path {
-  0%   { stroke-dasharray: 0.35 0.65; stroke-dashoffset:  0;   opacity: 0.3; }
-  50%  { stroke-dasharray: 0.7 0.3;   stroke-dashoffset: -0.5; opacity: 0.6; }
-  100% { stroke-dasharray: 0.35 0.65; stroke-dashoffset: -1;   opacity: 0.3; }
-}
-.lc-floating-path {
-  stroke-dasharray: 0.35 0.65;
-  animation: lc-floating-path var(--lc-dur, 44s) linear var(--lc-delay, 0s) infinite;
-}
-
 /* In-call chat "peer is typing" dots (components/TypingIndicator.tsx) — mirror
    of the portal's globals.css keyframe of the same name. Referenced via
    Tailwind's arbitrary value (`animate-[lc-typing-dot_...]`), so no companion
@@ -197,12 +180,6 @@ html, body {
   .lc-anim-spin, .lc-anim-spin-fast, .lc-anim-pulse, .lc-anim-shimmer, .lc-seam-drift,
   .lc-beacon-pulse {
     animation: none !important;
-  }
-  /* Connection lines settle to solid, calm strokes when motion is reduced. */
-  .lc-floating-path {
-    animation: none !important;
-    stroke-dasharray: none;
-    opacity: 0.45;
   }
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
