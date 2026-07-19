@@ -30,7 +30,7 @@
  * all three in-call Connects (D13 keeps that split deliberately, and
  * call-tile.test.tsx:440-449 pins the tile's `bg-accent`). `surface` is what the
  * control sits ON: the cards and both overlays are light, but the tile's
- * control bar is navy. Two things key off it, both contrast:
+ * control bar is navy. Three things key off it, all contrast:
  *
  *   - THE ERROR COLOUR. `text-destructive` (#C81E1E) reads at ~2.5:1 on the
  *     tile's navy and fails AA, so a dark surface carries its error in blaze.
@@ -39,6 +39,12 @@
  *     50% over ink at 50% and drops the label to roughly 2:1. A dark surface
  *     mutes the FILL instead and keeps the label light: still unmistakably
  *     unavailable, still readable. Light surfaces keep the base treatment.
+ *   - THE DUTY-GATED TREATMENT. The same trap from the opposite direction: a
+ *     gated control is deliberately ENABLED, so WCAG 1.4.3's inactive-component
+ *     exemption does not cover it and dimming the element would strand its
+ *     label below AA. Light surfaces mute the fill alpha; dark surfaces get no
+ *     gated cue at all, deliberately — see `gatedFill` below for why that is
+ *     the honest answer today.
  *
  * SIZING IS A PROP, NOT A `className` FIGHT. `size="sm"` (h-8) is the card
  * scale, normalized per spec §3.6a/D15; `size="xs"` (h-6, text-xs, 12px icon)
@@ -72,7 +78,7 @@ export type PropertyActionButtonProps = {
   readonly error?: string | null;
   /** Button fill. Teal for the in-call surfaces; navy (default) for cards. */
   readonly tone?: "navy" | "teal";
-  /** What the control sits on — drives the error colour and the disabled treatment. */
+  /** What the control sits on — drives the error colour, the disabled treatment and the gated one. */
   readonly surface?: "light" | "dark";
   /** Control scale. `sm` is the card scale; `xs` is the Document-PiP tile's. */
   readonly size?: "sm" | "xs";
@@ -115,6 +121,36 @@ export function PropertyActionButton({
         )
       : undefined;
 
+  // Duty gating must READ as unavailable without BEING unavailable, and it must
+  // do that by muting the FILL — never by dimming the element.
+  //
+  // Element opacity composites the label too. `opacity-60` on a white card puts
+  // the navy fill at rgb(111,129,147) under a still-opaque white label: 4.01:1.
+  // A DISABLED control is exempt from WCAG 1.4.3 ("inactive user interface
+  // component"), but the entire point of the gate is that this control stays
+  // ENABLED and operable, so the exemption does not apply and its 14px label
+  // owes 4.5:1. Computed: bg-primary/70 -> 5.43:1, bg-accent/70 -> 7.89:1, both
+  // still visibly recessed against the 14.03:1 / 5.60:1 full-strength states.
+  // Same move the dark disabled treatment above makes, for the same reason.
+  //
+  // Hover is pinned to the gated alpha so hovering cannot restore the
+  // full-strength fill and undo the signal; the cursor, focus ring and
+  // active-press all still respond, because the control genuinely is live.
+  //
+  // LIGHT SURFACES ONLY, deliberately. On the tile's navy there is no honest
+  // one-size treatment: bg-primary/70 composites straight back to navy (no cue
+  // at all) and bg-accent/70 leaves the ink label at 3.65:1. No dark recipe is
+  // invented here because the three in-call Connects are gate-unreachable in
+  // practice — a break cannot start and a shift cannot end mid-call (the
+  // mid-call rule the shift card inherits from duty-control). Task 14 owns
+  // specifying one if that ever stops being true.
+  const gatedFill =
+    gated && !unavailable && surface === "light"
+      ? tone === "teal"
+        ? "bg-accent/70 hover:bg-accent/70"
+        : "bg-primary/70 hover:bg-primary/70"
+      : undefined;
+
   return (
     <div
       className={cn("flex flex-col gap-1", wrapperClassName)}
@@ -138,9 +174,7 @@ export function PropertyActionButton({
           // the guarantee is this component's, not a base-class detail a
           // refactor could drop.
           "whitespace-nowrap",
-          // Duty gating reads as unavailable without BEING unavailable: the
-          // control stays live so the click can be intercepted.
-          gated && !unavailable && "opacity-60",
+          gatedFill,
           darkDisabled,
           className,
         )}

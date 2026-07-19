@@ -134,6 +134,45 @@ describe("KioskCallButton", () => {
     expect(startOutboundVideo).toHaveBeenCalledWith("p1", "Marlin");
   });
 
+  it("stays genuinely disabled while a start request is in flight", async () => {
+    // Spec §3.4 gives `busy` its own row — a transient REAL unavailability that
+    // must keep disabling the control, unlike the duty gate that deliberately
+    // must not. Nothing else in this file pinned it: the `busy` branch could be
+    // deleted from `unavailableReason` outright and every other test here still
+    // passed. It also now reaches `disabled` through the truthiness of a string
+    // prop rather than a boolean, so emptying that copy would silently
+    // un-disable a mid-flight control. handleClick's `if (!kioskOnline || busy)
+    // return` is the backstop; this is the affordance.
+    let settle!: (v: { ok: boolean }) => void;
+    startOutboundVideo.mockReturnValue(
+      new Promise<{ ok: boolean }>((r) => {
+        settle = r;
+      }),
+    );
+    render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={true} />);
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Kiosk" }).click();
+    });
+
+    // Resolved by name "Kiosk", which also pins that `busy` does NOT swap the
+    // label — an in-flight click must not resize the control (spec §3.6a/§5.3).
+    const inFlight = screen.getByRole("button", { name: "Kiosk" });
+    expect((inFlight as HTMLButtonElement).disabled).toBe(true);
+    // A net-new hover string this control did not previously carry: `busy`
+    // rides the same `unavailableReason` prop that supplies the title, so the
+    // reason surfaces on hover. Deliberate and informative, but asserted here
+    // so it is a decision rather than a side effect nobody noticed.
+    expect(inFlight.getAttribute("title")).toBe("Starting the call…");
+
+    await act(async () => {
+      settle({ ok: true });
+    });
+    const settled = screen.getByRole("button", { name: "Kiosk" });
+    expect((settled as HTMLButtonElement).disabled).toBe(false);
+    expect(settled.hasAttribute("title")).toBe(false);
+  });
+
   it("a non-busy failure shows the try-again message", async () => {
     startOutboundVideo.mockResolvedValue({ ok: false });
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={true} />);

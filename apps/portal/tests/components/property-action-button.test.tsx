@@ -83,6 +83,50 @@ describe("PropertyActionButton", () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
+  it("recesses a gated control by muting the fill, never by dimming the element", () => {
+    // WCAG 1.4.3 exempts an "inactive user interface component" from contrast,
+    // which is why a `disabled` button may be dimmed freely. A gated control is
+    // the opposite by design — enabled and operable — so the exemption does not
+    // apply and its 14px label owes 4.5:1.
+    //
+    // Element opacity composites the LABEL along with the fill: `opacity-60` on
+    // a white card gives fill rgb(111,129,147) under an opaque white label =
+    // 4.01:1, below AA. Muting only the fill leaves the label untouched:
+    // bg-primary/70 = 5.43:1, still clearly recessed against 14.03:1 at full
+    // strength. Hover is pinned to the same alpha so it cannot undo the signal.
+    gate.gated = true;
+    render(<PropertyActionButton label="Connect" onAction={vi.fn()} />);
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).toContain("bg-primary/70");
+    expect(cls).toContain("hover:bg-primary/70");
+    expect(cls).not.toContain("opacity-60");
+  });
+
+  it("mutes the teal fill for a gated in-call tone", () => {
+    // bg-accent/70 over white = 7.89:1 against the ink label.
+    gate.gated = true;
+    render(<PropertyActionButton label="Connect" tone="teal" onAction={vi.fn()} />);
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).toContain("bg-accent/70");
+    expect(cls).toContain("hover:bg-accent/70");
+  });
+
+  it("applies no gated cue on a dark surface, deliberately", () => {
+    // There is no honest one-size treatment on the tile's navy: bg-primary/70
+    // composites straight back to navy (no cue at all) and bg-accent/70 leaves
+    // the ink label at 3.65:1. Nothing is invented here because the three
+    // in-call Connects are gate-unreachable in practice — a break cannot start
+    // and a shift cannot end mid-call. This pins that as a decision rather than
+    // an oversight; Task 14 owns specifying one if that stops being true.
+    gate.gated = true;
+    render(
+      <PropertyActionButton label="Connect" tone="teal" surface="dark" onAction={vi.fn()} />,
+    );
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).not.toContain("bg-accent/70");
+    expect(cls).not.toContain("opacity-60");
+  });
+
   it("keeps the same label off duty — no per-card 'Go on duty' swap", () => {
     // Spec §3.6: with five properties per pod, a "Go on duty" repeated on every
     // card reads as noise. The prompt says it once instead.
@@ -301,20 +345,31 @@ describe("PropertyActionButton", () => {
   it("lets a caller's className win over classes this component itself sets", () => {
     // The sizing test above is satisfied by button.tsx alone, since its cva
     // appends className after the size variant. This one overrides two classes
-    // contributed HERE, so it pins this component's own merge order.
+    // contributed HERE — `whitespace-nowrap` and the gated fill alpha — so it
+    // pins this component's own merge order.
+    //
+    // Asserted on TOKENS, not substrings: `cls.toContain("bg-primary/70")`
+    // matches inside `hover:bg-primary/70` and would have made the negative
+    // assertion unfalsifiable.
     gate.gated = true;
     render(
       <PropertyActionButton
         label="Connect"
         onAction={vi.fn()}
-        className="whitespace-normal opacity-100"
+        className="whitespace-normal bg-live"
       />,
     );
-    const cls = screen.getByRole("button", { name: "Connect" }).className;
-    expect(cls).toContain("whitespace-normal");
-    expect(cls).toContain("opacity-100");
-    expect(cls).not.toContain("whitespace-nowrap");
-    expect(cls).not.toContain("opacity-60");
+    const classes = screen.getByRole("button", { name: "Connect" }).className.split(/\s+/);
+    expect(classes).toContain("whitespace-normal");
+    expect(classes).toContain("bg-live");
+    expect(classes).not.toContain("whitespace-nowrap");
+    expect(classes).not.toContain("bg-primary/70");
+    // And the trap worth knowing about: twMerge treats `hover:bg-*` as a
+    // separate group from bare `bg-*`, so a caller overriding the fill does NOT
+    // displace the hover pin — the control would revert to the gated alpha on
+    // hover. Pinned, not fixed: the gated hover is meant to hold its recessed
+    // fill, and no caller overrides it today.
+    expect(classes).toContain("hover:bg-primary/70");
   });
 
   it("treats an empty unavailable reason as available", () => {
@@ -344,7 +399,7 @@ describe("PropertyActionButton", () => {
     render(<PropertyActionButton label="Connect" onAction={onAction} />);
     const btn = screen.getByRole("button", { name: "Connect" });
     expect(btn.hasAttribute("disabled")).toBe(false);
-    expect(btn.className).not.toContain("opacity-60");
+    expect(btn.className).not.toContain("bg-primary/70");
     fireEvent.click(btn);
     expect(onAction).toHaveBeenCalledTimes(1);
   });

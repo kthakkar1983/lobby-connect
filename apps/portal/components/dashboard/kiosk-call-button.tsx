@@ -16,6 +16,17 @@
 //     owns it via useDutyGuard: the control stays enabled and the click is
 //     intercepted with an offer to start the shift.
 //
+// ICON: `MonitorPlay` is kept deliberately. The plan's Task 3 snippet wrote
+// `MonitorSmartphone`, but that would swap a shipped icon on no authority —
+// spec §7 never names a kiosk icon, and MonitorPlay reads as "start something
+// on the lobby screen", which is exactly what this does. Recorded so the next
+// reviewer does not "restore" the plan's version.
+//
+// `busy` rides the same `unavailableReason` prop that supplies `title`, so an
+// in-flight click also gets a hover string the spec did not ask for. Kept: it
+// explains a control that just went dead under the cursor. Pinned in
+// kiosk-call-button.test.tsx so it stays a decision.
+//
 // The kiosk's own liveness drives `kioskOnline` upstream in the page
 // (isKioskOnline, Task 3/lib/kiosk/liveness.ts). The server-side gate on
 // start-outbound-video (requires on-duty) remains the real lock.
