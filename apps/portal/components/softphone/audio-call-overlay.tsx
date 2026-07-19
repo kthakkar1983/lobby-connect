@@ -26,6 +26,7 @@ import {
 import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
+import { CallShell } from "@/components/call/call-shell";
 import { cn } from "@/lib/utils";
 
 function formatElapsed(totalSeconds: number): string {
@@ -136,72 +137,69 @@ export function AudioCallOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* SHARED-CHROME SEAM: this overlay mirrors the video overlay's chrome
-          (components/video-call/video-call.tsx). If they drift further, extract a
-          shared <CallShell>. The audio card (left) replaces the video stage. */}
-
-      {/* Header — live beacon + property; 911 alone, top-right corner. */}
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
-        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
-          On call{propertyName ? ` · ${propertyName}` : ""}
-        </span>
-        <span className="flex items-center gap-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button
-                type="button"
-                disabled={emergencyActive}
-                className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50"
-              >
-                <AlertTriangle size={15} /> {emergencyActive ? "911 active" : "Call 911"}
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
-              </div>
-              {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
-                  "also alerts the admin, owner, and property GM" line above. Don't render it until the
-                  backend actually sends those alerts. */}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onTriggerEmergency} className="bg-destructive text-destructive-foreground">
-                  Yes — call 911
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </span>
-      </div>
-
-      {/* Emergency banners — unchanged. */}
-      {emergencyActive && !emergencyFailed && (
-        <div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          Emergency active — 911 is being conferenced in. Stay on the line and relay the property
-          address and room number.
-        </div>
-      )}
-      {emergencyFailed && (
-        <div className="border-b border-destructive bg-destructive/15 px-4 py-2 text-sm font-medium text-destructive">
-          911 dispatch failed. Relay the property address and room number verbally, and have the guest
-          hang up and dial 911 directly.
-        </div>
-      )}
-
-      {/* Body — call card (~37%) + playbook (~63%). */}
-      <div className="flex flex-1 overflow-hidden">
+    <CallShell
+      title={<>On call{propertyName ? ` · ${propertyName}` : ""}</>}
+      /* 911 — audio only, alone in the header's top-right corner. Live even
+         while the tile is up: `collapsed` hides the call card and the caption
+         band, never the header. */
+      emergency={
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              disabled={emergencyActive}
+              className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50"
+            >
+              <AlertTriangle size={15} /> {emergencyActive ? "911 active" : "Call 911"}
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              Not life-threatening? Cancel and use the property&apos;s local non-emergency number instead. Only continue for a genuine emergency.
+            </div>
+            {/* FORWARD-COMPAT SEAM: when the on-call-manager notify feature lands (cut from v1), add an
+                "also alerts the admin, owner, and property GM" line above. Don't render it until the
+                backend actually sends those alerts. */}
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onTriggerEmergency} className="bg-destructive text-destructive-foreground">
+                Yes — call 911
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      }
+      /* Emergency banners — unchanged. */
+      bannersAboveBody={
+        <>
+          {emergencyActive && !emergencyFailed && (
+            <div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              Emergency active — 911 is being conferenced in. Stay on the line and relay the property
+              address and room number.
+            </div>
+          )}
+          {emergencyFailed && (
+            <div className="border-b border-destructive bg-destructive/15 px-4 py-2 text-sm font-medium text-destructive">
+              911 dispatch failed. Relay the property address and room number verbally, and have the guest
+              hang up and dial 911 directly.
+            </div>
+          )}
+        </>
+      }
+      /* Body — call card (~37%) + playbook (~63%). */
+      split="37/63"
+      stage={(basis) => (
         <div
           data-testid="audio-call-card"
           className={cn(
-            "relative flex basis-[37%] flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white",
+            "relative flex flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white",
+            basis,
             collapsed && "hidden",
           )}
         >
@@ -236,91 +234,97 @@ export function AudioCallOverlay({
             </button>
           )}
         </div>
-        <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : "basis-[63%]"} />
-      </div>
-
-      {/* Captions hide while the tile is up (symmetric with the video overlay,
-          whose band sits inside the collapsing guest stage) — when the tile owns
-          the call surface, live captions belong ONLY in the tile, never doubled. */}
-      <CaptionBand
-        finals={captionFinals}
-        partial={captionPartial}
-        className={cn("mx-3 mb-2", collapsed && "hidden")}
-      />
-      {/* Control bar — Room#/Notes (left, Enter-to-save) · Mute/Hang up (right). */}
-      <div className="flex items-center justify-between gap-3 border-t border-border bg-card p-3">
-        <div className="flex flex-1 items-center gap-2" style={{ maxWidth: 560 }}>
-          <input
-            value={roomNumber}
-            onChange={(e) => onRoomNumberChange(e.target.value)}
-            onKeyDown={onKeyDownSave}
-            placeholder="Room #"
-            className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
-          />
-          <div className="relative flex flex-1 items-center">
+      )}
+      panel={(basis) => <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : basis} />}
+      /* Captions hide while the tile is up (symmetric with the video overlay,
+         whose band sits inside the collapsing guest stage) — when the tile owns
+         the call surface, live captions belong ONLY in the tile, never doubled.
+         ⚠ The hidden class must stay on CaptionBand's OWN root: a test resolves
+         the band with getByText(...).closest("div"). Do not wrap it. */
+      bannersBelowBody={
+        <CaptionBand
+          finals={captionFinals}
+          partial={captionPartial}
+          className={cn("mx-3 mb-2", collapsed && "hidden")}
+        />
+      }
+      /* Control bar — Room#/Notes (left, Enter-to-save) · Mute/Hang up (right). */
+      controlBarClassName="justify-between gap-3"
+      controls={
+        <>
+          <div className="flex flex-1 items-center gap-2" style={{ maxWidth: 560 }}>
             <input
-              value={notes}
-              onChange={(e) => onNotesChange(e.target.value)}
+              value={roomNumber}
+              onChange={(e) => onRoomNumberChange(e.target.value)}
               onKeyDown={onKeyDownSave}
-              placeholder="Call notes"
-              className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              placeholder="Room #"
+              className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute right-2.5 flex items-center"
-            >
-              {saveState === "saving" ? (
-                <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
-              ) : saveState === "saved" ? (
-                <Check size={16} className="text-live-foreground" />
-              ) : saveState === "failed" ? (
-                <AlertTriangle size={15} className="text-destructive" />
-              ) : (
-                <CornerDownLeft size={16} className="text-text-muted" />
-              )}
-            </span>
-            {/* SR-announced save status; the icon above is decorative (aria-hidden). */}
-            <span role="status" aria-live="polite" className="sr-only">
-              {saveState === "saving"
-                ? "Saving notes"
-                : saveState === "saved"
-                  ? "Notes saved"
-                  : saveState === "failed"
-                    ? "Notes save failed — retries after the call"
-                    : ""}
-            </span>
+            <div className="relative flex flex-1 items-center">
+              <input
+                value={notes}
+                onChange={(e) => onNotesChange(e.target.value)}
+                onKeyDown={onKeyDownSave}
+                placeholder="Call notes"
+                className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2.5 flex items-center"
+              >
+                {saveState === "saving" ? (
+                  <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
+                ) : saveState === "saved" ? (
+                  <Check size={16} className="text-live-foreground" />
+                ) : saveState === "failed" ? (
+                  <AlertTriangle size={15} className="text-destructive" />
+                ) : (
+                  <CornerDownLeft size={16} className="text-text-muted" />
+                )}
+              </span>
+              {/* SR-announced save status; the icon above is decorative (aria-hidden). */}
+              <span role="status" aria-live="polite" className="sr-only">
+                {saveState === "saving"
+                  ? "Saving notes"
+                  : saveState === "saved"
+                    ? "Notes saved"
+                    : saveState === "failed"
+                      ? "Notes save failed — retries after the call"
+                      : ""}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <CaptionToggle enabled={captionsEnabled} onToggle={onToggleCaptions} />
-          <button
-            type="button"
-            disabled={!onConnect}
-            onClick={onConnect}
-            className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
-          >
-            <Monitor size={16} /> Connect
-          </button>
-          <button
-            type="button"
-            onClick={onToggleMute}
-            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm text-foreground"
-          >
-            {muted ? <MicOff size={16} /> : <Mic size={16} />}
-            {muted ? "Unmute" : "Mute"}
-          </button>
-          {/* Hang up is blaze (not navy): red=911 was reading as the "end call" cue.
-              Intentional override of "blaze = needs-attention, never a CTA" for this
-              one control (punch-list B1, Kumar 2026-06-18). 911 stays red, top-right. */}
-          <button
-            type="button"
-            onClick={onHangUp}
-            className="flex items-center gap-1.5 rounded-button bg-attention px-4 py-2 text-sm font-semibold text-attention-foreground"
-          >
-            <PhoneOff size={16} /> Hang up
-          </button>
-        </div>
-      </div>
-    </div>
+          <div className="flex items-center gap-2">
+            <CaptionToggle enabled={captionsEnabled} onToggle={onToggleCaptions} />
+            <button
+              type="button"
+              disabled={!onConnect}
+              onClick={onConnect}
+              className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+            >
+              <Monitor size={16} /> Connect
+            </button>
+            <button
+              type="button"
+              onClick={onToggleMute}
+              className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm text-foreground"
+            >
+              {muted ? <MicOff size={16} /> : <Mic size={16} />}
+              {muted ? "Unmute" : "Mute"}
+            </button>
+            {/* Hang up is blaze (not navy): red=911 was reading as the "end call" cue.
+                Intentional override of "blaze = needs-attention, never a CTA" for this
+                one control (punch-list B1, Kumar 2026-06-18). 911 stays red, top-right. */}
+            <button
+              type="button"
+              onClick={onHangUp}
+              className="flex items-center gap-1.5 rounded-button bg-attention px-4 py-2 text-sm font-semibold text-attention-foreground"
+            >
+              <PhoneOff size={16} /> Hang up
+            </button>
+          </div>
+        </>
+      }
+    />
   );
 }

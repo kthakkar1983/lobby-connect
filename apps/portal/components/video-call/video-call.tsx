@@ -20,6 +20,7 @@ import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { ChatDock } from "@/components/call/chat-dock";
+import { CallShell } from "@/components/call/call-shell";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
@@ -451,49 +452,46 @@ export function VideoCall({
   }, [setPeerTyping]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* Header strip */}
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
-          {phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
-        </span>
-      </div>
+    <CallShell
+      title={phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
+      /* No `emergency` — VIDEO has no 911 machinery anywhere in the codebase
+         (see the tile-control registration above, which omits triggerEmergency
+         for the same reason). Deliberate, per spec §4. */
+      bannersAboveBody={
+        <>
+          {audioBlocked && (
+            <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
+              <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  audioRecoveryRef.current?.();
+                  setAudioBlocked(false);
+                }}
+                className="shrink-0 rounded-button bg-live px-3 py-1.5 font-medium text-primary"
+              >
+                Tap to hear guest
+              </button>
+            </div>
+          )}
 
-      {audioBlocked && (
-        <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
-          <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
-          <button
-            type="button"
-            onClick={() => {
-              audioRecoveryRef.current?.();
-              setAudioBlocked(false);
-            }}
-            className="shrink-0 rounded-button bg-live px-3 py-1.5 font-medium text-primary"
-          >
-            Tap to hear guest
-          </button>
-        </div>
-      )}
-
-      {mediaWarning && (
-        <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
-          {mediaWarning === "camera"
-            ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
-            : mediaWarning === "mic"
-              ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
-              : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
-        </div>
-      )}
-
-      {/* SHARED-CHROME SEAM: the audio in-call overlay (components/softphone/audio-call-overlay.tsx)
-          mirrors this chrome (header strip + --color-call stage + control bar + PlaybookPanel). If the
-          two drift, extract a shared <CallShell> consumed by both. */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 40% guest video (left) — deep-navy video stage */}
+          {mediaWarning && (
+            <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
+              {mediaWarning === "camera"
+                ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
+                : mediaWarning === "mic"
+                  ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
+                  : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
+            </div>
+          )}
+        </>
+      }
+      split="40/60"
+      /* 40% guest video (left) — deep-navy video stage */
+      stage={(basis) => (
         <div
           data-testid="guest-video-stage"
-          className={`relative basis-2/5 bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
+          className={`relative ${basis} bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
         >
           <div ref={remoteRef} className="absolute inset-0" />
           {/* Self-view sits top-right (matches the kiosk) so the bottom-anchored
@@ -542,10 +540,12 @@ export function VideoCall({
             </div>
           )}
         </div>
-        {collapsed ? (
+      )}
+      panel={(basis) =>
+        collapsed ? (
           <PlaybookPanel callId={callId} basis="basis-full" />
         ) : (
-          <div className="flex basis-3/5 flex-col overflow-hidden border-l border-border">
+          <div className={`flex ${basis} flex-col overflow-hidden border-l border-border`}>
             <div className="flex shrink-0 border-b border-border bg-card text-sm">
               <button
                 type="button"
@@ -579,126 +579,127 @@ export function VideoCall({
               )}
             </div>
           </div>
-        )}
-      </div>
-
-      {saveFailed && (
-        <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
-          <span className="flex gap-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleEnd()}
-              className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Retry"}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={onClose}
-              className="rounded-button border border-border px-3 py-1 disabled:opacity-50"
-            >
-              Discard
-            </button>
-          </span>
-        </div>
-      )}
-
-      {/* control bar */}
-      <div className="flex items-center gap-2 border-t border-border bg-card p-3">
-        <input
-          value={roomNumber}
-          onChange={(e) => setRoomNumber(e.target.value)}
-          onKeyDown={onKeyDownSave}
-          placeholder="Room #"
-          className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
-        />
-        <div className="relative flex flex-1 items-center">
+        )
+      }
+      bannersBelowBody={
+        saveFailed && (
+          <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
+            <span className="flex gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleEnd()}
+                className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Retry"}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={onClose}
+                className="rounded-button border border-border px-3 py-1 disabled:opacity-50"
+              >
+                Discard
+              </button>
+            </span>
+          </div>
+        )
+      }
+      controlBarClassName="gap-2"
+      controls={
+        <>
           <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            value={roomNumber}
+            onChange={(e) => setRoomNumber(e.target.value)}
             onKeyDown={onKeyDownSave}
-            placeholder="Notes…"
-            className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+            placeholder="Room #"
+            className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
           />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-2.5 flex items-center"
+          <div className="relative flex flex-1 items-center">
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onKeyDown={onKeyDownSave}
+              placeholder="Notes…"
+              className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2.5 flex items-center"
+            >
+              {saveState === "saving" ? (
+                <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
+              ) : saveState === "saved" ? (
+                <Check size={16} className="text-live-foreground" />
+              ) : saveState === "failed" ? (
+                <AlertTriangle size={15} className="text-destructive" />
+              ) : (
+                <CornerDownLeft size={16} className="text-text-muted" />
+              )}
+            </span>
+            <span role="status" aria-live="polite" className="sr-only">
+              {saveState === "saving"
+                ? "Saving notes"
+                : saveState === "saved"
+                  ? "Notes saved"
+                  : saveState === "failed"
+                    ? "Notes save failed — retries after the call"
+                    : ""}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
           >
-            {saveState === "saving" ? (
-              <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
-            ) : saveState === "saved" ? (
-              <Check size={16} className="text-live-foreground" />
-            ) : saveState === "failed" ? (
-              <AlertTriangle size={15} className="text-destructive" />
-            ) : (
-              <CornerDownLeft size={16} className="text-text-muted" />
-            )}
-          </span>
-          <span role="status" aria-live="polite" className="sr-only">
-            {saveState === "saving"
-              ? "Saving notes"
-              : saveState === "saved"
-                ? "Notes saved"
-                : saveState === "failed"
-                  ? "Notes save failed — retries after the call"
-                  : ""}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={toggleMute}
-          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-        >
-          {muted ? <MicOff size={16} /> : <Mic size={16} />}
-          {muted ? "Unmute" : "Mute"}
-        </button>
-        <button
-          type="button"
-          onClick={toggleCamera}
-          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-        >
-          {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
-          {cameraOff ? "Cam on" : "Cam off"}
-        </button>
-        <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} />
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-        >
-          Hold
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-        >
-          Swap
-        </button>
-        <button
-          type="button"
-          disabled={!propertyId || !surface}
-          onClick={() => {
-            if (propertyId) void surface?.connectToProperty(propertyId);
-          }}
-          className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
-        >
-          <Monitor size={16} /> Connect
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleEnd()}
-          className="flex items-center gap-1.5 rounded-button bg-primary px-3 py-2 text-[1.1875rem] font-bold leading-none text-primary-foreground"
-        >
-          <PhoneOff size={18} /> End
-        </button>
-      </div>
-
-    </div>
+            {muted ? <MicOff size={16} /> : <Mic size={16} />}
+            {muted ? "Unmute" : "Mute"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleCamera}
+            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
+          >
+            {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
+            {cameraOff ? "Cam on" : "Cam off"}
+          </button>
+          <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} />
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
+          >
+            Hold
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
+          >
+            Swap
+          </button>
+          <button
+            type="button"
+            disabled={!propertyId || !surface}
+            onClick={() => {
+              if (propertyId) void surface?.connectToProperty(propertyId);
+            }}
+            className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+          >
+            <Monitor size={16} /> Connect
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleEnd()}
+            className="flex items-center gap-1.5 rounded-button bg-primary px-3 py-2 text-[1.1875rem] font-bold leading-none text-primary-foreground"
+          >
+            <PhoneOff size={18} /> End
+          </button>
+        </>
+      }
+    />
   );
 }
