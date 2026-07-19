@@ -9,6 +9,19 @@
  * all and is low-contrast for everyone. Keeping the control live and answering
  * on use is both the only way to build this and the better a11y outcome.
  *
+ * TWO GATED STATES, TWO DIALOGS. The gate is `!canWork`, and `canWork =
+ * onDuty && !onBreak` (duty-provider.tsx:189), so an agent ON A BREAK is gated
+ * too — she must be offered `Resume`, never `Start my shift`. Routing a break
+ * through goOnDuty() would POST /api/presence/go-on-duty, whose openShift()
+ * closes her live shift (stamping a lapse-style ended_reason) and inserts a new
+ * one: one continuous night recorded as two shifts, clocked hours corrupted,
+ * and the resume route's deliberate atomic BREAK-only guard bypassed. Spec §3.5
+ * gives break its own Resume action for exactly this reason.
+ *
+ * The GATE itself still keys on `canWork`, not `onDuty` — softphone.tsx:587
+ * (`if (!canWorkRef.current) return;`) already swallows a mid-break answer, so
+ * un-gating the break would give her a dead control with no feedback at all.
+ *
  * PRESENTATION ONLY. The authoritative gates stay exactly where they are —
  * softphone.tsx's `if (!canWorkRef.current) return;` accept gate and the
  * server-side D13 duty check. This guard must NEVER become the only thing
@@ -50,25 +63,34 @@ export function OffDutyPromptProvider({ children }: { readonly children: React.R
   // re-rendered merely because this provider re-rendered.
   const value = useMemo<PromptCtx>(() => ({ prompt: () => setOpen(true) }), []);
 
+  // On a break she is gated but NOT off duty: offer Resume, which goes through
+  // /api/presence/resume's BREAK-only guard and leaves her shift row intact.
+  const onBreak = duty?.onBreak === true;
+
   return (
     <Ctx.Provider value={value}>
       {children}
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>You&apos;re off duty</AlertDialogTitle>
+            <AlertDialogTitle>
+              {onBreak ? "You're on a break" : "You're off duty"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              That isn&apos;t available until your shift starts. Would you like to start it now?
+              {onBreak
+                ? "That isn't available while you're on a break. Would you like to resume now?"
+                : "That isn't available until your shift starts. Would you like to start it now?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Not yet</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                void duty?.goOnDuty();
+                if (onBreak) void duty?.resume();
+                else void duty?.goOnDuty();
               }}
             >
-              Start my shift
+              {onBreak ? "Resume" : "Start my shift"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
