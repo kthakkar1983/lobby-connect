@@ -28,26 +28,35 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+// Type-only, so it is erased and cannot execute before the hoisted vi.mock.
+import type * as OffDutyPrompt from "@/components/dashboard/off-duty-prompt";
 
-// Mock the guard rather than the duty provider: this file is about the button's
-// own branches, not about when the guard fires. useDutyGuard's own semantics
-// (including the no-provider pass-through) are covered by
-// tests/components/off-duty-prompt.test.tsx.
-const { gate } = vi.hoisted(() => ({ gate: { gated: false } }));
+// Mock the guard rather than the duty provider: most of this file is about the
+// button's own branches, not about when the guard fires. useDutyGuard's own
+// semantics are covered by tests/components/off-duty-prompt.test.tsx.
+//
+// `gate.real` flips the mock back to the genuine hook for the one test that
+// proves the two actually compose — see "composes with the real guard".
+const { gate } = vi.hoisted(() => ({ gate: { gated: false, real: false } }));
 const { guard } = vi.hoisted(() => ({
   guard: vi.fn((run: () => void) => {
     if (!gate.gated) run();
   }),
 }));
-vi.mock("@/components/dashboard/off-duty-prompt", () => ({
-  useDutyGuard: () => ({ gated: gate.gated, guard }),
-}));
+vi.mock("@/components/dashboard/off-duty-prompt", async (importOriginal) => {
+  const actual = await importOriginal<typeof OffDutyPrompt>();
+  return {
+    ...actual,
+    useDutyGuard: () => (gate.real ? actual.useDutyGuard() : { gated: gate.gated, guard }),
+  };
+});
 
 import { PropertyActionButton } from "@/components/dashboard/property-action-button";
 
 afterEach(cleanup);
 beforeEach(() => {
   gate.gated = false;
+  gate.real = false;
   guard.mockClear();
 });
 
@@ -205,16 +214,81 @@ describe("PropertyActionButton", () => {
     expect(screen.getByTestId("monitor")).toBeTruthy();
   });
 
+  it("keeps a disabled control legible on a dark surface", () => {
+    // Spec §7's third obligation. The tile's control bar is navy and its
+    // Connect is teal, so the Button base's `disabled:opacity-50` renders teal
+    // at 50% over ink at 50% — roughly 2:1, unreadable. The dark surface mutes
+    // the fill and keeps the label light instead.
+    render(
+      <PropertyActionButton
+        label="Connect"
+        tone="teal"
+        surface="dark"
+        unavailableReason="No property on this call"
+        onAction={vi.fn()}
+      />,
+    );
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).not.toContain("disabled:opacity-50");
+    expect(cls).toContain("disabled:opacity-100");
+    expect(cls).toContain("disabled:bg-accent/25");
+    expect(cls).toContain("disabled:text-primary-foreground/70");
+  });
+
+  it("leaves the light-surface disabled treatment on the base", () => {
+    // Only the dark surface needs the override; cards are teal/navy on white,
+    // where opacity dimming reads fine.
+    render(
+      <PropertyActionButton label="Kiosk" unavailableReason="Kiosk offline" onAction={vi.fn()} />,
+    );
+    const cls = screen.getByRole("button", { name: "Kiosk" }).className;
+    expect(cls).toContain("disabled:opacity-50");
+    expect(cls).not.toContain("disabled:opacity-100");
+  });
+
+  it("does not apply the dark disabled recipe to an enabled control", () => {
+    render(
+      <PropertyActionButton label="Connect" tone="teal" surface="dark" onAction={vi.fn()} />,
+    );
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).not.toContain("disabled:bg-accent/25");
+    expect(cls).toContain("bg-accent");
+  });
+
+  it("defaults to the card scale", () => {
+    // Spec §3.6a/D15: all four card actions are h-8. The size union excludes
+    // the base's h-9 `default` so a caller cannot reintroduce the mismatch.
+    render(<PropertyActionButton label="Connect" onAction={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Connect" }).className).toContain("h-8");
+  });
+
+  it("offers the tile's smaller scale as a size, not a className fight", () => {
+    // CORRECTIONS §9: the tile Connect must stay small in the Document-PiP
+    // window. `className` provably cannot deliver that — the sm variant's
+    // `has-[>svg]:px-2.5` and `[&_svg:not([class*='size-'])]:size-4` survive
+    // twMerge alongside a caller's plain `px-2`, and their compiled selectors
+    // outrank it, so padding and icon size would silently stay at card scale.
+    render(<PropertyActionButton label="Connect" tone="teal" size="xs" onAction={vi.fn()} />);
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).toContain("h-6");
+    expect(cls).toContain("text-xs");
+    expect(cls).toContain("has-[>svg]:px-1.5");
+    expect(cls).toContain("[&_svg:not([class*='size-'])]:size-3");
+    expect(cls).not.toContain("h-8");
+    expect(cls).not.toContain("has-[>svg]:px-2.5");
+    expect(cls).not.toContain("[&_svg:not([class*='size-'])]:size-4");
+  });
+
   it("lets a caller's className win over the default sizing", () => {
-    // The tile Connect is deliberately smaller than the card ones because it
-    // lives in a Document-PiP window. cn() merges caller-last, so twMerge drops
-    // the component's own h-8/text-sm rather than fighting it.
+    // cn() merges caller-last, so twMerge drops the height and type scale
+    // rather than fighting them. (Horizontal padding and icon size are NOT
+    // overridable this way — that is what `size` exists for.)
     render(
       <PropertyActionButton
         label="Connect"
         tone="teal"
         onAction={vi.fn()}
-        className="h-auto px-2 py-1 text-xs"
+        className="h-auto py-1 text-xs"
       />,
     );
     const cls = screen.getByRole("button", { name: "Connect" }).className;
@@ -222,6 +296,57 @@ describe("PropertyActionButton", () => {
     expect(cls).toContain("text-xs");
     expect(cls).not.toContain("h-8");
     expect(cls).not.toContain("text-sm");
+  });
+
+  it("lets a caller's className win over classes this component itself sets", () => {
+    // The sizing test above is satisfied by button.tsx alone, since its cva
+    // appends className after the size variant. This one overrides two classes
+    // contributed HERE, so it pins this component's own merge order.
+    gate.gated = true;
+    render(
+      <PropertyActionButton
+        label="Connect"
+        onAction={vi.fn()}
+        className="whitespace-normal opacity-100"
+      />,
+    );
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).toContain("whitespace-normal");
+    expect(cls).toContain("opacity-100");
+    expect(cls).not.toContain("whitespace-nowrap");
+    expect(cls).not.toContain("opacity-60");
+  });
+
+  it("treats an empty unavailable reason as available", () => {
+    // `!= null` would disable the control with an empty tooltip and no
+    // explanation on either the button or the wrapper.
+    const onAction = vi.fn();
+    render(<PropertyActionButton label="Connect" unavailableReason="" onAction={onAction} />);
+    const btn = screen.getByRole("button", { name: "Connect" });
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("composes with the real guard when neither provider is mounted", () => {
+    // Every other test here mocks useDutyGuard, so nothing else proves the two
+    // compose. call-tile-manager.test.tsx mounts PropertyCard with no
+    // DutyProvider and no OffDutyPromptProvider and drives eight Answer flows
+    // through it; that pass-through is what keeps those green once Task 14
+    // rewires the card onto this button.
+    //
+    // `gated` is left true deliberately: the real hook must ignore it (no
+    // DutyProvider means nothing to gate), so the action running is proof the
+    // mock is genuinely out of the way rather than quietly still in play.
+    gate.real = true;
+    gate.gated = true;
+    const onAction = vi.fn();
+    render(<PropertyActionButton label="Connect" onAction={onAction} />);
+    const btn = screen.getByRole("button", { name: "Connect" });
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    expect(btn.className).not.toContain("opacity-60");
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 
   it("lets a caller position the wrapper", () => {

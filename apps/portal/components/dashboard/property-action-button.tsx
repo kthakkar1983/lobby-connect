@@ -30,13 +30,28 @@
  * all three in-call Connects (D13 keeps that split deliberately, and
  * call-tile.test.tsx:440-449 pins the tile's `bg-accent`). `surface` is what the
  * control sits ON: the cards and both overlays are light, but the tile's
- * control bar is navy, where `text-destructive` (#C81E1E) reads at ~2.5:1 and
- * fails AA — so the dark surface carries its error in blaze instead.
+ * control bar is navy. Two things key off it, both contrast:
  *
- * SIZING. `size="sm"` (h-8) is the card scale, normalized per spec §3.6a/D15.
- * The tile's Connect is deliberately smaller because it lives in a Document-PiP
- * window; `className` is merged last so twMerge lets a caller drop the default
- * height and type scale rather than fight it.
+ *   - THE ERROR COLOUR. `text-destructive` (#C81E1E) reads at ~2.5:1 on the
+ *     tile's navy and fails AA, so a dark surface carries its error in blaze.
+ *   - THE DISABLED TREATMENT (spec §7's third fix). The Button base dims a
+ *     disabled control with `disabled:opacity-50`, which on navy leaves teal at
+ *     50% over ink at 50% and drops the label to roughly 2:1. A dark surface
+ *     mutes the FILL instead and keeps the label light: still unmistakably
+ *     unavailable, still readable. Light surfaces keep the base treatment.
+ *
+ * SIZING IS A PROP, NOT A `className` FIGHT. `size="sm"` (h-8) is the card
+ * scale, normalized per spec §3.6a/D15; `size="xs"` (h-6, text-xs, 12px icon)
+ * is the tile's, deliberately smaller because it lives in a Document-PiP
+ * window. The union excludes the base's `default` (h-9) on purpose — that
+ * height is the exact mismatch §3.6a/D15 normalized away.
+ *
+ * `className` is merged last and does win for height, type scale and colour,
+ * but it CANNOT override horizontal padding or icon size: the size variants
+ * carry `has-[>svg]:px-*` and `[&_svg:not([class*='size-'])]:size-*`, whose
+ * compiled selectors (`:has(>svg)`, `:not([class*='size-'])`) outrank a plain
+ * `px-2` or `[&_svg]:size-3` on specificity — and every Connect has an icon.
+ * Pick the size; do not fight it.
  */
 
 import { Button } from "@/components/ui/button";
@@ -57,8 +72,10 @@ export type PropertyActionButtonProps = {
   readonly error?: string | null;
   /** Button fill. Teal for the in-call surfaces; navy (default) for cards. */
   readonly tone?: "navy" | "teal";
-  /** What the control sits on — drives the error colour only. */
+  /** What the control sits on — drives the error colour and the disabled treatment. */
   readonly surface?: "light" | "dark";
+  /** Control scale. `sm` is the card scale; `xs` is the Document-PiP tile's. */
+  readonly size?: "sm" | "xs";
   /** Icon-only: the label becomes the accessible name and nothing else. */
   readonly hideLabel?: boolean;
   /** Classes for the button. Merged last, so the caller wins. */
@@ -76,13 +93,27 @@ export function PropertyActionButton({
   error,
   tone = "navy",
   surface = "light",
+  size = "sm",
   hideLabel = false,
   className,
   wrapperClassName,
 }: PropertyActionButtonProps) {
   const { gated, guard } = useDutyGuard();
-  const unavailable = unavailableReason != null;
+  // Truthiness, not `!= null`: an empty reason would otherwise disable the
+  // control with an empty tooltip and no explanation anywhere. Matches how
+  // `error` is consumed below.
+  const unavailable = Boolean(unavailableReason);
   const shown = unavailable ? (unavailableLabel ?? label) : label;
+
+  // Spec §7's third fix — see the SURFACE note in the header. Only applied when
+  // the control is actually disabled, so an enabled dark button is untouched.
+  const darkDisabled =
+    unavailable && surface === "dark"
+      ? cn(
+          "disabled:opacity-100 disabled:text-primary-foreground/70",
+          tone === "teal" ? "disabled:bg-accent/25" : "disabled:bg-primary-foreground/15",
+        )
+      : undefined;
 
   return (
     <div
@@ -90,24 +121,27 @@ export function PropertyActionButton({
       // The Button base carries `disabled:pointer-events-none`, so a title on a
       // disabled button never surfaces on hover. The wrapper is the hover
       // target that actually shows the reason.
-      title={unavailableReason ?? undefined}
+      title={unavailableReason || undefined}
     >
       <Button
         type="button"
         variant={tone === "teal" ? "accent" : "neutral"}
-        size="sm"
+        size={size}
         disabled={unavailable}
-        title={unavailableReason ?? undefined}
+        title={unavailableReason || undefined}
         onClick={() => guard(onAction)}
         className={cn(
-          // A state or label change must not resize a control (spec §3.6a,
-          // §5.3) — one convention, applied at every site. The Button base
-          // already sets this; restated here so the guarantee is this
-          // component's, not a base-class detail a refactor could drop.
+          // A label swap must not make the control taller (spec §3.6a, §5.3).
+          // Width is NOT covered — `unavailableLabel` deliberately swaps
+          // `Kiosk` for `Kiosk offline`, which widens the button; fixed widths
+          // are the call site's job. The Button base sets this too; restated so
+          // the guarantee is this component's, not a base-class detail a
+          // refactor could drop.
           "whitespace-nowrap",
           // Duty gating reads as unavailable without BEING unavailable: the
           // control stays live so the click can be intercepted.
           gated && !unavailable && "opacity-60",
+          darkDisabled,
           className,
         )}
       >
