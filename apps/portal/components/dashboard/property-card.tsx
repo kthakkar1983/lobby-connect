@@ -132,11 +132,15 @@ export function PropertyCard({
           // so the guard could not intercept it and could not offer to start
           // the shift (spec §3.4/D8). The label never swaps either — see the
           // useDutyGuard note above.
-          <Button
-            onClick={() => guard(answer)}
-            size="sm"
-            className="animate-pulse whitespace-nowrap"
-          >
+          //
+          // It also carries no gated FILL, unlike the Connect/Kiosk buttons
+          // beside it (PropertyActionButton's `gatedFill`, which recedes them
+          // to bg-primary/70 with the contrast figure computed). Deliberate,
+          // not drift: Answer is mint `bg-live` under an ink label and no
+          // equivalent figure has been computed for a muted mint, spec §3.6
+          // asks only that the label swap go, and a ringing Answer is the one
+          // control on this card that must stay maximally findable.
+          <Button onClick={() => guard(answer)} size="sm" className="animate-pulse">
             Answer
           </Button>
         )}
@@ -149,7 +153,6 @@ export function PropertyCard({
             onClick={() => silenceRing(ring.key)}
             disabled={silenced}
             aria-pressed={silenced}
-            className="whitespace-nowrap"
           >
             <BellOff aria-hidden="true" />
             {silenced ? "Silenced" : "Silence"}

@@ -258,6 +258,32 @@ describe("PropertyCard", () => {
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
 
+  it("Task 4: the ringing card's own actions are on the card scale", async () => {
+    // Spec §3.6a/D15: all four card actions are h-8 — the same invariant
+    // property-action-button.test.tsx:303 already pins for Connect and Kiosk.
+    // Answer and Silence are the two that were h-9, i.e. the exact mismatch
+    // D15 exists to remove, and the change's own headline claim. Without this,
+    // reverting either to size="default" leaves every other test here green,
+    // and a reviewer who greps for the D15 pin finds it and wrongly concludes
+    // the whole invariant is covered. The height rides a single unasserted
+    // prop: `size` carries it alone, deliberately, per PropertyActionButton's
+    // "SIZING IS A PROP, NOT A className FIGHT".
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    expect(screen.getByRole("button", { name: "Answer" }).className).toContain("h-8");
+    expect(screen.getByRole("button", { name: "Silence" }).className).toContain("h-8");
+  });
+
   it("Task 4: off duty, Answer keeps its label, stays ENABLED, and does not invoke acceptVideo", async () => {
     const calls: string[] = [];
     acceptVideoSpy = (callId: string) => calls.push(callId);

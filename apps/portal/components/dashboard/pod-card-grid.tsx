@@ -51,7 +51,9 @@ export function UnmatchedRingCards({
               Incoming {ring.channel === "AUDIO" ? "phone" : "video"} call
             </p>
             <div className="mt-3 flex items-center gap-2">
-              {/* Never `disabled` off duty, label never swaps — spec §3.4/D8. */}
+              {/* Never `disabled` off duty, label never swaps, and no gated
+                  fill — spec §3.4/D8. Mirrors PropertyCard's Answer exactly;
+                  the reasoning for all three lives there. */}
               <Button
                 onClick={() =>
                   guard(() =>
@@ -61,7 +63,7 @@ export function UnmatchedRingCards({
                   )
                 }
                 size="sm"
-                className="animate-pulse whitespace-nowrap"
+                className="animate-pulse"
               >
                 Answer
               </Button>
@@ -72,7 +74,6 @@ export function UnmatchedRingCards({
                 onClick={() => silenceRing(ring.key)}
                 disabled={silenced}
                 aria-pressed={silenced}
-                className="whitespace-nowrap"
               >
                 <BellOff aria-hidden="true" />
                 {silenced ? "Silenced" : "Silence"}

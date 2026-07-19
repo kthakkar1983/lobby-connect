@@ -581,9 +581,19 @@ export function Softphone({ role }: SoftphoneProps) {
     // The dial already presence-gates who rings, but a flip-to-break while a
     // call is mid-ring is the uncovered edge — and /api/twilio/voice/answered is
     // ungated (it would flip her ON_CALL server-side). accept() is the only path
-    // to the media + that route, so guarding here fully blocks the answer. The
-    // video Answer is gated in the card UI; audio has no card gate, so it lives
-    // here. No DutyProvider (owner surfaces / isolated tests) -> canWork = true.
+    // to the media + that route, so guarding here fully blocks the answer.
+    //
+    // BOTH channels are now gated in the card UI as well (spec §3.6 —
+    // PropertyCard and the unmatched-ring fallback). That does NOT make this
+    // line redundant and it must not be deleted as duplication of the card
+    // guard. The card guard is presentation only: it withholds a click and
+    // offers to start the shift, and it decides from the `gated` value of its
+    // LAST RENDER — so a flip to off-duty between that render and the click
+    // passes straight through it. That is the exact mid-ring edge named above,
+    // and this reads the ref at invocation instead. With no server-side duty
+    // check on /api/twilio/voice/answered, this is the authoritative gate for
+    // answering audio.
+    // No DutyProvider (owner surfaces / isolated tests) -> canWork = true.
     if (!canWorkRef.current) return;
     call.accept();
     answeredAtRef.current = Date.now();
