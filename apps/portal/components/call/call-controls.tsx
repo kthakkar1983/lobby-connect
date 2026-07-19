@@ -130,12 +130,14 @@ export function CallControlDivider() {
  *   - pressed   `text-foreground` on `bg-accent/10` over the tray
  *     (the composite is #E0EFEF, not #FFFFFF)                    = 11.86:1 PASS
  *
- * `text-accent-text` shipped here first and measured 3.81:1 on that composite —
- * a fail, under a comment that asserted it passed because it is the AA-on-WHITE
- * deep teal. It is, and only just (4.50:1 on #FFFFFF) — but this control has
- * never rendered on white. State is carried by the border, the fill and the
- * icon, so nothing is lost by holding the label at full strength. Neither state
- * dims the ELEMENT — only the fill — per the standing lesson.
+ * `text-accent-text` shipped here first and failed on that composite (~3.81:1
+ * against the then-current token) — under a comment that asserted it passed
+ * because it is the AA-on-white deep teal. The token was later darkened (merge
+ * 1ef6ee8, 2026-07-19) so it clears AA on white with more margin, but this
+ * control does not render on white; on the tray composite the deep-teal text
+ * token is still the wrong choice. State is carried by the border, the fill and
+ * the icon, so nothing is lost by holding the label at full strength. Neither
+ * state dims the ELEMENT — only the fill — per the standing lesson.
  */
 export function CallToggleButton({
   label,

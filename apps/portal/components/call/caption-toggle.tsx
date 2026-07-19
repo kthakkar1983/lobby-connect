@@ -15,18 +15,20 @@ import { cn } from "@/lib/utils";
  *   - Labelled (`compact === false`) renders only in the light control-bar tray.
  *     Enabled: `text-foreground` on `bg-accent/10` = 11.86:1 (the same recipe
  *     <CallToggleButton> uses, so the two tray toggles cannot re-diverge);
- *     `text-accent-text` there was only 3.81:1 and FAILED. Off: `text-text-muted`
- *     on white = 5.48:1, with the visible "Captions off" label.
+ *     `text-accent-text` there FAILED (~3.81:1 against the then-current token).
+ *     Off: `text-text-muted` on white, with the visible "Captions off" label.
  *   - Compact renders icon-only inside the navy call tile, whose ROOT is
  *     `bg-primary` #0F2D4B (call-tile.tsx:219; the control bar at :299 has no
  *     fill, so the navy shows through — this is NOT the #14202F video stage an
- *     earlier comment mistakenly measured against). On that navy the old colours
- *     FAILED the 3:1 icon bar: `text-accent-text` was ~2.68:1 over the
- *     bg-accent/10 composite, `text-text-muted` ~2.56:1. Corrected — enabled
- *     `text-accent` (bright teal, matching the border) ~4.1:1 over that
- *     composite; off `text-primary-foreground/70` ~7.6:1 on the navy, matching
- *     the sibling Video/Chat toggle. `text-foreground` would be navy-on-navy
- *     (~1.0:1, INVISIBLE), so do NOT "unify" the two branches.
+ *     earlier comment mistakenly measured against). On that navy the deep-text
+ *     tokens FAILED the 3:1 icon bar (`text-accent-text` ~2.68:1 over the
+ *     bg-accent/10 composite, `text-text-muted` ~2.56:1 — measured against the
+ *     pre-1ef6ee8 tokens; the 2026-07-19 darkening lifts them slightly but not
+ *     past 3:1 here). Corrected — enabled `text-accent` (bright teal fill token,
+ *     matching the border) ~4.1:1 over that composite; off
+ *     `text-primary-foreground/70` ~7.6:1 on the navy, matching the sibling
+ *     Video/Chat toggle. `text-foreground` would be navy-on-navy (~1.0:1,
+ *     INVISIBLE), so do NOT "unify" the two branches.
  */
 export function CaptionToggle({
   enabled,

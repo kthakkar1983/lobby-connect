@@ -909,12 +909,14 @@ export function Softphone({ role }: SoftphoneProps) {
                   aria-hidden="true"
                   className="lc-seam-drift absolute -inset-1 rounded-full opacity-70 blur-md"
                 />
-                {/* border-live-foreground (#048765), not border-live (#06D6A0).
-                    On duty this ring is a decorative div and exempt; off duty it
-                    is a real control, so WCAG 1.4.11 wants 3:1 on the boundary
-                    that identifies it — bright mint on white is only 1.89:1,
-                    the deep mint is 4.5:1. It also matches the caption below,
-                    which was already text-live-foreground. */}
+                {/* border-live-foreground (the deep mint), not border-live
+                    (bright mint #06D6A0). On duty this ring is a decorative div
+                    and exempt; off duty it is a real control, so WCAG 1.4.11
+                    wants 3:1 on the boundary that identifies it — bright mint on
+                    white is only 1.89:1, the deep mint clears it comfortably (it
+                    was darkened further in merge 1ef6ee8, 2026-07-19). It also
+                    matches the caption below, which was already
+                    text-live-foreground. */}
                 <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-live-foreground bg-card">
                   <Phone size={20} className="text-primary" />
                 </span>
