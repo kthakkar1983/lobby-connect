@@ -865,41 +865,54 @@ export function Softphone({ role }: SoftphoneProps) {
               </span>
             </div>
           ) : (
-            /* `relative` is load-bearing: BOTH children are absolutely
-               positioned and resolve against this element. Without it the glow
-               and the disc escape to the nearest positioned ancestor and the
-               ring falls apart. */
+            /* The caption is INSIDE the button, not a sibling label beside it.
+               Users click the words — on the one control that starts her shift,
+               a click that lands on the label and does nothing is a dead control
+               with zero feedback, the exact failure spec §3.4's enabled-not-
+               disabled reasoning exists to avoid. Being inside also makes it the
+               accessible name outright, so the aria-label/aria-hidden pairing
+               that risked the visible and announced names drifting apart is
+               gone: there is now one name and it is the visible text. */
             <button
               type="button"
-              aria-label="Go on duty"
               onClick={() => void goOnDuty?.()}
-              className="relative mx-auto mt-1 h-16 w-16"
+              className="mt-1 flex flex-col items-center"
             >
-              <span
-                aria-hidden="true"
-                className="lc-seam-drift absolute -inset-1 rounded-full opacity-70 blur-md"
-              />
-              <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-live bg-card">
-                <Phone size={20} className="text-primary" />
+              {/* `relative` is load-bearing: BOTH children are absolutely
+                  positioned and resolve against this element. Without it the
+                  glow and the disc escape to the nearest positioned ancestor
+                  and the ring falls apart. It sits on this inner wrapper rather
+                  than the button so the ring's geometry is unchanged now that
+                  the button also has to lay out the caption below it. */}
+              <span className="relative block h-16 w-16">
+                <span
+                  aria-hidden="true"
+                  className="lc-seam-drift absolute -inset-1 rounded-full opacity-70 blur-md"
+                />
+                {/* border-live-foreground (#048765), not border-live (#06D6A0).
+                    On duty this ring is a decorative div and exempt; off duty it
+                    is a real control, so WCAG 1.4.11 wants 3:1 on the boundary
+                    that identifies it — bright mint on white is only 1.89:1,
+                    the deep mint is 4.5:1. It also matches the caption below,
+                    which was already text-live-foreground. */}
+                <span className="absolute inset-0 grid place-items-center rounded-full border-2 border-live-foreground bg-card">
+                  <Phone size={20} className="text-primary" />
+                </span>
               </span>
+              <span className="mt-2 text-sm font-semibold text-live-foreground">Go on duty</span>
             </button>
           )}
-          {onDuty ? (
-            <p className="mt-3 text-center text-text-muted">Incoming calls ring here.</p>
-          ) : (
-            <>
-              {/* aria-hidden because it duplicates the button's accessible name
-                  verbatim: this is the icon-only control's VISIBLE label, and
-                  without it AT would announce "Go on duty" twice. */}
-              <p
-                aria-hidden="true"
-                className="mt-2 text-center text-sm font-semibold text-live-foreground"
-              >
-                Go on duty
-              </p>
-              <p className="mt-1 text-center text-text-muted">Your line is offline.</p>
-            </>
-          )}
+          {/* One persistent element, not a branch per state — activating the ring
+              unmounts the focused button and focus falls back to <body>, so
+              without this the shift starts in silence for anyone not watching
+              the pixels. Keeping the same <p> mounted across the flip makes it a
+              live region that announces the new state on the change. */}
+          <p
+            role="status"
+            className={cn("text-center text-text-muted", onDuty ? "mt-3" : "mt-1")}
+          >
+            {onDuty ? "Incoming calls ring here." : "Your line is offline."}
+          </p>
           {role === "AGENT" ? (
             <button
               type="button"

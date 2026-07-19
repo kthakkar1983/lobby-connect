@@ -76,6 +76,8 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
   const [pushBlocked, setPushBlocked] = useState(false);
   const primeRef = useRef<(() => void) | null>(null);
   const beatRef = useRef<(() => void) | null>(null);
+  // Re-entrancy lock for goOnDuty — see the comment on the callback itself.
+  const goingOnDutyRef = useRef(false);
 
   const registerPrime = useCallback((fn: (() => void) | null) => {
     primeRef.current = fn;
@@ -147,34 +149,76 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
     setShiftStartedAt(null);
   }, []);
 
+  // RE-ENTRANCY LOCK — the one thing standing between a double-click and a
+  // corrupted timesheet. This function stays mid-flight for a long, fully
+  // interactive stretch: armPush() below registers a service worker, then
+  // raises Notification.requestPermission(), a browser-chrome prompt that
+  // leaves the page underneath completely clickable. `onDuty` does not flip
+  // until AFTER all of that, so every control keyed on `!onDuty` — the
+  // softphone ring above all — is still mounted, still enabled and still
+  // clickable for the whole window.
+  //
+  // Two clicks would mean two POSTs to /api/presence/go-on-duty, and that route
+  // calls openShift(), which is close-then-insert: the second POST closes the
+  // shift the first one just opened (stamping it with an `auto` ended_reason
+  // derived from its ~0s duration) and inserts a second row. One continuous
+  // night lands in `shifts` as two, the first a zero-length lapse — read
+  // straight through to the admin timesheet that shipped to prod. It is the
+  // same corruption the ring's own comment refuses to risk for the break case.
+  //
+  // The lock lives HERE rather than in the ring so all three entry points (the
+  // ring, the guard dialog's "Start my shift", the header control) are covered
+  // at once — every one of them fires this as a bare `void goOnDuty()` and so
+  // can neither observe nor serialize anything itself.
   const goOnDuty = useCallback(async () => {
-    primeRef.current?.(); // unlock ring autoplay (softphone element)
-    // Arming notifications is a best-effort side errand and must NEVER be able
-    // to fail the shift. armPush() returns false on the paths it handles, but
-    // ensurePushSubscription (lib/push/sw-registration.ts:45-61) leaves
-    // Notification.requestPermission() and pushManager.getSubscription()
-    // unguarded — only subscribe() is wrapped — so a rejection propagates all
-    // the way out here. Unguarded it would abort this function before
-    // setOnDuty(true) and before the POST, and every caller invokes this as
-    // `void goOnDuty()` (the ring, the off-duty prompt), so the rejection is
-    // swallowed: the dialog closes looking like success while she is still off
-    // duty and the server never heard. A rejection IS "not armed", so it takes
-    // the same pushBlocked path as a false return and she gets the hint.
-    const ok = await armPush().catch(() => false); // permission prompt INSIDE this gesture
-    setPushBlocked(!ok);
-    setOnDuty(true);
-    setOnBreak(false);
-    await fetch("/api/presence/go-on-duty", { method: "POST" }).catch(() => {});
-    // refetch shiftStartedAt (a new shift just opened)
+    if (goingOnDutyRef.current) return;
+    goingOnDutyRef.current = true;
     try {
-      const res = await fetch("/api/presence");
-      const b = res.ok ? await res.json().catch(() => null) : null;
-      if (b) setShiftStartedAt(b.shiftStartedAt ?? null);
-    } catch {
-      /* ignore */
+      primeRef.current?.(); // unlock ring autoplay (softphone element)
+      // Arming notifications is a best-effort side errand and must NEVER be able
+      // to fail the shift. armPush() returns false on the paths it handles, but
+      // ensurePushSubscription (lib/push/sw-registration.ts:45-61) leaves
+      // Notification.requestPermission() and pushManager.getSubscription()
+      // unguarded — only subscribe() is wrapped — so a rejection propagates all
+      // the way out here. Unguarded it would abort this function before
+      // setOnDuty(true) and before the POST, and every caller invokes this as
+      // `void goOnDuty()` (the ring, the off-duty prompt), so the rejection is
+      // swallowed: the dialog closes looking like success while she is still off
+      // duty and the server never heard. A rejection IS "not armed", so it takes
+      // the same pushBlocked path as a false return and she gets the hint.
+      const ok = await armPush().catch(() => false); // permission prompt INSIDE this gesture
+      setPushBlocked(!ok);
+      setOnDuty(true);
+      setOnBreak(false);
+      const res = await fetch("/api/presence/go-on-duty", { method: "POST" }).catch(() => null);
+      // The flip above is optimistic; this is where it is confirmed. A swallowed
+      // failure here is the dangerous direction of wrong: she reads "on duty",
+      // the shift card starts counting, and the server never opened a shift or
+      // left OFFLINE — so she is not in the dial set and does not know it. The
+      // gated beat does self-heal this, but a heartbeat interval of believing
+      // she is covered is exactly the window that loses a guest's call. Roll
+      // back instead: the ring returns, which IS the retry affordance, and
+      // "Your line is offline." goes back to being true. The inverse error (the
+      // POST landed but its response was lost) is the safe one and converges on
+      // its own via the off-duty resync read.
+      if (!res || !res.ok) {
+        setOnDuty(false);
+        setShiftStartedAt(null);
+        return;
+      }
+      // refetch shiftStartedAt (a new shift just opened)
+      try {
+        const presence = await fetch("/api/presence");
+        const b = presence.ok ? await presence.json().catch(() => null) : null;
+        if (b) setShiftStartedAt(b.shiftStartedAt ?? null);
+      } catch {
+        /* ignore */
+      }
+      beatRef.current?.();
+      nudgeIncomingVideo(); // surface a call already ringing when she clocks in
+    } finally {
+      goingOnDutyRef.current = false;
     }
-    beatRef.current?.();
-    nudgeIncomingVideo(); // surface a call already ringing when she clocks in
   }, []);
 
   const endShift = useCallback(async () => {
