@@ -28,18 +28,18 @@
 
   /* Mint — connect / live / success AND every primary action button (brand: action == live) */
   --color-live: #06D6A0;
-  --color-live-foreground: #048765;     /* deep mint — readable as text/link on white (4.5:1) */
+  --color-live-foreground: #046F55;     /* deep mint — text/link, ≥4.5:1 on white AND on its own bg-live/15 chip */
   --color-live-glow: rgb(6 214 160 / 0.18); /* mint at 18% alpha — focus/glow ring */
 
   /* Teal — links, secondary/interactive, active nav (the old coral 'accent' role, recoloured) */
   --color-accent: #2EA6AA;
   --color-accent-foreground: #14202F;   /* ink on a teal fill */
-  --color-accent-text: #248386;         /* deep teal — links/text on white (4.5:1) */
+  --color-accent-text: #1F6E71;         /* deep teal — links/text, ≥4.5:1 on white AND on the bg-accent/10–15 active pill */
 
   /* Blaze — needs attention: open incident, missed, degraded, "new" (never decorative) */
   --color-attention: #FD6734;
   --color-attention-foreground: #14202F;/* ink on a blaze fill */
-  --color-attention-text: #C85129;      /* deep blaze — text on white (4.5:1) */
+  --color-attention-text: #AB4421;      /* deep blaze — text, ≥4.5:1 on white AND on its own bg-attention/15 chip */
 
   --color-call: #14202F;                /* deep-navy video stage background */
 
