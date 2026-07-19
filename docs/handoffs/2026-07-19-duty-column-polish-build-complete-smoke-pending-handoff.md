@@ -1,26 +1,28 @@
-# Handoff — duty column + call-surface polish: BUILT, gate green, prod smoke pending (2026-07-19)
+# Handoff — duty column + call-surface polish: MERGED to main, prod DEPLOYING, smoke pending (2026-07-19)
 
-**START HERE.** The 17-task plan is built. All 15 code tasks + Task 16 (whole-branch review) are done. **Task 17 is a prod smoke only Kumar can run** — merging to `main` auto-deploys prod via Coolify, so nothing is merged yet.
+**START HERE.** The 17-task plan is built, reviewed, and **MERGED to `main` + pushed** (Kumar authorized). Coolify is auto-deploying box-prod now. **Task 17 is the prod smoke — Kumar runs it and returns with findings in a new chat.**
 
-- **Branch:** `duty-column-polish` (off `main` at `2bcb899`), **32 commits**, HEAD `5c7a5de`. **Not pushed, not merged, prod untouched.**
+- **`main` = `dfc8700`** (merge commit), pushed to `origin/main`. The feature branch `duty-column-polish` (HEAD `6e57c17`) is merged; its local ref can be pruned whenever.
+- **Integrated main's deep-text token darkening** (`1ef6ee8`, the `task_b16b5418` fix from a parallel session): my branch was cut at `2bcb899` before it landed. **Clean merge, zero file overlap** — and it *resolved the two sub-AA contrast items this work had deferred* (softphone accepting pill was 4.03:1, video warning banners), because they are exactly the "colored text on a same-hue tint" case that fix targets. No dark-surface regression: my dark-surface fixes used unchanged *fill* tokens. Three of my contrast comments cited pre-merge token values as current fact — reconciled in `6e57c17` (dropped a stale hex, dated the ratios; decisions unchanged, deep-text tokens still fail on those surfaces even after darkening).
+- **Rollback if the smoke fails badly:** `git revert -m 1 dfc8700 && git push` (Coolify redeploys the prior build), or roll back the Coolify deployment. The frozen Vercel/Agora standby (flip Twilio + tablet back) remains the nuclear option for a total box failure — but it runs pre-this-change Agora code.
 - **Spec:** [`docs/specs/2026-07-19-duty-column-and-call-surface-polish-design.md`](../specs/2026-07-19-duty-column-and-call-surface-polish-design.md)
 - **Plan:** [`docs/plans/2026-07-19-duty-column-and-call-surface-polish.md`](../plans/2026-07-19-duty-column-and-call-surface-polish.md)
 - **⚠ Corrections (OVERRIDES the plan):** [`docs/plans/2026-07-19-duty-column-polish-CORRECTIONS.md`](../plans/2026-07-19-duty-column-polish-CORRECTIONS.md) — the plan could not be run literally; this file is why.
 - **Predecessor handoff:** [`2026-07-19-duty-column-polish-spec-and-plan-handoff.md`](2026-07-19-duty-column-polish-spec-and-plan-handoff.md)
 
-## Gate (independently verified at HEAD, not just claimed by agents)
+## Gate (independently verified on the merged tree at `dfc8700`, not just agent claims)
 
-| Check | Baseline (`main`) | Now |
-|---|---|---|
-| node vitest | 835 / 123 | **861 / 125** |
-| jsdom vitest | 241 / 27 | **420 / 34** |
-| typecheck · lint · check:routes | — | OK · OK · OK |
-| `git diff main -- supabase/ apps/kiosk/` | — | **empty** (zero-migration invariant holds) |
-| 911 `<AlertDialog>` block vs `main` | — | **byte-identical** (whitespace-normalized diff empty) |
-| `lib/remote-access/connect.ts` | — | **untouched**; `launch-rustdesk.test.ts` 2/2 green |
-| hardcoded hex / `as any` / `@ts-ignore` in code | — | **none** (only inside contrast-calc comments) |
+| Check | Result |
+|---|---|
+| node vitest | **879 / 127** (includes the merged-in token-contrast tests) |
+| jsdom vitest | **420 / 34** |
+| typecheck · lint · check:routes · build | OK · OK · OK · OK |
+| this branch's own `supabase/` + `apps/kiosk/` diff | **empty** (zero-migration holds; the one `apps/kiosk/src/index.css` change on `main` is the merged token work, already deployed) |
+| 911 `<AlertDialog>` block vs pre-branch | **byte-identical** (whitespace-normalized diff empty) |
+| `lib/remote-access/connect.ts` | **untouched**; `launch-rustdesk.test.ts` 2/2 green |
+| hardcoded hex / `as any` / `@ts-ignore` in code | **none** (only inside contrast-calc comments) |
 
-**+205 tests over baseline, zero regressions.**
+**~+240 tests over the pre-work baseline (node 835/jsdom 241), zero regressions.** Two gotchas hit while integrating and fixed: the merged `competent-williamson-20dc08` **worktree left inside `.claude/worktrees/` broke root `eslint .`** (pruned — that worktree is gone), and `check:routes` does a naive `line.includes("as never")` scan that a reworded comment ("h**as never** rendered") tripped (reworded).
 
 ## How it was built
 
@@ -69,11 +71,13 @@ Making a control **enabled** removes WCAG's contrast exemption for inactive/deco
 - **§3.4's "Applies to" list omits the UnmatchedRingCards fallback Answer** (both channels), which also needed gating (corrections §3b).
 - **The plan's Task-17 smoke "single most important check" encodes the wrong 911 mechanism** — "arms on first tap, fires on second" is the *tile's* two-tap (`call-tile.tsx`, never touched here). Audio's 911 is an AlertDialog (tap → confirm dialog → "Yes — call 911"). Fixed in the smoke list below.
 
-## Deferred, verified-real, NOT fixed (tracked in `task_b16b5418`)
+## Deferred contrast items — RESOLVED by the token merge (`task_b16b5418`)
 
-Two sub-AA contrasts that **predate this branch** and touch shared tokens, so a spot-fix would diverge from the token:
-- Softphone accepting-toggle **"Accepting calls"** label: **4.03:1** (< 4.5:1). Shared `Badge` `live` variant used at 5 sites. Note the reviewer's suggested "deepen the fill" direction is mathematically inverted (text is darker than the tint). Needs an app-wide brand-token decision.
-- `call-filters.tsx` active tab: **3.81:1** — the surviving instance of the recipe the caption tray just fixed.
+The two sub-AA contrasts this build flagged as deferred were fixed **app-wide** by the parallel `task_b16b5418` session (merged here as `1ef6ee8`), which darkened `--color-{live-foreground,accent-text,attention-text}` one shade so colored text clears 4.5:1 on its own same-hue tint:
+- Softphone accepting-toggle **"Accepting calls"** (was 4.03:1) — fixed by the darker `--color-live-foreground`.
+- `call-filters.tsx` active tab (was 3.81:1) — fixed by the darker `--color-accent-text`.
+
+Its regression guard `tests/theme/token-contrast.test.ts` now enforces the rule and runs in this gate. **Standing rule for a new `text-*` token: it must clear 4.5:1 on its own darkest tint, not just on white** — see the `wcag-deep-text-token-on-tint` and `wcag-enabled-control-exemption` memories.
 
 ## TASK 17 — the prod smoke (yours; merging auto-deploys prod)
 
