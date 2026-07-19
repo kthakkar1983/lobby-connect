@@ -8,7 +8,7 @@ Supersedes the dashboard-layout gripe recorded 2026-07-05 (`docs/handoffs/2026-0
 
 **Terminology.** *Visually gated* means: styled to read as unavailable, but **not** HTML-`disabled` — the control stays enabled and focusable so a click can be intercepted (§3.4).
 
-**Plan sizing.** This spec covers two areas — the dashboard column and the call surfaces — joined by the shared `<ConnectControl>`. The implementation plan may split them into two phases; the shared component should land before the surfaces that consume it.
+**Plan sizing.** This spec covers two areas — the dashboard column and the call surfaces — joined by the shared `<PropertyActionButton>`. The implementation plan may split them into two phases; the shared component should land before the surfaces that consume it.
 
 Mockups (living, may drift from this doc — the doc is authoritative):
 - Dashboard: `https://claude.ai/code/artifact/78b99223-36b3-4979-969e-bfdf3e4886ab`
@@ -46,7 +46,7 @@ Two long-standing complaints, plus a groomed backlog of nits.
 | Call surfaces | Extract `<CallShell>`; rework both control bars |
 | Call surfaces | Remove `Hold` + `Swap`; normalize `End`; fixed-width toggles; grouping |
 | Video overlay | Reopen-tile becomes a round mint-outlined icon button in the corner |
-| Shared | `<ConnectControl>` replacing four hand-rolled copies |
+| Shared | `<PropertyActionButton>` replacing five hand-rolled copies |
 | Observability | `RoomEvent.Disconnected` → Sentry on unexpected disconnect |
 
 ### Out
@@ -279,7 +279,7 @@ Rejected alternatives: keeping the teal pill (chrome over the guest, and a secon
 
 ---
 
-## 7. Shared `<ConnectControl>`
+## 7. Shared `<PropertyActionButton>`
 
 `Connect` exists in four places across two colour families:
 
@@ -292,11 +292,13 @@ Rejected alternatives: keeping the teal pill (chrome over the guest, and a secon
 
 A fifth site shares the same shape: `components/dashboard/kiosk-call-button.tsx` is `variant="neutral"` `size="sm"` in a `flex flex-col gap-1` wrapper with an error `<p role="alert">` — structurally identical to `connect-button.tsx`, differing only in label, action, and its extra `kioskOnline` disabled reason.
 
-One shared control replaces all five, taking icon, label, tone, disabled-reason and click delegation as props. Name it for what it is — a **card action button** — rather than `<ConnectControl>`, since `Kiosk` is not a Connect.
+One shared control replaces all five, taking icon, label, tone, disabled-reason and click delegation as props.
+
+**Named `<PropertyActionButton>`, not `<ConnectControl>`** — `Kiosk` is not a Connect, and all five sites share the same real shape: *a button performing a gated action against a property, which can fail and must say so inline.* The plan may pick a better name; what matters is that it is not named after one of its five callers.
 
 **The navy/teal split is kept**, deliberately: teal-on-white and teal-on-navy read differently, and the in-call surfaces are dark. The shared component makes unifying a one-prop change if Kumar later wants to test it.
 
-**Behavioural gap to close:** none of the three in-call copies carry the duty gate or the error affordance the canonical component has (`connect-button.tsx:27,54-58`). In-call, a failed remote-access launch is currently **silent**. `<ConnectControl>` should surface the error on every surface.
+**Behavioural gap to close:** none of the three in-call copies carry the duty gate or the error affordance the canonical component has (`connect-button.tsx:27,54-58`). In-call, a failed remote-access launch is currently **silent**. `<PropertyActionButton>` should surface the error on every surface.
 
 Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on ink@50%) — an edge case reachable only when `propertyId == null`.
 
@@ -332,7 +334,7 @@ Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on in
 | **D10** | Remove `Hold` and `Swap` | Permanently disabled; Hold deferred to multi-property. Frees the space everything else needs. |
 | **D11** | `End` → `End call`, at the shared control scale | Kumar 2026-07-19. Removing two dead buttons pays for the longer label. |
 | **D12** | Reopen-tile = round mint-outlined icon button, video corner | Kumar preferred the ghost treatment but not mid-frame placement. Chrome does not belong on live guest video. |
-| **D13** | Keep the navy/teal `Connect` split | Surface-appropriate; `<ConnectControl>` makes reversing it one prop. |
+| **D13** | Keep the navy/teal `Connect` split | Surface-appropriate; the shared control makes reversing it one prop. |
 | **D14** | Keep a `RoomEvent.Disconnected` → Sentry handler | The only durable value salvaged from the closed crash investigation. |
 | **D15** | Normalize card actions to `sm`/`h-8`; no label-driven reflow | Kumar 2026-07-19 asked whether the real dashboard is more consistent than the mockup. It is in radius/font/focus, but **not in size** — `Answer`/`Silence` are `h-9` while `Connect`/`Kiosk` are `h-8`. Same defect as the header's lone `h-9`. |
 | **D16** | Reserve the ringing action row; uniform card height | Kumar 2026-07-19 spotted the ragged top/bottom rows and proposed a uniform height. Adopted — and the stronger reason is that it removes a **layout shift under the cursor at the moment `Answer` appears**. Height derived by hiding a rendered row, never a hardcoded `min-height` (the root font scales to 112.5% at `lg`). |
@@ -349,7 +351,7 @@ Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on in
 - Guard confirm path: `Start my shift` calls the same handler as the ring.
 - Shift card renders the correct state for on-duty / on-break / off-duty.
 - `Not accepting calls` copy appears only when off duty.
-- `<ConnectControl>`: renders its error state; delegates click; disabled variant carries an accessible name.
+- `<PropertyActionButton>`: renders its error state; delegates click; disabled variant carries an accessible name.
 - Reopen button exposes an accessible name while icon-only.
 - `RoomEvent.Disconnected`: reports to Sentry on an unexpected disconnect; **stays silent** after a local `leave()`.
 
