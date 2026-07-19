@@ -1,6 +1,7 @@
 "use client";
 
 import type { RemoteTrack } from "livekit-client";
+import * as Sentry from "@sentry/nextjs";
 import { buildLiveKitVideoOptions } from "@lc/shared";
 
 export interface PortalVideoHandle {
@@ -68,7 +69,7 @@ function handleFor(track: AttachableTrack, opts?: { mirror?: boolean }): PortalV
 export async function joinLiveKitCall(
   opts: { url: string; token: string } & LiveKitCallCallbacks,
 ): Promise<LiveKitCallSession> {
-  const { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } =
+  const { Room, RoomEvent, Track, DisconnectReason, createLocalAudioTrack, createLocalVideoTrack } =
     await import("livekit-client");
 
   const { roomOptions, captureOptions } = buildLiveKitVideoOptions();
@@ -88,6 +89,42 @@ export async function joinLiveKitCall(
     if (!room.canPlaybackAudio) opts.onAudioBlocked(() => void room.startAudio());
   });
   room.on(RoomEvent.ParticipantDisconnected, () => opts.onGuestLeft());
+
+  // The portal has had NO disconnect handling on its LiveKit leg, so a dropped
+  // room produced no Sentry event, no log and no UI. That invisibility is
+  // exactly why a week of investigating "the call just ended" produced no
+  // evidence (spec 8 / D14).
+  //
+  // What stays silent: our own leave(), and ONLY that. Every app-driven
+  // teardown routes through it -- hang-up, guest-left, the max-duration cap,
+  // the cancelled-during-setup path, and unmount on client-side navigation
+  // away from the dashboard. So ordinary in-app navigation is already quiet
+  // without a special case.
+  //
+  // What deliberately reports: a full-document unload (tab close, reload,
+  // external navigation). React cleanup never runs there, so livekit-client
+  // disconnects the room itself -- disconnectOnPageLeave defaults true and its
+  // freeze listener is ungated. That is not noise: the guest's call dropped.
+  // `visibility` is the discriminator a triager needs -- a room that dies while
+  // the agent is looking at the page is a different animal from one that dies
+  // behind a hidden or frozen tab.
+  //
+  // Gate on our own flag, never on the reason: the SDK's page-lifecycle path
+  // disconnects via room.disconnect(), which reports CLIENT_INITIATED exactly
+  // like leave() does. Filtering by reason would hide the very case this
+  // exists to catch. (Caveat: an event raised during unload may not flush, so
+  // absence of events is weak evidence.)
+  let leaving = false;
+  room.on(RoomEvent.Disconnected, (reason?: number) => {
+    if (leaving) return;
+    Sentry.captureMessage("livekit room disconnected unexpectedly", {
+      level: "warning",
+      extra: {
+        reason: reason == null ? "unknown" : (DisconnectReason[reason] ?? String(reason)),
+        visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+      },
+    });
+  });
   room.on(RoomEvent.DataReceived, (payload, participant) => {
     opts.onData?.(payload, participant?.identity ?? "");
   });
@@ -121,6 +158,7 @@ export async function joinLiveKitCall(
       else await audio.unmute();
     },
     leave: async () => {
+      leaving = true;
       for (const el of remoteAudioEls) {
         el.pause();
         (el as HTMLMediaElement & { srcObject: unknown }).srcObject = null;
