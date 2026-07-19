@@ -40,6 +40,7 @@ Two long-standing complaints, plus a groomed backlog of nits.
 | Interaction | Off-duty guard: gated controls intercept and offer to start the shift |
 | Header | Empties of everything shift-related; `DutyMenu` retires |
 | Property card | The `answerGated` → "Go on duty" label swap is removed |
+| Property card | Normalize the four card actions to one height; stop label-driven reflow |
 | Call surfaces | Extract `<CallShell>`; rework both control bars |
 | Call surfaces | Remove `Hold` + `Swap`; normalize `End`; fixed-width toggles; grouping |
 | Video overlay | Reopen-tile becomes a round mint-outlined icon button in the corner |
@@ -157,6 +158,23 @@ Kumar's rationale: with five properties per pod and more later, a per-tile "Go o
 `Kiosk` (`components/dashboard/kiosk-call-button.tsx`, Task 14 of the outbound-video-calls plan) starts an **outbound video call to that property's lobby kiosk**. It mirrors `ConnectButton`'s shape exactly — `variant="neutral"` `size="sm"`, wrapped in `flex flex-col gap-1` with an error `<p role="alert">` beneath — which is why §7 folds it into the shared control.
 
 So a **quiet card off duty shows two visually gated buttons**, `Connect` and `Kiosk`, not one.
+
+### 3.6a Card action buttons are two different heights
+
+Surfaced while reviewing the mockup against the real components. On one card:
+
+| Button | Size prop | Height |
+|---|---|---|
+| `Answer` (`property-card.tsx:129`) | none → `default` | **h-9** |
+| `Silence` (`property-card.tsx:139`) | none → `default` | **h-9** |
+| `Connect` (`connect-button.tsx:59`) | `sm` | **h-8** |
+| `Kiosk` (`kiosk-call-button.tsx:59`) | `sm` | **h-8** |
+
+(`button.tsx:30-32`: `default: h-9`, `sm: h-8`.)
+
+**This is the same defect as the header's**, where `Go on duty` was the lone `h-9` among `h-8` siblings (§3.5) — one pattern, two instances. Normalize all four card actions to a single size. `sm`/`h-8` is the better target: it matches the two controls that are always present, and `Answer`/`Silence` are transient.
+
+**Also normalize label-driven reflow**, the same failure the control bar has (§5.3). Card labels change length in three places — `Kiosk` → `Kiosk offline`, `Silence` → `Silenced`, and `Answer` (whose "Go on duty" swap §3.6 removes). A longer label currently changes the button's width and can wrap `Kiosk offline` onto two lines, making it taller than `Connect` beside it. Card action buttons get a fixed height and must not wrap.
 
 ### 3.7 Clocks card
 
@@ -286,6 +304,7 @@ Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on in
 | **D12** | Reopen-tile = round mint-outlined icon button, video corner | Kumar preferred the ghost treatment but not mid-frame placement. Chrome does not belong on live guest video. |
 | **D13** | Keep the navy/teal `Connect` split | Surface-appropriate; `<ConnectControl>` makes reversing it one prop. |
 | **D14** | Keep a `RoomEvent.Disconnected` → Sentry handler | The only durable value salvaged from the closed crash investigation. |
+| **D15** | Normalize card actions to `sm`/`h-8`; no label-driven reflow | Kumar 2026-07-19 asked whether the real dashboard is more consistent than the mockup. It is in radius/font/focus, but **not in size** — `Answer`/`Silence` are `h-9` while `Connect`/`Kiosk` are `h-8`. Same defect as the header's lone `h-9`. |
 
 ---
 
