@@ -2001,6 +2001,8 @@ Merge, wait for the Coolify deploy to report healthy, then hard-refresh. No buil
 - [ ] Clocks: four analog faces; US faces dark and India light during a night shift; hands are in plausible positions
 - [ ] Header carries no duty chrome and does not look broken
 - [ ] **Card geometry:** all cards in the pod grid are the same height; `Holiday Inn Express Southgate` (or any two-line name) has its buttons level with its neighbours; when a call rings, **nothing below the card moves**
+- [ ] **Card geometry — the crop case:** `Connect` and `Kiosk` are fully visible on a quiet card **and** on a ringing one, and a forced launch failure shows its error line beneath them **uncropped**. The reserved action row is fixed at `h-8`; anything folded back into it gets clipped, and the clipped thing is `PropertyActionButton`'s inline `<p role="alert">` — i.e. a failed RustDesk launch would show the agent nothing at all. jsdom pins the structure (`property-card.test.tsx`, "connectSlot stays out of it"), but only a browser shows the crop.
+- [ ] **Card geometry — the state line:** at the narrowest card width (`sm:grid-cols-2`), a long property name with a three-digit elapsed value (`Ringing · video · 120s`) must not wrap the state line to two lines. If it does, the card grows on ring and CSS Grid propagates that to the whole row — a smaller version of the defect §3.6b just closed.
 
 - [ ] **Step 3: Walk a real video call**
 

@@ -162,8 +162,25 @@ export function PropertyCard({
           `mt-auto` lives here because this is the FIRST of the two action rows:
           it pins the whole action block to the bottom of the flex column (§3.6c).
           Accepted cost: every quiet card is one button row taller than before —
-          a one-time static cost traded for never shifting during a live ring. */}
-      <div className="mt-auto flex h-8 items-center gap-2">
+          a one-time static cost traded for never shifting during a live ring.
+
+          `shrink-0` makes the reservation a property of THIS row rather than of
+          its parent's sizing. `h-8` on a flex-column child resolves its
+          `min-height: auto` to 0 while the row is empty, so the height only
+          survives because the grid stretches cards and never compresses them —
+          an implicit dependency on the parent, not a local guarantee. The Button
+          base carries `shrink-0` for exactly this reason (button.tsx:8); the
+          wrapper reserving space FOR those buttons should match.
+
+          `data-testid` is the stable handle the two Task-5 tests resolve this
+          row by. It earns its place: the geometry this row exists for is
+          invisible to jsdom, and a full revert of the commit that introduced the
+          reservation left the entire suite green — so without a handle the
+          contract is not merely under-tested, it is untestable. */}
+      <div
+        data-testid="card-action-row"
+        className="mt-auto flex h-8 shrink-0 items-center gap-2"
+      >
         {ringing && canAnswer && (
           // Never `disabled` off duty: a disabled button fires no click event,
           // so the guard could not intercept it and could not offer to start
@@ -201,7 +218,19 @@ export function PropertyCard({
           above: that row is fixed at h-8, which would crop these buttons and cut
           off the inline error <p role="alert"> PropertyActionButton renders
           beneath them on a failed launch. No `mt-auto` here — the row above
-          already anchored the block, and a second one would split it. */}
+          already anchored the block, and a second one would split it.
+
+          INVARIANT: `connectSlot` must be all-or-nothing across the cards of one
+          grid. This row is conditional, and an absent slot removes ~32px, so a
+          `connectFor` that returns a slot for some properties and null for
+          others makes sibling cards different heights — reintroducing through
+          this door the exact defect §3.6b closed at the row above. Rendering the
+          wrapper unconditionally does NOT fix that: an empty flex row is 0px
+          tall, so the cards still differ by the button's height. Only the
+          all-or-nothing rule holds, so it is stated rather than engineered
+          around. Both callers satisfy it today (pod-card-grid's default supplies
+          the pair for every property; fleet-board passes no `connectFor` and
+          inherits that default). */}
       {connectSlot && <div className="mt-2 flex items-center gap-2">{connectSlot}</div>}
       {footerSlot && <div className="mt-3 border-t border-border pt-3">{footerSlot}</div>}
     </div>

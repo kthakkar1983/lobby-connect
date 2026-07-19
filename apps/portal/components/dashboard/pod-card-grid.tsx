@@ -96,7 +96,13 @@ export function PodCardGrid({
   properties: PropertyCardData[];
   /** Admins: gated by covering (D11), keyed by property id. Omitted => canAnswer defaults true (agents). */
   canAnswerByProperty?: Record<string, boolean>;
-  /** Optional per-property Connect override; defaults to <ConnectButton> (Phase E). */
+  /**
+   * Optional per-property Connect override; defaults to <ConnectButton> (Phase E).
+   * Must be ALL-OR-NOTHING across the grid: returning a slot for some properties
+   * and null for others gives sibling cards different heights (property-card.tsx
+   * renders that row conditionally, and no reservation can size an arbitrary
+   * slot). Return a disabled control rather than null.
+   */
   connectFor?: (propertyId: string) => React.ReactNode;
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerFor?: (propertyId: string) => React.ReactNode;

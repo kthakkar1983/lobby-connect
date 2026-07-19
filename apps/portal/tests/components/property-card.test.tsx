@@ -422,6 +422,71 @@ describe("PropertyCard", () => {
     expect(calls).toEqual(["call-1"]);
   });
 
+  // Task 5 (spec §3.6b/D16). These two exist because the commit that reserved
+  // the action row shipped with NO coverage at all: `git checkout <parent> --
+  // property-card.tsx` reverted the whole thing and left jsdom at 293/293 green.
+  // jsdom computes no layout, so the reservation cannot be measured — but it CAN
+  // be pinned structurally, which is what these do. Task 14 reworks Connect and
+  // Kiosk on this very card, and folding connectSlot back into the fixed-height
+  // row is the single most likely edit (it lived there until this change, and
+  // the plan's own Task-4 snippet still draws it there). That regression crops
+  // Connect/Kiosk and clips PropertyActionButton's inline <p role="alert">
+  // entirely — so a failed RustDesk launch would show the agent nothing at all,
+  // mid-shift, while she believes the remote session is coming.
+  it("Task 5: the action row is reserved at h-8, rendered and empty, while the card is quiet", () => {
+    const { getByTestId, queryAllByRole } = render(
+      <CallSurfaceProvider>
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    const row = getByTestId("card-action-row");
+    expect(row.className).toContain("h-8");
+    expect(row.children.length).toBe(0);
+
+    // The empty row needs no aria-hidden/tabIndex juggling precisely BECAUSE it
+    // holds nothing: it cannot be focused and has nothing to announce. Pinned so
+    // that "reserve the space" can never quietly become "render hidden buttons",
+    // which would put dead controls in the tab order of every quiet card.
+    expect(queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("Task 5: a ring fills that same row rather than adding one, and connectSlot stays out of it", async () => {
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} connectSlot={<button>Connect</button>} />
+      </CallSurfaceProvider>,
+    );
+
+    const quietRow = screen.getByTestId("card-action-row");
+    const connect = screen.getByRole("button", { name: "Connect" });
+
+    // Quiet: Connect already sits outside the reserved row.
+    expect(quietRow.contains(connect)).toBe(false);
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    // Ringing: the SAME DOM node (identity, not just a match) now holds Answer
+    // and Silence. Same element + same h-8 is the whole geometry contract — a
+    // ring changes the row's contents and colour, never the card's height, so
+    // the Answer target cannot move under the cursor at the moment she reaches
+    // for it, and CSS Grid cannot propagate a growth to every sibling card.
+    const ringingRow = screen.getByTestId("card-action-row");
+    expect(ringingRow).toBe(quietRow);
+    expect(ringingRow.className).toContain("h-8");
+    expect(ringingRow.contains(screen.getByRole("button", { name: "Answer" }))).toBe(true);
+    expect(ringingRow.contains(screen.getByRole("button", { name: "Silence" }))).toBe(true);
+
+    // `contains`, not `closest("div")`: once Task 14 swaps this stub for a real
+    // PropertyActionButton the nearest div is that component's OWN wrapper, so
+    // a closest() check would pass while Connect sat inside the reserved row.
+    expect(ringingRow.contains(connect)).toBe(false);
+  });
+
   it("renders footerSlot under the actions row (Task 9: the admin fleet board's Covering toggle)", () => {
     render(
       <CallSurfaceProvider>
