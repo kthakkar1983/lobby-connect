@@ -1,0 +1,195 @@
+"use client";
+
+/**
+ * The shift half of the dashboard's right column (spec §3.3), replacing the
+ * header's DutyControl (retired in Task 10). This RELOCATES controls: it changes
+ * no duty semantics and touches none of the four /api/presence routes. End shift
+ * stops hiding behind a ChevronDown and becomes a first-class labelled button,
+ * which is what absorbs the two outstanding time-tracker polish items (spec §3.5).
+ *
+ * THREE RULES CARRIED OVER FROM duty-control.tsx, none of them polish:
+ *
+ *   - END SHIFT IS BLOCKED MID-CALL (duty-control.tsx:83-84). Ending now closes
+ *     the shift at now() and un-clocks the call tail. Applied on BOTH the
+ *     on-duty and the on-break branch (:146-147, :175) -- that symmetry is
+ *     deliberate: ending from a break mid-call loses the same tail.
+ *   - BREAK IS REMOVED MID-CALL, not disabled (:167-174). You cannot take a
+ *     break on a call, and a heartbeat that clobbered BREAK would corrupt the
+ *     timesheet.
+ *   - A DENIED WEB PUSH IS SURFACED (:94-108). duty-control.tsx was the repo's
+ *     ONLY consumer of pushBlocked, so once it goes this card is the only place
+ *     left to say so. On a product whose alerting contract is "she can always
+ *     hear it ring", a silent denial means she believes she is covered while
+ *     OS-level alerting is off -- so the hint shows in ALL THREE states, and it
+ *     matters MOST off duty, which is the one state the header never covered:
+ *     right before a shift starts is when she can still fix it.
+ *
+ * Deliberately absent (spec D4/D5): a "calls tonight" figure (already on the
+ * chart) and a "last shift" readout (net-new agent-facing plumbing for a state
+ * lasting seconds). "Line ready" and "Accepting" belong to the softphone card
+ * directly above -- duplicating them here would be worse than the dead space
+ * this card fills.
+ */
+
+import { useEffect, useState } from "react";
+import { BellOff, Coffee, LogOut, Play } from "lucide-react";
+import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
+import { useDuty } from "@/components/dashboard/duty-provider";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
+/** Elapsed shift as H:MM:SS. Clamped at zero so clock skew reads 0:00:00, not a
+ *  negative stopwatch. */
+function elapsed(startedAtIso: string, nowMs: number): string {
+  const totalSeconds = Math.floor(Math.max(0, nowMs - Date.parse(startedAtIso)) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** Shift start on HER clock, 24-hour. `hour12: false` is explicit rather than
+ *  locale-dependent: the spec writes it HH:MM, and the clocks card below reads
+ *  24-hour for the same AM/PM-ambiguity reason. */
+function startedAtLabel(startedAtIso: string): string {
+  return new Date(startedAtIso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Visible, not an icon-only chip with an aria-label. The header that carried
+ *  this had no room for the sentence; a 340px card does, and the tooltip-only
+ *  version was discoverable by hover alone. */
+function NotificationsBlockedHint() {
+  return (
+    <p className="flex items-start gap-1.5 text-xs text-attention-text">
+      <BellOff size={14} aria-hidden="true" className="mt-px shrink-0" />
+      Notifications blocked — rings still work in this tab
+    </p>
+  );
+}
+
+function EndShiftButton({
+  onCall,
+  onEndShift,
+}: {
+  readonly onCall: boolean;
+  readonly onEndShift: () => void;
+}) {
+  const reason = onCall ? "Finish the call first" : undefined;
+  return (
+    // The Button base carries `disabled:pointer-events-none`, so a title on a
+    // disabled button never surfaces on hover. The wrapper is the hover target
+    // that actually shows the reason -- same recipe as PropertyActionButton.
+    <span className="flex-1" title={reason}>
+      <Button
+        type="button"
+        variant="neutral"
+        size="sm"
+        className="w-full whitespace-nowrap"
+        disabled={onCall}
+        title={reason}
+        onClick={onEndShift}
+      >
+        <LogOut aria-hidden="true" />
+        End shift
+      </Button>
+    </span>
+  );
+}
+
+const CARD_LABEL = (
+  <p className="font-label text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
+    Your shift
+  </p>
+);
+
+export function ShiftCard() {
+  const { onDuty, onBreak, shiftStartedAt, pushBlocked, endShift, takeBreak, resume } = useDuty();
+  // The live call, for the two mid-call rules above. The OPTIONAL hook, so this
+  // card still renders outside a CallSurfaceProvider.
+  const onCall = useCallSurfaceOptional()?.active != null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // Per-second only while there is a running clock to move. An agent parked off
+  // duty all evening should not be re-rendering 3600 times an hour to update
+  // nothing.
+  useEffect(() => {
+    if (!onDuty || !shiftStartedAt) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [onDuty, shiftStartedAt]);
+
+  const blockedHint = pushBlocked ? <NotificationsBlockedHint /> : null;
+
+  if (!onDuty) {
+    return (
+      <Card className="gap-3 p-4">
+        {CARD_LABEL}
+        <p className="text-sm text-text-muted">Not on duty</p>
+        {blockedHint}
+      </Card>
+    );
+  }
+
+  // NOTE the branch above is on `onDuty` ALONE, not on `onDuty && shiftStartedAt`.
+  // DutyProvider mounts onDuty=true (fail-open) with shiftStartedAt=null until
+  // GET /api/presence lands, so a missing start time is an ordinary transient,
+  // not proof she is off duty. Reading it as off duty would flash a false
+  // "Not on duty" on every mount -- and if the start time never arrived it would
+  // strand her with no way to end the shift, now that the header has no duty
+  // control at all. So: withhold the figures we do not have, keep the actions.
+  return (
+    <Card className="gap-3 p-4">
+      {CARD_LABEL}
+      <div>
+        {shiftStartedAt ? (
+          // tabular-nums matters here specifically: this re-renders every second,
+          // and proportional digits would jitter the whole line.
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
+            {elapsed(shiftStartedAt, nowMs)}
+          </p>
+        ) : null}
+        {onBreak ? (
+          <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-attention px-2.5 py-1 text-xs font-semibold text-attention-foreground">
+            <Coffee size={13} aria-hidden="true" />
+            On break
+          </span>
+        ) : (
+          <p className="mt-0.5 text-xs text-text-muted tabular-nums">
+            {shiftStartedAt ? `On duty since ${startedAtLabel(shiftStartedAt)}` : "On duty"}
+          </p>
+        )}
+      </div>
+      {blockedHint}
+      <div className="flex gap-2 border-t border-border pt-3">
+        {onBreak ? (
+          <Button
+            type="button"
+            variant="neutral"
+            size="sm"
+            className="flex-1 whitespace-nowrap"
+            onClick={() => void resume()}
+          >
+            <Play aria-hidden="true" />
+            Resume
+          </Button>
+        ) : onCall ? null : (
+          <Button
+            type="button"
+            variant="neutral"
+            size="sm"
+            className="flex-1 whitespace-nowrap"
+            onClick={() => void takeBreak()}
+          >
+            <Coffee aria-hidden="true" />
+            Break
+          </Button>
+        )}
+        <EndShiftButton onCall={onCall} onEndShift={() => void endShift()} />
+      </div>
+    </Card>
+  );
+}
