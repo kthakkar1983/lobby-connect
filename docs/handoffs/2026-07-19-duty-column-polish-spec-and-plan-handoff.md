@@ -10,7 +10,7 @@
 
 | Thing | State |
 |---|---|
-| `main` | **`ec783c6`** — six docs-only commits this session. `origin/main` may be behind; push if so. |
+| `main` | **`79154b4`** — seven docs-only commits this session. ⚠ **NOT PUSHED** — `origin/main` is still at `0041e75`, seven behind. Push when you're ready; nothing here depends on it. |
 | Prod | **Untouched.** Nothing built, nothing deployed. |
 | Branch | None cut yet. Task 1 starts on a fresh branch off `main`. |
 | Untracked | `analysis-and-audit-2026_07_11/` — leave it. Never `git add -A` (prior key leak). |
