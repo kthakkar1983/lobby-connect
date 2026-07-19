@@ -44,6 +44,13 @@ export function CaptionToggle({
       type="button"
       onClick={onToggle}
       aria-pressed={enabled}
+      /* Compact drops the visible label (below), leaving `title` as the only
+         accessible name — and title is an unreliable name source (the sibling
+         <CallToggleButton> documents and measures this: name-from-content wins
+         over title, and AT commonly drops it). Give the compact icon-only
+         toggle a stable explicit name; aria-pressed still carries on/off. The
+         labelled branch keeps its name from the visible text. */
+      aria-label={compact ? "Captions" : undefined}
       title={enabled ? "Turn captions off" : "Turn captions on"}
       className={cn(
         "flex items-center gap-1 rounded-button border text-sm",

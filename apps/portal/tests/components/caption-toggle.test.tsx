@@ -51,6 +51,20 @@ describe("CaptionToggle", () => {
     expect(btn.textContent).toBe("");
   });
 
+  it("gives the compact icon-only toggle an explicit accessible name", () => {
+    // Icon-only: the visible label is dropped, so `title` alone is an
+    // unreliable accessible name (see CallToggleButton). aria-label carries it.
+    render(<CaptionToggle enabled compact onToggle={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Captions" })).toBeTruthy();
+  });
+
+  it("keeps its name from the visible text when labelled (no aria-label)", () => {
+    render(<CaptionToggle enabled={false} onToggle={vi.fn()} />);
+    const btn = screen.getByRole("button");
+    expect(btn.getAttribute("aria-label")).toBeNull();
+    expect(btn.textContent).toBe("Captions off");
+  });
+
   it("uses a navy-tile-safe muted icon colour for the compact off state", () => {
     render(<CaptionToggle enabled={false} compact onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
