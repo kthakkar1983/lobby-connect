@@ -99,11 +99,11 @@ export function DashboardWorkspace({
               regardless). */}
           <ShiftCard />
           <ZoneClocksCard />
-          {/* Incoming-video banner sits here instead of floating over the
-              screen. The active VideoCall is fixed full-screen (it escapes this
-              container and blocks nav, so the aside never hides mid-call).
-              Headless otherwise, so its position below the cards is visually
-              irrelevant. */}
+          {/* Headless: VideoCallHost renders no chrome of its own (see its
+              docblock) — either the fixed full-screen <VideoCall>, which escapes
+              this container and blocks nav so the aside never hides mid-call, or
+              nothing. So its position below the cards is visually irrelevant;
+              only staying MOUNTED matters. */}
           <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>

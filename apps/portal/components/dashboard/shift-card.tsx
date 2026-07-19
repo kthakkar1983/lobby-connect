@@ -7,7 +7,8 @@
  * stops hiding behind a ChevronDown and becomes a first-class labelled button,
  * which is what absorbs the two outstanding time-tracker polish items (spec §3.5).
  *
- * THREE RULES CARRIED OVER FROM duty-control.tsx, none of them polish:
+ * THREE RULES CARRIED OVER FROM duty-control.tsx, none of them polish. That file
+ * was deleted in commit 534b37e; the line numbers below resolve at 534b37e^:
  *
  *   - END SHIFT IS BLOCKED MID-CALL (duty-control.tsx:83-84). Ending now closes
  *     the shift at now() and un-clocks the call tail. Applied on BOTH the

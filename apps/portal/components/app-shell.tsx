@@ -35,10 +35,12 @@ export function AppShell({
   return (
     <LineStatusProvider>
       <CallSurfaceProvider>
-        {/* DutyProvider wraps both the header (DutyControl) and the softphone so
-            duty state has ONE owner; it sits inside CallSurfaceProvider but is
-            deliberately separate from it (no ring/audio ownership → no render-loop
-            coupling). See duty-provider.tsx.
+        {/* DutyProvider wraps every duty surface — the softphone card's ring (go
+            on duty) and the shift card below it (Break/Resume/End shift), both in
+            the dashboard's right column since Task 10 emptied the header of duty
+            chrome — so duty state has ONE owner. It sits inside CallSurfaceProvider
+            but is deliberately separate from it (no ring/audio ownership → no
+            render-loop coupling). See duty-provider.tsx.
             INVARIANT (finding #5): do NOT insert a React.memo or Suspense boundary
             between DutyProvider and the softphone (rendered inside DashboardWorkspace).
             The "no stray beat after End shift" gate depends on the softphone

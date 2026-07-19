@@ -1,19 +1,23 @@
 /**
  * ShiftCard (Task 8): the shift half of the dashboard's right column (spec §3.3).
  *
- * Presentational-only, so useDuty() is mocked here exactly as
- * duty-control.test.tsx mocks it -- the provider's own hydration and handler
+ * Presentational-only, so useDuty() is mocked here exactly as the retired
+ * duty-control.test.tsx mocked it -- the provider's own hydration and handler
  * behaviour is covered by duty-provider.test.tsx. (The "never mock duty-provider"
  * rule in the corrections file is specific to softphone.test.tsx, where the real
  * provider is what makes the accept-gate tests non-vacuous. Nothing of the sort
  * is at stake here.)
  *
  * Three of the behaviours below are inherited safety rules rather than new
- * features, and this file is now their only coverage -- duty-control.test.tsx is
- * deleted in Task 10:
+ * features, and this file is now their only coverage -- duty-control.tsx and
+ * duty-control.test.tsx were both deleted in Task 10 (commit 534b37e; read them
+ * at 534b37e^, where the line numbers cited below resolve):
  *   - End shift blocked mid-call, on BOTH branches (duty-control.tsx:83-84,146-147,175)
  *   - Break REMOVED from the tree mid-call, not disabled (duty-control.tsx:167-174)
  *   - the denied-Web-Push hint (duty-control.tsx:94-108, test :197-211)
+ *
+ * Go on duty is NOT here: off duty it lives on the softphone's ring, covered by
+ * softphone.test.tsx. This card's off-duty branch is deliberately actionless.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";

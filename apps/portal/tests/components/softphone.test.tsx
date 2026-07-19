@@ -207,9 +207,11 @@ function CardProbe() {
 
 /**
  * Duty-side probe: duty ownership moved OUT of the softphone into the
- * DutyProvider (Task 16 — the header renders the real DutyControl). These tests
- * observe/drive duty through this probe (its `duty-onduty`/`duty-onbreak`
- * read-outs + plain buttons) instead of the retired in-softphone duty buttons.
+ * DutyProvider (Task 16). Duty now lives in the dashboard's RIGHT COLUMN, not
+ * the header: Break/Resume/End shift on the shift card, and Go on duty on this
+ * card's own ring. These tests observe/drive duty through this probe (its
+ * `duty-onduty`/`duty-onbreak` read-outs + plain buttons) instead of the retired
+ * in-softphone duty buttons.
  */
 function DutyProbe() {
   const { onDuty, onBreak, goOnDuty, endShift, takeBreak, resume } = useDuty();
@@ -559,20 +561,34 @@ describe("Softphone — ring-silence (own ring element)", () => {
  * Error phase: when the line can't register (staging has no Twilio, or the prod
  * line briefly drops), the softphone shows "Phone line disconnected" and hides
  * its line-gated idle chrome (the Accepting toggle + "Incoming calls ring here").
- * The token fetch is forced to fail so connect() lands in phase "error". (Duty
- * controls are no longer here — they live in the header's DutyControl, which is
- * Twilio-independent and covered by duty-control.test.tsx.)
+ * The token fetch is forced to fail so connect() lands in phase "error".
+ *
+ * DUTY IS TWILIO-INDEPENDENT AND MUST SURVIVE THIS PHASE. Break/Resume/End shift
+ * are on the shift card (covered by shift-card.test.tsx), which never touches
+ * Twilio. Go on duty is on THIS card's ring — inside the line-gated idle block —
+ * so it is the one duty control the error phase can take down, and the second
+ * test below is what stops that regression. Coverage for the ring's normal
+ * behaviour is in "Softphone — D13 duty hydration + gated beats" further down,
+ * where `hydration` can drive duty state.
  */
 describe("Softphone — error phase (line can't register)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
+  let presence: { onDuty: boolean; accepting: boolean };
 
   beforeEach(() => {
     vi.clearAllMocks();
     push.armPush.mockResolvedValue(true);
+    presence = { onDuty: true, accepting: true };
     // Token endpoint 500s → fetchVoiceToken() throws → connect() catch → phase "error".
-    fetchMock = vi.fn().mockImplementation((url: string) => {
+    // GET /api/presence still answers, so DutyProvider can hydrate off duty and
+    // the two failure modes stay independent — this is the real-world pairing
+    // (Twilio down, our own API up), not a doubly-broken environment.
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url === "/api/twilio/token") {
         return Promise.resolve({ ok: false, status: 500 });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(presence) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -595,11 +611,56 @@ describe("Softphone — error phase (line can't register)", () => {
     // The line-gated idle chrome stays hidden in error.
     expect(screen.queryByText(/Accepting calls/i)).toBeNull();
     expect(screen.queryByText(/Incoming calls ring here/i)).toBeNull();
+    // ...and off-duty sub-copy too: "Phone line disconnected" already says it,
+    // and the block only survives this phase to carry the ring.
+    expect(screen.queryByText(/Your line is offline/i)).toBeNull();
+  });
+
+  it("still offers Go on duty while the line is down — duty must not ride Twilio", async () => {
+    // The outage she needs to clock in THROUGH. With the header emptied of duty
+    // chrome and the off-duty shift card actionless by design, suppressing the
+    // ring here would leave no labelled duty control anywhere: her shift never
+    // opens, the timesheet gaps, and isReachableForDial wants AVAILABLE presence
+    // so she is never dialled. Reloading does not help — the line is still down.
+    presence = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+
+    await waitFor(() =>
+      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+    );
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const ring = await screen.findByRole("button", { name: "Go on duty" });
+    await user.click(ring);
+
+    // It reaches the real route, not just a rendered button: the provider is the
+    // real one here, so this is the whole path working with Twilio dead.
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+      ).toBe(true),
+    );
+  });
+
+  it("keeps the ring decorative-only when she is already ON duty and the line drops", async () => {
+    // The converse: the block survives `error` ONLY to carry the off-duty ring.
+    // On duty there is nothing here that still works, so the whole idle block
+    // stays hidden rather than showing a brand ring over a dead line.
+    renderSoftphone("AGENT"); // presence defaults to onDuty: true
+
+    await waitFor(() =>
+      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+    );
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
+
+    expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
+    expect(document.querySelector(".lc-seam-drift")).toBeNull();
   });
 });
 
 /**
- * Task 16 (spec D6): End shift (now the header DutyControl → DutyProvider.endShift,
+ * Task 16 (spec D6): End shift (now the shift card → DutyProvider.endShift,
  * driven here via DutyProbe) flips duty off + POSTs /api/presence/end-shift; the
  * softphone mirrors the provider's onDuty into its heartbeat gate, so beats STOP
  * after End shift and RESUME (immediate stamp) on Go on duty. We count only POST

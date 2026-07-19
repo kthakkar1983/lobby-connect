@@ -103,7 +103,8 @@ export function Softphone({ role }: SoftphoneProps) {
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
-  // Task 16: duty is owned by the DutyProvider (the header renders the control).
+  // Task 16: duty is owned by the DutyProvider (the shift card in the same column
+  // renders Break/Resume/End shift; this card's ring is the go-on-duty control).
   // The softphone is a CONSUMER — it mirrors the provider's onDuty / accepting /
   // hydrated into refs for the heartbeat's SYNCHRONOUS gate + intendedStatus,
   // keeps the beat loop, and reports gate verdicts (a gated beat, an off-duty
@@ -144,7 +145,7 @@ export function Softphone({ role }: SoftphoneProps) {
   //
   // INVARIANT (Task 16, finding #5): the "no stray beat after End shift" safety
   // relies on the softphone re-rendering SYNCHRONOUSLY with the DutyProvider.
-  // When DutyControl calls endShift(), the provider flips onDuty=false; React 19
+  // When the shift card calls endShift(), the provider flips onDuty=false; React 19
   // flushes this consumer in the SAME update, so onDutyRef.current becomes false
   // before the next heartbeat tick can read it and beat() self-gates. A future
   // React.memo or Suspense boundary inserted BETWEEN DutyProvider and this
@@ -216,7 +217,7 @@ export function Softphone({ role }: SoftphoneProps) {
   }, [phase]);
 
   // The server gated a beat (shift ended/lapsed elsewhere): suppress the very
-  // next beat synchronously, then flip the header off via the provider (no POST —
+  // next beat synchronously, then flip the tab off duty via the provider (no POST —
   // the server already ended it). Stable ([]).
   const applyBeatResult = useCallback((result: BeatResult) => {
     if (result === "off-duty") {
@@ -410,10 +411,10 @@ export function Softphone({ role }: SoftphoneProps) {
   const primeRing = useCallback(() => primeRingtone(ringAudioRef.current), []);
 
   // Task 16: register the ring-prime + the "beat now" with the DutyProvider so
-  // its goOnDuty()/resume() (in the header) can unlock our real ring element and
-  // stamp last_seen immediately — WITHOUT the provider ever owning the <audio>
-  // element or the heartbeat loop. registerPrime/registerBeat are []-stable and
-  // primeRing is []-stable, so this runs once.
+  // its goOnDuty() (this card's ring) / resume() (the shift card) can unlock our
+  // real ring element and stamp last_seen immediately — WITHOUT the provider ever
+  // owning the <audio> element or the heartbeat loop. registerPrime/registerBeat
+  // are []-stable and primeRing is []-stable, so this runs once.
   const registerPrime = duty?.registerPrime;
   const registerBeat = duty?.registerBeat;
   useEffect(() => {
@@ -794,6 +795,11 @@ export function Softphone({ role }: SoftphoneProps) {
   // button — read at render from the ref the "incoming" handler already set.
   const connectPropertyId = incomingPropertyIdRef.current;
 
+  // Whether the idle block may say anything about the LINE. False in the error
+  // phase, where the block renders purely to keep the (Twilio-independent)
+  // go-on-duty ring reachable — see the gate below.
+  const lineChrome = phase !== "error";
+
   return (
     <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
       <div className="flex items-center justify-between">
@@ -835,7 +841,21 @@ export function Softphone({ role }: SoftphoneProps) {
           duty control this card owns is the ring below, which off duty becomes
           Go on duty (spec §3.2). */}
 
-      {phase !== "in-call" && phase !== "error" && (
+      {/* DUTY IS TWILIO-INDEPENDENT, so the go-on-duty control must not ride the
+          line-gated chrome. The error phase is a designed-for failure mode
+          (staging has no Twilio; the prod line briefly drops), and until Task 10
+          the header's DutyControl was the fallback that let her clock in through
+          it. With the header empty and the off-duty shift card actionless by
+          design, suppressing this block in `error` would leave NO labelled duty
+          control anywhere: her shift never opens, the timesheet gaps, and
+          isReachableForDial wants AVAILABLE presence — so she is not dialled at
+          all through the very outage she is trying to work through. Reloading
+          does not help; the line is still down.
+
+          So the block renders in `error` ONLY to carry the off-duty ring, and
+          everything in it that describes a WORKING line is suppressed via
+          `lineChrome` below. */}
+      {phase !== "in-call" && (phase !== "error" || !onDuty) && (
         <div className="mt-2 flex flex-col items-center">
           {/* Seam-ring idle brand moment. ON DUTY it stays the decorative anchor
               it has always been (not a status light), rendering through the
@@ -902,46 +922,56 @@ export function Softphone({ role }: SoftphoneProps) {
               <span className="mt-2 text-sm font-semibold text-live-foreground">Go on duty</span>
             </button>
           )}
-          {/* One persistent element, not a branch per state — activating the ring
-              unmounts the focused button and focus falls back to <body>, so
-              without this the shift starts in silence for anyone not watching
-              the pixels. Keeping the same <p> mounted across the flip makes it a
-              live region that announces the new state on the change. */}
-          <p
-            role="status"
-            className={cn("text-center text-text-muted", onDuty ? "mt-3" : "mt-1")}
-          >
-            {onDuty ? "Incoming calls ring here." : "Your line is offline."}
-          </p>
-          {role === "AGENT" ? (
-            <button
-              type="button"
-              onClick={() => guard(toggleReady)}
-              aria-pressed={acceptingNow}
-              className={cn(
-                "mt-3 w-full rounded-button border px-3 py-2 font-medium transition-colors",
-                acceptingNow
-                  ? "border-transparent bg-live/15 text-live-foreground"
-                  : "border-border text-text-muted",
-                // Gated reads as unavailable WITHOUT being unavailable (spec
-                // §3.4): the control stays enabled and focusable so the click
-                // can be intercepted and answered with "start your shift?".
-                // The cue is a recessed FILL, never element opacity — opacity
-                // composites the label too, and because this control is
-                // deliberately ENABLED it loses WCAG 1.4.3's inactive-component
-                // exemption, so its 14px label owes 4.5:1. text-text-muted on
-                // bg-muted computes to 4.575:1 (vs 5.477:1 on the bare card):
-                // visibly recessed, still passing. The border is left alone so
-                // the control's boundary is unchanged.
-                gated && "bg-muted",
+          {/* Everything below describes a line that can actually carry a call, so
+              none of it may claim to be true in the error phase — the ring above
+              is the one thing here that still works. `Phone line disconnected —
+              reload to reconnect.` (rendered further down) is the honest reading
+              of the line's state, and repeating "Your line is offline." above it
+              would only say it twice. */}
+          {lineChrome && (
+            <>
+              {/* One persistent element, not a branch per state — activating the ring
+                  unmounts the focused button and focus falls back to <body>, so
+                  without this the shift starts in silence for anyone not watching
+                  the pixels. Keeping the same <p> mounted across the flip makes it a
+                  live region that announces the new state on the change. */}
+              <p
+                role="status"
+                className={cn("text-center text-text-muted", onDuty ? "mt-3" : "mt-1")}
+              >
+                {onDuty ? "Incoming calls ring here." : "Your line is offline."}
+              </p>
+              {role === "AGENT" ? (
+                <button
+                  type="button"
+                  onClick={() => guard(toggleReady)}
+                  aria-pressed={acceptingNow}
+                  className={cn(
+                    "mt-3 w-full rounded-button border px-3 py-2 font-medium transition-colors",
+                    acceptingNow
+                      ? "border-transparent bg-live/15 text-live-foreground"
+                      : "border-border text-text-muted",
+                    // Gated reads as unavailable WITHOUT being unavailable (spec
+                    // §3.4): the control stays enabled and focusable so the click
+                    // can be intercepted and answered with "start your shift?".
+                    // The cue is a recessed FILL, never element opacity — opacity
+                    // composites the label too, and because this control is
+                    // deliberately ENABLED it loses WCAG 1.4.3's inactive-component
+                    // exemption, so its 14px label owes 4.5:1. text-text-muted on
+                    // bg-muted computes to 4.575:1 (vs 5.477:1 on the bare card):
+                    // visibly recessed, still passing. The border is left alone so
+                    // the control's boundary is unchanged.
+                    gated && "bg-muted",
+                  )}
+                >
+                  {acceptingNow ? "Accepting calls" : "Not accepting calls"}
+                </button>
+              ) : (
+                <p className="mt-3 text-center text-xs text-text-muted">
+                  You&apos;re dialed in for properties set to Covering.
+                </p>
               )}
-            >
-              {acceptingNow ? "Accepting calls" : "Not accepting calls"}
-            </button>
-          ) : (
-            <p className="mt-3 text-center text-xs text-text-muted">
-              You&apos;re dialed in for properties set to Covering.
-            </p>
+            </>
           )}
         </div>
       )}

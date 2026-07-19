@@ -100,6 +100,12 @@ function headerOf(container: HTMLElement): HTMLElement {
   return header as HTMLElement;
 }
 
+function mainOf(container: HTMLElement): HTMLElement {
+  const main = container.querySelector("main");
+  if (!main) throw new Error("no main rendered");
+  return main as HTMLElement;
+}
+
 beforeEach(() => {
   pathname.value = "/agent";
   useDuty.mockReset();
@@ -151,10 +157,33 @@ describe("DashboardWorkspace — the right column", () => {
     // consequence). Rendering them in <main> would show them on every route and
     // silently reverse the accepted ADMIN consequence in §3.5.
     const { container } = renderWorkspace();
-    const main = container.querySelector("main");
+    // Via the guard helper, not a bare cast: if <main> were ever renamed, a cast
+    // would hide the null and surface as an opaque RTL "Expected container to be
+    // an Element" rather than as the regression it is.
+    const main = within(mainOf(container));
 
-    expect(within(main as HTMLElement).queryByText("Your shift")).toBeNull();
-    expect(within(main as HTMLElement).queryByText("Clocks")).toBeNull();
+    expect(main.queryByText("Your shift")).toBeNull();
+    expect(main.queryByText("Clocks")).toBeNull();
+  });
+});
+
+describe("DashboardWorkspace — the agent-only call-back shortcut", () => {
+  // The stub at the top of this file has always carried a testid; until now
+  // nothing queried it, so deleting the `role === "AGENT" ? ... : null` line
+  // from the source left the whole file green while the testid still read as
+  // coverage to anyone grepping. The gate is untested anywhere else --
+  // call-back-shortcut.test.tsx exercises the component, never the gate.
+  it("mounts for an AGENT", () => {
+    renderWorkspace("AGENT");
+    expect(screen.getByTestId("call-back-shortcut")).toBeTruthy();
+  });
+
+  it("does NOT mount for an ADMIN", () => {
+    // Deliberately role-gated, not duty-gated: it is the agent's drop-moment
+    // complement to her own property-card "Kiosk" button. Pathname-independent,
+    // so home-vs-off-home does not enter into it.
+    renderWorkspace("ADMIN");
+    expect(screen.queryByTestId("call-back-shortcut")).toBeNull();
   });
 });
 
@@ -181,7 +210,15 @@ describe("DashboardWorkspace — the header empties", () => {
     const header = within(headerOf(container));
 
     expect(header.queryByRole("button", { name: /go on duty/i })).toBeNull();
-    // Going on duty now lives on the softphone's ring (Task 9), in the column.
+    // Going on duty now lives on the softphone's RING (Task 9), in the column --
+    // and the Softphone is stubbed here, so this file proves only that the header
+    // is empty and that the off-duty shift card renders. It CANNOT prove a
+    // go-on-duty control exists anywhere; that lives in softphone.test.tsx (the
+    // D13 "turns the ring into a go-on-duty control while off duty" block, plus
+    // the error-phase test that pins it surviving a dead Twilio line). Read this
+    // assertion as "the header is empty AND the column took over", not as
+    // "duty is reachable" -- the gap between those two is what let a
+    // no-duty-control-in-the-error-phase regression through review.
     expect(within(asideOf(container)).getByText("Not on duty")).toBeTruthy();
   });
 
