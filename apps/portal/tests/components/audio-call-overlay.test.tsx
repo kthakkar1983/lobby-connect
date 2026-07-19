@@ -106,7 +106,10 @@ describe("AudioCallOverlay", () => {
   // (e.g. the ringing call's propertyId Parameter was absent).
   it("calls onConnect from the Connect control when provided", async () => {
     const user = userEvent.setup();
-    const onConnect = vi.fn();
+    // Task 14: onConnect now RESOLVES the launch outcome so this overlay can
+    // say something when it fails. Presence/absence still means "is there a
+    // property to connect to", exactly as before.
+    const onConnect = vi.fn().mockResolvedValue({ launched: true });
     render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
     await user.click(screen.getByRole("button", { name: /connect/i }));
     expect(onConnect).toHaveBeenCalledOnce();
@@ -115,6 +118,50 @@ describe("AudioCallOverlay", () => {
   it("disables the Connect control when onConnect is absent", () => {
     render(<AudioCallOverlay {...baseProps} />);
     expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
+  });
+
+  // Task 14: the tone is a DELIBERATE split (2026-07-10 batch-1 polish) — navy
+  // on the property cards, teal on all three in-call Connects.
+  // <PropertyActionButton> defaults to navy, so an omitted `tone="teal"` reverts
+  // that polish with nothing to notice it.
+  it("keeps the in-call Connect teal after the move onto PropertyActionButton", () => {
+    render(<AudioCallOverlay {...baseProps} onConnect={vi.fn().mockResolvedValue({ launched: true })} />);
+    expect(screen.getByRole("button", { name: /connect/i }).className).toContain("bg-accent");
+  });
+
+  // Spec §7's behavioural gap. This Connect called its handler and dropped the
+  // result on the floor, so a failed remote-access launch was SILENT: the agent
+  // pressed Connect during a live guest call, RustDesk never opened, and nothing
+  // on screen distinguished "still coming" from "will never come".
+  it("surfaces a failed remote-access launch instead of failing silently", async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn().mockResolvedValue({ launched: false, notConfigured: true });
+    render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
+
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("No remote access configured — ask an admin.");
+  });
+
+  it("clears a previous Connect failure once a later attempt launches", async () => {
+    const user = userEvent.setup();
+    const onConnect = vi
+      .fn()
+      .mockResolvedValueOnce({ launched: false, notConfigured: false })
+      .mockResolvedValue({ launched: true });
+    render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
+
+    const connect = screen.getByRole("button", { name: /connect/i });
+    await user.click(connect);
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Could not fetch credentials — try again.",
+    );
+
+    // A stale failure left on screen after a working retry reads as "still
+    // broken" for the rest of the call.
+    await user.click(connect);
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
   it("saves notes on Tab as well as Enter (audio↔video parity)", async () => {

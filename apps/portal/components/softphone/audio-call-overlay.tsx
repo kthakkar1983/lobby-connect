@@ -33,6 +33,8 @@ import {
   EndCallButton,
 } from "@/components/call/call-controls";
 import { Button } from "@/components/ui/button";
+import { PropertyActionButton } from "@/components/dashboard/property-action-button";
+import { connectErrorMessage, type ConnectOutcome } from "@/lib/remote-access/connect-error";
 import { cn } from "@/lib/utils";
 
 function formatElapsed(totalSeconds: number): string {
@@ -90,8 +92,15 @@ export function AudioCallOverlay({
   readonly onReopenTile?: () => void;
   /** Phase E (Task 19b): launch the hotel PC's remote-access session for this
    *  call's property. Absent (undefined) when the ringing property is unknown
-   *  (nullable propertyId) — the control renders disabled in that case. */
-  readonly onConnect?: () => void;
+   *  (nullable propertyId) — the control renders disabled in that case.
+   *
+   *  Task 14: it now RESOLVES the launch outcome so this overlay can say
+   *  something when the launch fails (spec §7). The callback shape stays —
+   *  unlike the video overlay and the tile, this one does NOT read the property
+   *  off the CallSurfaceProvider; the softphone resolves it and hands down a
+   *  closure. That is deliberate and worth keeping: every one of this file's
+   *  tests renders it bare, with no provider anywhere. */
+  readonly onConnect?: () => Promise<ConnectOutcome>;
   /** Spec D2: when the call tile is up it owns the controls; the overlay hides
    *  its call card so the playbook fills the width. */
   readonly collapsed?: boolean;
@@ -131,6 +140,25 @@ export function AudioCallOverlay({
       savedTimer.current = setTimeout(() => setSaveState("idle"), 1500);
     }
   }
+  // Task 14 / spec §7 — the behavioural gap. This Connect fired its callback and
+  // dropped the result on the floor, so a failed remote-access launch was
+  // SILENT: mid guest-call the agent pressed Connect, RustDesk never opened, and
+  // nothing distinguished "still coming" from "will never come".
+  //
+  // The state lives HERE rather than in the softphone for two reasons. It
+  // matches the other two in-call surfaces, which each own theirs — the drift
+  // spec §7 exists to end. And it gets its lifetime for free: this overlay only
+  // mounts while `phase === "in-call"`, so a failure from the last call cannot
+  // survive into the next one. Softphone-owned state would need explicit
+  // per-call clearing, i.e. a new invariant for someone to forget.
+  const [connectError, setConnectError] = useState<string | null>(null);
+  async function handleConnect() {
+    if (!onConnect) return;
+    // Invoked synchronously inside the click, before any await, so a pre-warmed
+    // credential cache still launches on the click's transient activation.
+    setConnectError(connectErrorMessage(await onConnect()));
+  }
+
   function onKeyDownSave(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -374,19 +402,28 @@ export function AudioCallOverlay({
               <PictureInPicture2 aria-hidden="true" /> Reopen tile
             </Button>
           )}
-          {/* Task 14 replaces this with <PropertyActionButton tone="teal"> to
-              pick up the duty guard and the inline error the card Connect has;
-              the treatment here is already that component's. */}
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            disabled={!onConnect}
-            onClick={onConnect}
+          {/* Connect (Task 14, spec §7) — one of five sites now sharing
+              <PropertyActionButton>. `tone="teal"` is NOT decoration and NOT
+              the default: the 2026-07-10 batch-1 polish split the fill navy on
+              the property cards / teal on all three in-call Connects, and that
+              component defaults to navy, so omitting it silently reverts it.
+              `surface` stays light — this bar is `bg-card`, unlike the tile's
+              navy one.
+
+              A missing `onConnect` is REAL unavailability, not duty: the
+              ringing call carried no propertyId, and starting a shift would not
+              give it one. It must stay natively `disabled` and must never reach
+              the duty guard, which would otherwise offer to fix it by starting
+              a shift — a lie. */}
+          <PropertyActionButton
+            label="Connect"
+            icon={<Monitor aria-hidden="true" />}
+            tone="teal"
+            onAction={handleConnect}
+            unavailableReason={onConnect ? null : "This call has no property to connect to"}
+            error={connectError}
             className="font-semibold"
-          >
-            <Monitor aria-hidden="true" /> Connect
-          </Button>
+          />
           {/* Blaze, not navy — see <EndCallButton>'s `tone`. This is the one
               surface where a red 911 and the end-call button coexist. */}
           <EndCallButton tone="blaze" onEnd={onHangUp} />

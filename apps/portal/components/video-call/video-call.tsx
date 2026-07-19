@@ -27,9 +27,10 @@ import {
   CallToggleButton,
   EndCallButton,
 } from "@/components/call/call-controls";
-import { Button } from "@/components/ui/button";
+import { PropertyActionButton } from "@/components/dashboard/property-action-button";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 
@@ -128,6 +129,30 @@ export function VideoCall({
   // Hoisted because TWO things key off it: the corner control itself, and the
   // caption band, which gives the corner up while it is there (spec §6).
   const showReopenTile = tileClosedByUser && docPipSupported();
+
+  // Task 14 / spec §7 — the behavioural gap. This Connect called
+  // connectToProperty as a bare `void` with no catch, so a failed remote-access
+  // launch was SILENT: mid guest-call the agent pressed Connect, RustDesk never
+  // opened, and nothing said whether it was still coming or would never come.
+  const connectToProperty = surface?.connectToProperty;
+  const [connectError, setConnectError] = useState<string | null>(null);
+  // Both reasons are REAL unavailability, not duty, so neither may reach the
+  // duty guard: a video ring can carry a null propertyId (same as audio's TwiML
+  // Parameter), and outside a CallSurfaceProvider there is nothing to connect
+  // WITH. Offering "start your shift" for either would be a lie — starting a
+  // shift gives this call neither a property nor a provider.
+  const connectUnavailable = !propertyId
+    ? "This call has no property to connect to"
+    : !connectToProperty
+      ? "Remote access is unavailable here"
+      : null;
+
+  async function handleConnect() {
+    if (!propertyId || !connectToProperty) return;
+    // Called synchronously inside the click, before any await, so a pre-warmed
+    // cache hit still launches on the click's transient activation.
+    setConnectError(connectErrorMessage(await connectToProperty(propertyId)));
+  }
 
   // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
   // overlay + tile toggles, default OFF, reset per call). No provider (standalone
@@ -741,21 +766,22 @@ export function VideoCall({
             />
           </CallControlTray>
           <CallControlDivider />
-          {/* Task 14 replaces this with <PropertyActionButton tone="teal"> to
-              pick up the duty guard and the inline error the card Connect has;
-              the treatment here is already that component's. */}
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            disabled={!propertyId || !surface}
-            onClick={() => {
-              if (propertyId) void surface?.connectToProperty(propertyId);
-            }}
+          {/* Connect (Task 14, spec §7) — one of five sites now sharing
+              <PropertyActionButton>. `tone="teal"` is NOT decoration and NOT
+              the default: the 2026-07-10 batch-1 polish split the fill navy on
+              the property cards / teal on all three in-call Connects, and this
+              component defaults to navy, so omitting it silently reverts that.
+              `surface` stays light — this bar is `bg-card`, unlike the tile's
+              navy one. */}
+          <PropertyActionButton
+            label="Connect"
+            icon={<Monitor aria-hidden="true" />}
+            tone="teal"
+            onAction={handleConnect}
+            unavailableReason={connectUnavailable}
+            error={connectError}
             className="font-semibold"
-          >
-            <Monitor aria-hidden="true" /> Connect
-          </Button>
+          />
           <EndCallButton tone="navy" onEnd={() => void handleEnd()} />
         </>
       }

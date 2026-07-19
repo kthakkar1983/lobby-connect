@@ -1006,8 +1006,11 @@ export function Softphone({ role }: SoftphoneProps) {
           showReopenTile={tileClosedByUser && docPipSupported()}
           onReopenTile={() => openTileForCall?.()}
           onConnect={
+            // Task 14: the `void` is gone — the overlay awaits this outcome and
+            // renders the failure, which used to be dropped on the floor.
+            // Presence still means "there is a property to connect to".
             surface?.connectToProperty && connectPropertyId
-              ? () => void surface.connectToProperty(connectPropertyId)
+              ? () => surface.connectToProperty(connectPropertyId)
               : undefined
           }
         />

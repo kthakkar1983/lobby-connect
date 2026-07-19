@@ -20,6 +20,7 @@ import { Monitor } from "lucide-react";
 import { useState } from "react";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { PropertyActionButton } from "@/components/dashboard/property-action-button";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 
 export function ConnectButton({ propertyId }: { propertyId: string }) {
   const surface = useCallSurfaceOptional();
@@ -30,16 +31,10 @@ export function ConnectButton({ propertyId }: { propertyId: string }) {
   const { connectToProperty } = surface;
 
   async function handleClick() {
-    const r = await connectToProperty(propertyId);
-    if (r.launched) {
-      setError(null);
-      return;
-    }
-    setError(
-      r.notConfigured
-        ? "No remote access configured — ask an admin."
-        : "Could not fetch credentials — try again.",
-    );
+    // Task 14: the wording moved to lib/remote-access/connect-error so the three
+    // in-call Connects, which had no error handling at all, could adopt this
+    // one's behaviour without minting three more copies of the strings.
+    setError(connectErrorMessage(await connectToProperty(propertyId)));
   }
 
   return (

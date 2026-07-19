@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MAX_CALL_DURATION_MS } from "@lc/shared";
+import type * as RemoteAccessConnect from "@/lib/remote-access/connect";
 
 // vi.hoisted: variables created here are available inside vi.mock() factories,
 // which are hoisted before top-level module code.
@@ -84,6 +85,25 @@ vi.mock("@/lib/duty-tile/call-tile-manager", () => ({
   openCallTile: tile.openCallTile,
 }));
 
+// Task 14: the Connect control drives the REAL connectToProperty through a real
+// CallSurfaceProvider — only its leaf dependencies are mocked (network fetch +
+// the OS handoff), the same split call-tile.test.tsx uses. `launchRustdesk` in
+// particular must never be replaced by anything that navigates: it launches
+// rustdesk:// through a hidden iframe precisely because a top-window navigation
+// fires pagehide and livekit-client tears the live room down on pagehide.
+const remoteAccess = vi.hoisted(() => ({
+  fetchRemoteCredentials: vi.fn(),
+  launchRustdesk: vi.fn(),
+}));
+vi.mock("@/lib/remote-access/connect", async (importOriginal) => {
+  const actual = await importOriginal<typeof RemoteAccessConnect>();
+  return {
+    ...actual,
+    fetchRemoteCredentials: remoteAccess.fetchRemoteCredentials,
+    launchRustdesk: remoteAccess.launchRustdesk,
+  };
+});
+
 import { VideoCall } from "@/components/video-call/video-call";
 import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
 
@@ -134,6 +154,12 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     // so the unsupported-DocPiP test's `false` would otherwise leak forward and
     // silently blank the reopen control for every test declared after it.
     tile.docPipSupported.mockReturnValue(true);
+    // Same reason as docPipSupported above: clearAllMocks() clears CALLS but not
+    // a mockResolvedValue, so one test's Connect outcome would leak into every
+    // test declared after it.
+    remoteAccess.fetchRemoteCredentials.mockReset();
+    remoteAccess.launchRustdesk.mockReset();
+    remoteAccess.fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: false });
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/answer-video")) {
         return Promise.resolve({
@@ -312,6 +338,75 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     );
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: /connect/i })).toHaveProperty("disabled", true);
+  });
+
+  // Task 14: Connect moved onto <PropertyActionButton>. The three checks below
+  // pin what that move must NOT change and the one thing it exists to add.
+  //
+  // The tone is a DELIBERATE split (2026-07-10 batch-1 polish): navy on the
+  // property cards, teal on all three in-call Connects. PropertyActionButton
+  // defaults to navy, so an omitted `tone="teal"` reverts that polish silently —
+  // the same reversal call-tile.test.tsx:440-449 already guards on the tile.
+  it("keeps the in-call Connect teal after the move onto PropertyActionButton", async () => {
+    render(
+      <CallSurfaceProvider>
+        <VideoCall callId="call-teal" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const connect = screen.getByRole("button", { name: /connect/i });
+    expect(connect.className).toContain("bg-accent");
+    // Enabled once there is both a property and a provider — the disabled state
+    // above must stay tied to those two reasons and nothing else.
+    expect(connect).toHaveProperty("disabled", false);
+  });
+
+  // Spec §7's behavioural gap. Every in-call Connect called connectToProperty as
+  // a bare `void` with no catch, so a failed launch was SILENT: the agent
+  // pressed Connect mid guest-call, RustDesk never opened, and nothing on screen
+  // said whether it was still coming.
+  it("surfaces a failed remote-access launch instead of failing silently", async () => {
+    const user = userEvent.setup();
+    remoteAccess.fetchRemoteCredentials.mockResolvedValue({ ok: false, notConfigured: true });
+    render(
+      <CallSurfaceProvider>
+        <VideoCall callId="call-connect-fail" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("No remote access configured — ask an admin.");
+    expect(remoteAccess.launchRustdesk).not.toHaveBeenCalled();
+  });
+
+  it("clears a previous Connect failure once a later attempt launches", async () => {
+    const user = userEvent.setup();
+    remoteAccess.fetchRemoteCredentials.mockResolvedValueOnce({ ok: false, notConfigured: false });
+    render(
+      <CallSurfaceProvider>
+        <VideoCall callId="call-connect-retry" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const connect = screen.getByRole("button", { name: /connect/i });
+    await user.click(connect);
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Could not fetch credentials — try again.",
+    );
+
+    // A stale failure left on screen after a working retry would read as "still
+    // broken" for the rest of the call.
+    remoteAccess.fetchRemoteCredentials.mockResolvedValue({
+      ok: true,
+      creds: { peerId: "peer-1", password: "pw" },
+    });
+    await user.click(connect);
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(remoteAccess.launchRustdesk).toHaveBeenCalledWith({ peerId: "peer-1", password: "pw" });
   });
 
   // Parity with the audio overlay: an explicit in-call notes save on Enter (and
