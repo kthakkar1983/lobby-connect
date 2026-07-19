@@ -105,6 +105,36 @@ describe("DutyProvider", () => {
     expect(postsTo("/api/presence/go-on-duty")).toHaveLength(1);
   });
 
+  it("a REJECTING armPush cannot prevent the duty flip (push failure != duty failure)", async () => {
+    // armPush() resolves false on the paths it handles, but
+    // ensurePushSubscription leaves Notification.requestPermission() and
+    // pushManager.getSubscription() unguarded (only subscribe() is wrapped), so
+    // a rejection propagates out. Unguarded, it aborts goOnDuty BEFORE
+    // setOnDuty(true) and before the POST — and every caller invokes this as
+    // `void goOnDuty()`, so the rejection is swallowed and the prompt closes
+    // looking like success while she is still off duty and the server never
+    // heard. Arming notifications is a best-effort side errand; it must never
+    // be able to fail the shift.
+    presenceGetBody = {
+      onDuty: false,
+      onBreak: false,
+      accepting: true,
+      shiftStartedAt: null,
+    };
+    push.armPush.mockRejectedValue(new Error("permission request failed"));
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(false));
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(postsTo("/api/presence/go-on-duty")).toHaveLength(1);
+    expect(result.current.onDuty).toBe(true);
+    // A rejection is "not armed" just as much as a false return, so she is told.
+    expect(result.current.pushBlocked).toBe(true);
+  });
+
   it("takeBreak POSTs /api/presence/take-break and flips onBreak; resume POSTs /api/presence/resume and flips it back", async () => {
     const { result } = renderDuty();
     await waitFor(() => expect(result.current.onDuty).toBe(true));

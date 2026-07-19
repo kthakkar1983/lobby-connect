@@ -149,7 +149,18 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
 
   const goOnDuty = useCallback(async () => {
     primeRef.current?.(); // unlock ring autoplay (softphone element)
-    const ok = await armPush(); // permission prompt INSIDE this gesture
+    // Arming notifications is a best-effort side errand and must NEVER be able
+    // to fail the shift. armPush() returns false on the paths it handles, but
+    // ensurePushSubscription (lib/push/sw-registration.ts:45-61) leaves
+    // Notification.requestPermission() and pushManager.getSubscription()
+    // unguarded — only subscribe() is wrapped — so a rejection propagates all
+    // the way out here. Unguarded it would abort this function before
+    // setOnDuty(true) and before the POST, and every caller invokes this as
+    // `void goOnDuty()` (the ring, the off-duty prompt), so the rejection is
+    // swallowed: the dialog closes looking like success while she is still off
+    // duty and the server never heard. A rejection IS "not armed", so it takes
+    // the same pushBlocked path as a false return and she gets the hint.
+    const ok = await armPush().catch(() => false); // permission prompt INSIDE this gesture
     setPushBlocked(!ok);
     setOnDuty(true);
     setOnBreak(false);
