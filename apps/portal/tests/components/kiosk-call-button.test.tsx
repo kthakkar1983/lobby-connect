@@ -71,12 +71,39 @@ describe("KioskCallButton", () => {
     expect(btn.hasAttribute("title")).toBe(false);
   });
 
-  it("kioskOnline=true + DutyProvider canWork=false: disabled with a go-on-duty title hint, label stays 'Kiosk', never invokes startOutboundVideo", async () => {
+  it("duty-column polish: kioskOnline=true + canWork=false keeps the button ENABLED, with no duty title, but withholds the action", async () => {
+    // Repointed from Task 17's disabled+title assertion. Spec §3.4/D8: the duty
+    // reason no longer disables — <PropertyActionButton>'s useDutyGuard keeps
+    // the control live so the off-duty prompt can intercept the click and offer
+    // to start the shift. A `disabled` button fires no click event at all.
+    //
+    // THIS IS THE LOAD-BEARING ASSERTION for the enabled half: the hook cannot
+    // add or remove a `disabled` attribute, so only a rendered control proves
+    // it. The `title` is now reserved for REAL unavailability (see the
+    // kioskOnline=false cases above), which is what keeps the two kinds
+    // distinguishable to a hovering agent.
     useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={true} />);
     const btn = screen.getByRole("button", { name: "Kiosk" });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    expect(btn.hasAttribute("title")).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(startOutboundVideo).not.toHaveBeenCalled();
+  });
+
+  it("kioskOnline=false + canWork=false: real unavailability wins, so it stays genuinely disabled", async () => {
+    // The conflation spec §3.4 forbids. Off duty AND an offline kiosk: starting
+    // the shift would not make that kiosk reachable, so offering to start it
+    // would be a lie. Real unavailability must beat the duty intercept.
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+    render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={false} />);
+    const btn = screen.getByRole("button", { name: "Kiosk offline" });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
-    expect(btn.getAttribute("title")).toBe("Go on duty to call");
+    expect(btn.getAttribute("title")).toBe("Kiosk offline");
 
     await act(async () => {
       btn.click();
@@ -105,6 +132,45 @@ describe("KioskCallButton", () => {
       screen.getByRole("button", { name: "Kiosk" }).click();
     });
     expect(startOutboundVideo).toHaveBeenCalledWith("p1", "Marlin");
+  });
+
+  it("stays genuinely disabled while a start request is in flight", async () => {
+    // Spec §3.4 gives `busy` its own row — a transient REAL unavailability that
+    // must keep disabling the control, unlike the duty gate that deliberately
+    // must not. Nothing else in this file pinned it: the `busy` branch could be
+    // deleted from `unavailableReason` outright and every other test here still
+    // passed. It also now reaches `disabled` through the truthiness of a string
+    // prop rather than a boolean, so emptying that copy would silently
+    // un-disable a mid-flight control. handleClick's `if (!kioskOnline || busy)
+    // return` is the backstop; this is the affordance.
+    let settle!: (v: { ok: boolean }) => void;
+    startOutboundVideo.mockReturnValue(
+      new Promise<{ ok: boolean }>((r) => {
+        settle = r;
+      }),
+    );
+    render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={true} />);
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Kiosk" }).click();
+    });
+
+    // Resolved by name "Kiosk", which also pins that `busy` does NOT swap the
+    // label — an in-flight click must not resize the control (spec §3.6a/§5.3).
+    const inFlight = screen.getByRole("button", { name: "Kiosk" });
+    expect((inFlight as HTMLButtonElement).disabled).toBe(true);
+    // A net-new hover string this control did not previously carry: `busy`
+    // rides the same `unavailableReason` prop that supplies the title, so the
+    // reason surfaces on hover. Deliberate and informative, but asserted here
+    // so it is a decision rather than a side effect nobody noticed.
+    expect(inFlight.getAttribute("title")).toBe("Starting the call…");
+
+    await act(async () => {
+      settle({ ok: true });
+    });
+    const settled = screen.getByRole("button", { name: "Kiosk" });
+    expect((settled as HTMLButtonElement).disabled).toBe(false);
+    expect(settled.hasAttribute("title")).toBe(false);
   });
 
   it("a non-busy failure shows the try-again message", async () => {

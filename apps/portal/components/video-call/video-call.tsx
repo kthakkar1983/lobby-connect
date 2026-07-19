@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 import {
   MAX_CALL_DURATION_MS,
@@ -20,8 +20,17 @@ import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { ChatDock } from "@/components/call/chat-dock";
+import { CallShell } from "@/components/call/call-shell";
+import {
+  CallControlDivider,
+  CallControlTray,
+  CallToggleButton,
+  EndCallButton,
+} from "@/components/call/call-controls";
+import { PropertyActionButton } from "@/components/dashboard/property-action-button";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 
@@ -117,6 +126,39 @@ export function VideoCall({
   const registerCallControls = surface?.registerCallControls;
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
+  // Hoisted because TWO things key off it: the corner control itself, and the
+  // caption band, which gives the corner up while it is there (spec §6).
+  const showReopenTile = tileClosedByUser && docPipSupported();
+
+  // Task 14 / spec §7 — the behavioural gap. This Connect called
+  // connectToProperty as a bare `void` with no catch, so a failed remote-access
+  // launch was SILENT: mid guest-call the agent pressed Connect, RustDesk never
+  // opened, and nothing said whether it was still coming or would never come.
+  const connectToProperty = surface?.connectToProperty;
+  const [connectError, setConnectError] = useState<string | null>(null);
+  // Both reasons are REAL unavailability, not duty, so neither may reach the
+  // duty guard: a video ring can carry a null propertyId (same as audio's TwiML
+  // Parameter), and outside a CallSurfaceProvider there is nothing to connect
+  // WITH. Offering "start your shift" for either would be a lie — starting a
+  // shift gives this call neither a property nor a provider.
+  const connectUnavailable = !propertyId
+    ? "This call has no property to connect to"
+    : !connectToProperty
+      ? "Remote access is unavailable here"
+      : null;
+
+  async function handleConnect() {
+    if (!propertyId || !connectToProperty) return;
+    try {
+      // Called synchronously inside the click, before any await, so a pre-warmed
+      // cache hit still launches on the click's transient activation.
+      setConnectError(connectErrorMessage(await connectToProperty(propertyId)));
+    } catch {
+      // A throw would skip setConnectError and surface as an unhandled
+      // rejection — the exact silence this handler exists to end.
+      setConnectError(connectErrorMessage({ launched: false }));
+    }
+  }
 
   // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
   // overlay + tile toggles, default OFF, reset per call). No provider (standalone
@@ -451,49 +493,46 @@ export function VideoCall({
   }, [setPeerTyping]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* Header strip */}
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-live shadow-[0_0_0_3px_var(--color-live-glow)]" />
-          {phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
-        </span>
-      </div>
+    <CallShell
+      title={phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
+      /* No `emergency` — VIDEO has no 911 machinery anywhere in the codebase
+         (see the tile-control registration above, which omits triggerEmergency
+         for the same reason). Deliberate, per spec §4. */
+      bannersAboveBody={
+        <>
+          {audioBlocked && (
+            <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
+              <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  audioRecoveryRef.current?.();
+                  setAudioBlocked(false);
+                }}
+                className="shrink-0 rounded-button bg-live px-3 py-1.5 font-medium text-primary"
+              >
+                Tap to hear guest
+              </button>
+            </div>
+          )}
 
-      {audioBlocked && (
-        <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
-          <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
-          <button
-            type="button"
-            onClick={() => {
-              audioRecoveryRef.current?.();
-              setAudioBlocked(false);
-            }}
-            className="shrink-0 rounded-button bg-live px-3 py-1.5 font-medium text-primary"
-          >
-            Tap to hear guest
-          </button>
-        </div>
-      )}
-
-      {mediaWarning && (
-        <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
-          {mediaWarning === "camera"
-            ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
-            : mediaWarning === "mic"
-              ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
-              : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
-        </div>
-      )}
-
-      {/* SHARED-CHROME SEAM: the audio in-call overlay (components/softphone/audio-call-overlay.tsx)
-          mirrors this chrome (header strip + --color-call stage + control bar + PlaybookPanel). If the
-          two drift, extract a shared <CallShell> consumed by both. */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 40% guest video (left) — deep-navy video stage */}
+          {mediaWarning && (
+            <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
+              {mediaWarning === "camera"
+                ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
+                : mediaWarning === "mic"
+                  ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
+                  : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
+            </div>
+          )}
+        </>
+      }
+      playbookBasis="60%"
+      /* 40% guest video (left) — deep-navy video stage */
+      stage={(basis) => (
         <div
           data-testid="guest-video-stage"
-          className={`relative basis-2/5 bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
+          className={`relative ${basis} bg-[var(--color-call)]${collapsed ? " hidden" : ""}`}
         >
           <div ref={remoteRef} className="absolute inset-0" />
           {/* Self-view sits top-right (matches the kiosk) so the bottom-anchored
@@ -502,22 +541,59 @@ export function VideoCall({
             ref={localRef}
             className="absolute right-4 top-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
           />
+          {/* left/right rather than `inset-x-3` so ONLY the right edge moves:
+              the band yields the corner to the reopen control instead of the
+              control floating on top of it (spec §6). Covering the band would
+              hide the tail of the guest's sentence — the newest words, which are
+              the ones the caption is there for. */}
           <CaptionBand
             finals={captions.finals}
             partial={captions.partial}
-            className="absolute inset-x-3 bottom-3"
+            className={`absolute bottom-3 left-3 ${showReopenTile ? "right-16" : "right-3"}`}
           />
-          {/* Task 17 (repositioned 2026-07-09): reopen the call tile if the agent
-              closed it mid-call. A small teal pill floating at the bottom-right of
-              the guest stage, seated above the caption band — replaces the flat
-              grey header pill that read as easy to miss. */}
-          {tileClosedByUser && docPipSupported() && (
+          {/* Reopen the call tile if the agent closed it mid-call. Icon-only and
+              round, in the TRUE bottom-right corner (spec §6). It was a teal
+              filled pill at bottom-16 — chrome sitting mid-frame over a guest
+              who fills the shot, and a second teal fill competing with Connect.
+              A 40px circle in the corner is a far smaller footprint over a live
+              person. (40px = `h-10`, the nearest step on the spacing scale to
+              the spec's "~38px" — the spec figure is approximate, not a target.)
+
+              MINT OUTLINE ON A SCRIM — the app's FIRST outline-only mint
+              treatment, called out in the spec so it reads as a choice. Mint is
+              the live/connect role in the brand, so it says "available action"
+              without adding another filled button.
+
+              CONTRAST (WCAG 1.4.11, 3:1 — this is a real control, and its
+              boundary is what identifies it). Read the figures below for what
+              they are: the ring has an INNER boundary against its own scrim and
+              an OUTER one against whatever the guest's camera happens to be
+              showing. Only the inner one can be measured, and the outer one
+              cannot be guaranteed by construction — a blown-out white or
+              mint-adjacent frame puts it well under 3:1. Holding the scrim
+              opaque enough that the ring is identified against IT is the
+              defensible reading of the SC here, not a claim that every edge of
+              this control clears 3:1 against arbitrary video.
+
+              So: the scrim is held at 90%, and the numbers are mint #06D6A0
+              (L 0.5067) on the scrim — 8.72:1 over pure navy, 6.47:1 in the
+              worst case (a blown-out white frame under the 10% that shows
+              through). At the /60 this was first written with, that worst case
+              is 2.33:1 — an outright fail — which is why the alpha is where it
+              is, and why a test now pins it. Hover DEEPENS the scrim rather
+              than lightening it, for the same reason: a mint-tinted hover fill
+              would put the ring back over raw video. */}
+          {showReopenTile && (
             <button
               type="button"
               onClick={() => openTileForCall?.()}
-              className="absolute bottom-16 right-3 z-10 flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground shadow-md"
+              /* Icon-only, so the name has to come from aria-label; `title` is
+                 additionally how a new agent learns the glyph. */
+              title="Reopen tile"
+              aria-label="Reopen tile"
+              className="absolute bottom-3 right-3 z-10 grid h-10 w-10 place-items-center rounded-full border border-live bg-call/90 text-live shadow-md transition-colors hover:bg-call focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live focus-visible:ring-offset-2 focus-visible:ring-offset-call"
             >
-              <PictureInPicture2 size={14} /> Reopen tile
+              <PictureInPicture2 size={17} aria-hidden="true" />
             </button>
           )}
           {/* Task 13: outbound pre-connect phase. An opaque overlay (not a
@@ -542,10 +618,15 @@ export function VideoCall({
             </div>
           )}
         </div>
-        {collapsed ? (
+      )}
+      panel={(basis) =>
+        collapsed ? (
           <PlaybookPanel callId={callId} basis="basis-full" />
         ) : (
-          <div className="flex basis-3/5 flex-col overflow-hidden border-l border-border">
+          <div
+            data-testid="video-right-panel"
+            className={`flex ${basis} flex-col overflow-hidden border-l border-border`}
+          >
             <div className="flex shrink-0 border-b border-border bg-card text-sm">
               <button
                 type="button"
@@ -579,126 +660,148 @@ export function VideoCall({
               )}
             </div>
           </div>
-        )}
-      </div>
+        )
+      }
+      bannersBelowBody={
+        saveFailed && (
+          <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
+            <span className="flex gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleEnd()}
+                className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Retry"}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={onClose}
+                className="rounded-button border border-border px-3 py-1 disabled:opacity-50"
+              >
+                Discard
+              </button>
+            </span>
+          </div>
+        )
+      }
+      /* Control bar — Room#/Notes (left, Enter-to-save) · tray (Mute, Camera,
+         Captions) · divider · Connect, End call. Same order and the same shared
+         controls as the audio overlay (spec §5.4). The input group is capped in
+         REM so it tracks the 112.5% root font at `lg`. */
+      controls={
+        <>
+          <div className="flex min-w-0 max-w-[35rem] flex-1 items-center gap-2">
+            <input
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
+              onKeyDown={onKeyDownSave}
+              placeholder="Room #"
+              className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
+            />
+            <div className="relative flex flex-1 items-center">
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onKeyDown={onKeyDownSave}
+                placeholder="Notes…"
+                className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2.5 flex items-center"
+              >
+                {saveState === "saving" ? (
+                  <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
+                ) : saveState === "saved" ? (
+                  <Check size={16} className="text-live-foreground" />
+                ) : saveState === "failed" ? (
+                  <AlertTriangle size={15} className="text-destructive" />
+                ) : (
+                  <CornerDownLeft size={16} className="text-text-muted" />
+                )}
+              </span>
+              <span role="status" aria-live="polite" className="sr-only">
+                {saveState === "saving"
+                  ? "Saving notes"
+                  : saveState === "saved"
+                    ? "Notes saved"
+                    : saveState === "failed"
+                      ? "Notes save failed — retries after the call"
+                      : ""}
+              </span>
+            </div>
+          </div>
+          {/* Hold and Swap are gone (spec §5.1 / D10). Both were hardcoded
+              `disabled` with title="Coming soon", and Hold was deferred
+              entirely to multi-property when the Phase-3 plan was gated — they
+              held prime control-bar space doing nothing, and removing them is
+              what pays for `End call`'s longer label. */}
+          <CallControlTray>
+            <CallToggleButton
+              label="Mute"
+              icon={muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
+              pressed={muted}
+              title={muted ? "Turn your microphone on" : "Turn your microphone off"}
+              onToggle={toggleMute}
+            />
+            <CallToggleButton
+              label="Camera"
+              icon={cameraOff ? <VideoOff aria-hidden="true" /> : <Video aria-hidden="true" />}
+              pressed={cameraOff}
+              title={cameraOff ? "Turn your camera on" : "Turn your camera off"}
+              /* Without this the screen reader announces "Camera, pressed" at
+                 exactly the moment the camera is OFF — see <CallToggleButton>.
+                 On the surface whose whole point is kiosk eye contact. */
+              stateLabel={cameraOff ? "camera is off" : "camera is on"}
+              onToggle={toggleCamera}
+            />
+            <CaptionToggle
+              enabled={captionsEnabled}
+              onToggle={toggleCaptions}
+              /* Fixed box so the label swap ("Captions" / "Captions off") can't
+                 widen the tray and shift Connect and End call sideways.
+                 `shrink-0` because this one is a hand-rolled <button>: every
+                 <Button>-based sibling gets it from the button base, so without
+                 it this is the ONE item in the tray a narrow viewport can
+                 squeeze below w-36 and wrap — the exact reflow the box exists
+                 to prevent. */
+              className="h-8 w-36 shrink-0 justify-center py-0"
+            />
+          </CallControlTray>
+          <CallControlDivider />
+          {/* Connect (Task 14, spec §7) — one of five sites now sharing
+              <PropertyActionButton>. `tone="teal"` is NOT decoration and NOT
+              the default: the 2026-07-10 batch-1 polish split the fill navy on
+              the property cards / teal on all three in-call Connects, and this
+              component defaults to navy, so omitting it silently reverts that.
+              `surface` stays light — this bar is `bg-card`, unlike the tile's
+              navy one.
 
-      {saveFailed && (
-        <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
-          <span className="flex gap-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleEnd()}
-              className="rounded-button bg-destructive px-3 py-1 font-medium text-destructive-foreground disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Retry"}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={onClose}
-              className="rounded-button border border-border px-3 py-1 disabled:opacity-50"
-            >
-              Discard
-            </button>
-          </span>
-        </div>
-      )}
+              `gate="none"`: duty can be revoked mid-call from a second tab
+              (end-shift has no ON_CALL guard), and remoting into the hotel PC
+              during a live call is not an off-duty action. See the header note
+              in property-action-button.tsx.
 
-      {/* control bar */}
-      <div className="flex items-center gap-2 border-t border-border bg-card p-3">
-        <input
-          value={roomNumber}
-          onChange={(e) => setRoomNumber(e.target.value)}
-          onKeyDown={onKeyDownSave}
-          placeholder="Room #"
-          className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
-        />
-        <div className="relative flex flex-1 items-center">
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onKeyDown={onKeyDownSave}
-            placeholder="Notes…"
-            className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              `errorPlacement="float"`: this bar's geometry is fixed on purpose
+              so it cannot move under her hand mid-call; a flow error would grow
+              it by ~20px and lift End call and Mute the moment one appeared. */}
+          <PropertyActionButton
+            label="Connect"
+            icon={<Monitor aria-hidden="true" />}
+            tone="teal"
+            gate="none"
+            onAction={handleConnect}
+            unavailableReason={connectUnavailable}
+            error={connectError}
+            errorPlacement="float"
+            className="font-semibold"
           />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-2.5 flex items-center"
-          >
-            {saveState === "saving" ? (
-              <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
-            ) : saveState === "saved" ? (
-              <Check size={16} className="text-live-foreground" />
-            ) : saveState === "failed" ? (
-              <AlertTriangle size={15} className="text-destructive" />
-            ) : (
-              <CornerDownLeft size={16} className="text-text-muted" />
-            )}
-          </span>
-          <span role="status" aria-live="polite" className="sr-only">
-            {saveState === "saving"
-              ? "Saving notes"
-              : saveState === "saved"
-                ? "Notes saved"
-                : saveState === "failed"
-                  ? "Notes save failed — retries after the call"
-                  : ""}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={toggleMute}
-          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-        >
-          {muted ? <MicOff size={16} /> : <Mic size={16} />}
-          {muted ? "Unmute" : "Mute"}
-        </button>
-        <button
-          type="button"
-          onClick={toggleCamera}
-          className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-        >
-          {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
-          {cameraOff ? "Cam on" : "Cam off"}
-        </button>
-        <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} />
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-        >
-          Hold
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-        >
-          Swap
-        </button>
-        <button
-          type="button"
-          disabled={!propertyId || !surface}
-          onClick={() => {
-            if (propertyId) void surface?.connectToProperty(propertyId);
-          }}
-          className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
-        >
-          <Monitor size={16} /> Connect
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleEnd()}
-          className="flex items-center gap-1.5 rounded-button bg-primary px-3 py-2 text-[1.1875rem] font-bold leading-none text-primary-foreground"
-        >
-          <PhoneOff size={18} /> End
-        </button>
-      </div>
-
-    </div>
+          <EndCallButton tone="navy" onEnd={() => void handleEnd()} />
+        </>
+      }
+    />
   );
 }

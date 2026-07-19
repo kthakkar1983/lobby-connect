@@ -448,6 +448,86 @@ describe("CallTile", () => {
     expect(connectBtn.className).toContain("bg-accent");
   });
 
+  // Spec §7's behavioural gap. The tile's Connect called connectToProperty as a
+  // bare `void` with no catch, so a failed remote-access launch was SILENT — and
+  // the tile is the surface the agent is most likely to be looking at when she
+  // presses it, with the tab backgrounded behind RustDesk.
+  it("surfaces a failed remote-access launch instead of failing silently", async () => {
+    // The default beforeEach outcome: a 404, i.e. no credentials configured.
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    await act(async () => {
+      (tile.getByText("Connect").closest("button") as HTMLButtonElement).click();
+    });
+
+    // Neither findBy* nor *ByRole works against the fake PiP document:
+    // createHTMLDocument() has no defaultView, so waitFor's getWindowFromNode
+    // throws and byRole's visibility check dereferences a null window for
+    // getComputedStyle. A plain querySelector is the portable form here — which
+    // is why every other assertion in this file is getByText or querySelector.
+    await waitFor(() =>
+      expect(pipDoc.body.querySelector('[role="alert"]')).not.toBeNull(),
+    );
+    const alert = pipDoc.body.querySelector('[role="alert"]') as HTMLElement;
+    // The COMPACT wording, deliberately not the overlays' full string. This
+    // window is 380x300 (TILE_WIDTH/TILE_HEIGHT) and the bar beside this button
+    // already carries Mute, Hang up and the caption toggle, so the wrapper
+    // shrinks toward min-content: "No remote access configured — ask an admin."
+    // wraps to roughly four lines of text-xs there. Both strings say the same
+    // two things — whose problem it is, and whether pressing again helps.
+    expect(alert.textContent).toBe("No credentials — ask an admin.");
+    // Blaze, not the light surfaces' red: `text-destructive` (#C81E1E) reads at
+    // roughly 2.5:1 on the tile's navy bar and fails AA. This is what
+    // `surface="dark"` buys, and it is the whole reason the prop exists.
+    expect(alert.className).toContain("text-attention");
+    // OUT OF FLOW. Rendering this must not resize the control bar it belongs
+    // to: in flow it grows the bar from ~40px to ~100px of a 300px window and
+    // permanently shrinks the guest's video face, with no dismissal short of a
+    // successful retry. jsdom does no layout, so the mechanism is what can be
+    // pinned here — offsetHeight is 0 for everything either way.
+    expect(alert.className).toContain("absolute");
+  });
+
+  it("clears a previous Connect failure once a later attempt launches", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    const connectBtn = tile.getByText("Connect").closest("button") as HTMLButtonElement;
+    await act(async () => connectBtn.click());
+    await waitFor(() => expect(pipDoc.body.querySelector('[role="alert"]')).not.toBeNull());
+
+    // A stale failure left on screen after a working retry reads as "still
+    // broken" for the rest of the call — in a window the size of a postcard.
+    remoteAccess.fetchRemoteCredentials.mockResolvedValue({
+      ok: true,
+      creds: { peerId: "peer-1", password: "pw" },
+    });
+    await act(async () => connectBtn.click());
+    await waitFor(() => expect(pipDoc.body.querySelector('[role="alert"]')).toBeNull());
+  });
+
+  // The tile lives in a Document-PiP window the size of a postcard. Task 14 put
+  // it on the shared <PropertyActionButton>, whose CARD scale (`sm`, h-8) would
+  // be visibly oversized here — `size="xs"` is the tile's, and the reason that
+  // variant exists.
+  it("keeps the tile's Connect at the compact PiP scale, not the card scale", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const connectBtn = within(pipDoc.body).getByText("Connect").closest("button") as HTMLButtonElement;
+    expect(connectBtn.className).toContain("h-6");
+    expect(connectBtn.className).not.toContain("h-8");
+  });
+
   it("renders the hotel-clock chip on the video face when a timezone is present", async () => {
     const track = { kind: "video" } as unknown as MediaStreamTrack;
     const { pipDoc } = renderTile({ active: videoActiveTz, controls: makeControls(), track });

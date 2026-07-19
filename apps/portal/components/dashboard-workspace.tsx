@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { CallBackShortcut } from "@/components/dashboard/call-back-shortcut";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { DutyControl } from "@/components/dashboard/duty-control";
+import { ShiftCard } from "@/components/dashboard/shift-card";
+import { ZoneClocksCard } from "@/components/dashboard/zone-clocks-card";
 import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 import { syncPushSubscription } from "@/lib/push/client";
@@ -80,7 +81,6 @@ export function DashboardWorkspace({
     <div className="flex flex-col gap-6 p-6">
       <DashboardHeader firstName={firstName}>
         <div className="flex items-center gap-3">
-          <DutyControl />
           <AccountMenu fullName={fullName} email={email} role={role} />
         </div>
       </DashboardHeader>
@@ -89,10 +89,21 @@ export function DashboardWorkspace({
         <main id="main">{children}</main>
         <aside className={onHome ? "flex flex-col gap-3" : "hidden"}>
           <Softphone role={role} />
-          {/* Incoming-video banner sits here, in the dead space directly under the
-              softphone, instead of floating over the screen. The active VideoCall
-              is fixed full-screen (it escapes this container and blocks nav, so
-              the aside never hides mid-call). */}
+          {/* Spec D1: the softphone card keeps its position and is deliberately
+              NOT merged into the shift card -- the shift card slots below it.
+              Both new cards live here rather than in <main> so they inherit the
+              off-home hiding, which is spec §3.5's accepted consequence: an
+              ADMIN on a non-home route has no duty affordance and navigates
+              home to end a shift (AGENT_NAV has exactly one entry, so an agent
+              never hits it, and MAX_SHIFT_MS force-closes a forgotten shift
+              regardless). */}
+          <ShiftCard />
+          <ZoneClocksCard />
+          {/* Headless: VideoCallHost renders no chrome of its own (see its
+              docblock) — either the fixed full-screen <VideoCall>, which escapes
+              this container and blocks nav so the aside never hides mid-call, or
+              nothing. So its position below the cards is visually irrelevant;
+              only staying MOUNTED matters. */}
           <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>

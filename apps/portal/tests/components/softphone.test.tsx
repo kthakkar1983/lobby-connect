@@ -175,6 +175,7 @@ import {
   useCallSurface,
 } from "@/components/dashboard/call-surface-provider";
 import { DutyProvider, useDuty } from "@/components/dashboard/duty-provider";
+import { OffDutyPromptProvider } from "@/components/dashboard/off-duty-prompt";
 
 /**
  * Card-side consumer probe: exposes the audio ring count + an Answer button
@@ -206,9 +207,11 @@ function CardProbe() {
 
 /**
  * Duty-side probe: duty ownership moved OUT of the softphone into the
- * DutyProvider (Task 16 — the header renders the real DutyControl). These tests
- * observe/drive duty through this probe (its `duty-onduty`/`duty-onbreak`
- * read-outs + plain buttons) instead of the retired in-softphone duty buttons.
+ * DutyProvider (Task 16). Duty now lives in the dashboard's RIGHT COLUMN, not
+ * the header: Break/Resume/End shift on the shift card, and Go on duty on this
+ * card's own ring. These tests observe/drive duty through this probe (its
+ * `duty-onduty`/`duty-onbreak` read-outs + plain buttons) instead of the retired
+ * in-softphone duty buttons.
  */
 function DutyProbe() {
   const { onDuty, onBreak, goOnDuty, endShift, takeBreak, resume } = useDuty();
@@ -368,7 +371,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
     await waitFor(() => screen.getByText(/On call · The Sample Hotel/i));
     // The in-call controls (now inside the overlay) are still present.
     expect(screen.getByPlaceholderText("Room #")).toBeTruthy();
-    expect(screen.getByText("Hang up")).toBeTruthy();
+    expect(screen.getByText("End call")).toBeTruthy();
   });
 
   it("captions the guest after answering a phone call", async () => {
@@ -558,20 +561,34 @@ describe("Softphone — ring-silence (own ring element)", () => {
  * Error phase: when the line can't register (staging has no Twilio, or the prod
  * line briefly drops), the softphone shows "Phone line disconnected" and hides
  * its line-gated idle chrome (the Accepting toggle + "Incoming calls ring here").
- * The token fetch is forced to fail so connect() lands in phase "error". (Duty
- * controls are no longer here — they live in the header's DutyControl, which is
- * Twilio-independent and covered by duty-control.test.tsx.)
+ * The token fetch is forced to fail so connect() lands in phase "error".
+ *
+ * DUTY IS TWILIO-INDEPENDENT AND MUST SURVIVE THIS PHASE. Break/Resume/End shift
+ * are on the shift card (covered by shift-card.test.tsx), which never touches
+ * Twilio. Go on duty is on THIS card's ring — inside the line-gated idle block —
+ * so it is the one duty control the error phase can take down, and the second
+ * test below is what stops that regression. Coverage for the ring's normal
+ * behaviour is in "Softphone — D13 duty hydration + gated beats" further down,
+ * where `hydration` can drive duty state.
  */
 describe("Softphone — error phase (line can't register)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
+  let presence: { onDuty: boolean; accepting: boolean };
 
   beforeEach(() => {
     vi.clearAllMocks();
     push.armPush.mockResolvedValue(true);
+    presence = { onDuty: true, accepting: true };
     // Token endpoint 500s → fetchVoiceToken() throws → connect() catch → phase "error".
-    fetchMock = vi.fn().mockImplementation((url: string) => {
+    // GET /api/presence still answers, so DutyProvider can hydrate off duty and
+    // the two failure modes stay independent — this is the real-world pairing
+    // (Twilio down, our own API up), not a doubly-broken environment.
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url === "/api/twilio/token") {
         return Promise.resolve({ ok: false, status: 500 });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(presence) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -594,11 +611,56 @@ describe("Softphone — error phase (line can't register)", () => {
     // The line-gated idle chrome stays hidden in error.
     expect(screen.queryByText(/Accepting calls/i)).toBeNull();
     expect(screen.queryByText(/Incoming calls ring here/i)).toBeNull();
+    // ...and off-duty sub-copy too: "Phone line disconnected" already says it,
+    // and the block only survives this phase to carry the ring.
+    expect(screen.queryByText(/Your line is offline/i)).toBeNull();
+  });
+
+  it("still offers Go on duty while the line is down — duty must not ride Twilio", async () => {
+    // The outage she needs to clock in THROUGH. With the header emptied of duty
+    // chrome and the off-duty shift card actionless by design, suppressing the
+    // ring here would leave no labelled duty control anywhere: her shift never
+    // opens, the timesheet gaps, and isReachableForDial wants AVAILABLE presence
+    // so she is never dialled. Reloading does not help — the line is still down.
+    presence = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+
+    await waitFor(() =>
+      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+    );
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const ring = await screen.findByRole("button", { name: "Go on duty" });
+    await user.click(ring);
+
+    // It reaches the real route, not just a rendered button: the provider is the
+    // real one here, so this is the whole path working with Twilio dead.
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+      ).toBe(true),
+    );
+  });
+
+  it("keeps the ring decorative-only when she is already ON duty and the line drops", async () => {
+    // The converse: the block survives `error` ONLY to carry the off-duty ring.
+    // On duty there is nothing here that still works, so the whole idle block
+    // stays hidden rather than showing a brand ring over a dead line.
+    renderSoftphone("AGENT"); // presence defaults to onDuty: true
+
+    await waitFor(() =>
+      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+    );
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
+
+    expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
+    expect(document.querySelector(".lc-seam-drift")).toBeNull();
   });
 });
 
 /**
- * Task 16 (spec D6): End shift (now the header DutyControl → DutyProvider.endShift,
+ * Task 16 (spec D6): End shift (now the shift card → DutyProvider.endShift,
  * driven here via DutyProbe) flips duty off + POSTs /api/presence/end-shift; the
  * softphone mirrors the provider's onDuty into its heartbeat gate, so beats STOP
  * after End shift and RESUME (immediate stamp) on Go on duty. We count only POST
@@ -731,6 +793,44 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     );
   }
 
+  /**
+   * Presence POSTs carrying a specific intended status. The interval beat POSTs
+   * too — it gates on onDuty alone, so an agent on a BREAK still beats — which
+   * means a raw count cannot distinguish "the guard withheld the flip" from "no
+   * beat happened to land yet". That only passes because HEARTBEAT_MS is 20s
+   * and the test finishes in well under a second: a margin that is real but
+   * implicit, and this file has flake history (fd3fbdb) earned exactly that way.
+   * Filtering on the status the toggle WOULD have sent removes it entirely.
+   */
+  function presencePostsWithStatus(status: string) {
+    return presencePosts().filter((post) => {
+      const body = JSON.parse((post[1] as RequestInit).body as string) as { status?: string };
+      return body.status === status;
+    });
+  }
+
+  /**
+   * Same tree as renderSoftphone, plus the real OffDutyPromptProvider. The
+   * default helper deliberately omits it (mirroring the surfaces that mount
+   * PropertyCard with neither provider), which means useDutyGuard's ctx is null
+   * there and a gated click is silently swallowed — so those tests can only
+   * ever prove the WITHHOLDING half of the guard. This one proves the OFFERING
+   * half, which is the whole justification for leaving the control enabled.
+   */
+  function renderSoftphoneWithPrompt(role: "AGENT" | "ADMIN" = "AGENT") {
+    return render(
+      <CallSurfaceProvider>
+        <DutyProvider>
+          <OffDutyPromptProvider>
+            <Softphone role={role} />
+            <CardProbe />
+            <DutyProbe />
+          </OffDutyPromptProvider>
+        </DutyProvider>
+      </CallSurfaceProvider>,
+    );
+  }
+
   it("hydrates OFF duty from the server and suppresses ALL beats (incl. the registration stamp)", async () => {
     hydration = { onDuty: false, accepting: true };
     renderSoftphone("AGENT");
@@ -810,6 +910,264 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     // gate-riding registration stamp) must already have POSTed so a mid-shift
     // refresh re-stamps last_seen well inside the 90s stale window.
     await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+  });
+
+  // ---------------------------------------------------------------------
+  // Spec §3.2 — the ring becomes the go-on-duty control while off duty.
+  //
+  // These live in THIS describe block because `hydration` is the only real
+  // lever for duty state here, and it is scoped to this block. Do NOT add a
+  // vi.mock of duty-provider to this file to drive duty more directly: the
+  // accept-gate tests below import the REAL provider to prove
+  // softphone.tsx's `if (!canWorkRef.current) return;` blocks an off-duty
+  // answer, and with no server-side duty check on /api/twilio/voice/answered
+  // that is the authoritative client-side gate for answering audio. A mock
+  // would make those tests vacuous while leaving them green.
+  // ---------------------------------------------------------------------
+
+  it("turns the ring into a go-on-duty control while off duty", async () => {
+    hydration = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const ring = screen.getByRole("button", { name: "Go on duty" });
+    // The disc's two children are absolutely positioned, so their wrapper must
+    // be their positioning context. Without `relative` they escape to the
+    // nearest positioned ancestor and the ring visibly falls apart — a pure-CSS
+    // defect jsdom cannot see through layout, so it is pinned structurally.
+    // Resolved via the glow's parent rather than a test-only attribute, so it
+    // follows the wrapper wherever the markup puts it.
+    const disc = ring.querySelector(".lc-seam-drift")?.parentElement;
+    expect(disc?.className).toContain("relative");
+
+    // The visible caption must be INSIDE the button: users click labels, and a
+    // click that lands on the words and does nothing is a dead control on the
+    // one thing that starts her shift.
+    expect(ring.textContent).toContain("Go on duty");
+
+    await user.click(ring);
+
+    // Same route the retired header button drove — asserted through the fetch
+    // mock rather than a spy, because this file uses the real DutyProvider.
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+      ).toBe(true),
+    );
+  });
+
+  it("swaps the ring's sub-copy to 'Your line is offline.' while off duty", async () => {
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+    expect(screen.getByText("Your line is offline.")).toBeTruthy();
+    expect(screen.queryByText("Incoming calls ring here.")).toBeNull();
+    // The caption IS the accessible name (it lives inside the button), so there
+    // is only one string to keep true — sighted and screen-reader users cannot
+    // be told the control is called two different things.
+    expect(screen.getByRole("button", { name: "Go on duty" })).toBeTruthy();
+  });
+
+  it("announces the duty flip through a live region rather than in silence", async () => {
+    // Activating the ring unmounts the focused button, so focus falls back to
+    // <body> with nothing to announce the shift actually started. The sub-copy
+    // is one persistent element across the flip precisely so it can carry that.
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("Your line is offline.");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Go on duty" }));
+
+    // Same node, new text — that is what makes it announce. A branch per state
+    // would remount it and say nothing.
+    await waitFor(() => expect(status.textContent).toBe("Incoming calls ring here."));
+    expect(screen.getByRole("status")).toBe(status);
+  });
+
+  it("leaves the ring decorative while on duty", async () => {
+    // Hydrate with accepting:false — a value the provider's fail-open defaults
+    // (onDuty/accepting both true) cannot produce, so waiting on it proves the
+    // GET actually landed and applied. Waiting on an on-duty read-out instead
+    // would pass on the very first render, before hydration resolved, and the
+    // test would assert the default rather than server truth.
+    hydration = { onDuty: true, accepting: false };
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByRole("button", { name: "Not accepting calls" }));
+    expect(screen.getByTestId("duty-onduty").textContent).toBe("true");
+    expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
+    expect(screen.getByText("Incoming calls ring here.")).toBeTruthy();
+  });
+
+  it("leaves the ring decorative on a BREAK — go-on-duty must never fire mid-shift", async () => {
+    // She is gated on a break but she is NOT off duty, and goOnDuty() would
+    // POST /api/presence/go-on-duty, whose openShift() closes her live shift
+    // and inserts a new one: one continuous night recorded as two shifts. The
+    // ring therefore keys on onDuty, never on canWork. Resume lives on the
+    // shift card, and the guard dialog offers Resume rather than Start.
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
+
+    await user.click(screen.getByRole("button", { name: /probe-take-break/i }));
+    await waitFor(() => expect(screen.getByTestId("duty-onbreak").textContent).toBe("true"));
+
+    expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
+    expect(
+      fetchMock.mock.calls.some((args) => args[0] === "/api/presence/go-on-duty"),
+    ).toBe(false);
+  });
+
+  it("gates the accepting toggle on a BREAK too, and never claims she is accepting", async () => {
+    // The gate is `canWork` (onDuty && !onBreak), so a break gates the toggle
+    // exactly as being off duty does. The label must move with it: a control
+    // that reads "Accepting calls" while wearing the gated fill is telling her
+    // two different things at once, and the server will not ring her either way.
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    // Hydration witness: an on-duty hydration fires the first beat, so a POST
+    // proves the GET landed AND resolved on duty. The "Accepting calls" label
+    // alone is the provider's fail-open default and matches on the very first
+    // render, before hydration has resolved anything.
+    await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+    await waitFor(() => screen.getByRole("button", { name: "Accepting calls" }));
+
+    await user.click(screen.getByRole("button", { name: /probe-take-break/i }));
+    await waitFor(() => expect(screen.getByTestId("duty-onbreak").textContent).toBe("true"));
+
+    const toggle = await screen.findByRole("button", { name: "Not accepting calls" });
+    expect(toggle.className).toContain("bg-muted");
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(toggle);
+    // She was accepting, so a flip that got through would POST AWAY. Beats on a
+    // break post AVAILABLE, so this cannot be satisfied by beat timing.
+    expect(presencePostsWithStatus("AWAY")).toHaveLength(0);
+  });
+
+  it("reads 'Not accepting calls' while off duty even when the server says accepting", async () => {
+    // Off duty the server will not ring her, so rendering the raw `accepting`
+    // flag would claim a readiness she does not have.
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+    expect(screen.getByText("Not accepting calls")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Not accepting calls" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("WITHHOLDS the accepting toggle while off duty — enabled, but it posts nothing", async () => {
+    // The load-bearing test for spec §3.4 on this control: it is deliberately
+    // NOT `disabled` (a disabled button fires no click and so cannot be
+    // intercepted or offered a shift), so nothing else proves a click cannot
+    // get through to the presence POST.
+    hydration = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const toggle = screen.getByRole("button", { name: "Not accepting calls" });
+    expect((toggle as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(toggle);
+
+    expect(presencePosts()).toHaveLength(0);
+    expect(screen.getByText("Not accepting calls")).toBeTruthy();
+  });
+
+  it("carries the recessed gated FILL off duty, and drops it on duty", async () => {
+    // Spec §3.2 says the toggle is *visually* gated, and since it is
+    // deliberately not `disabled` there is no other signal that clicking will
+    // prompt rather than toggle. Pinned on the class because the cue must stay
+    // a FILL: dimming the element would composite its label too, and an ENABLED
+    // control has no WCAG 1.4.3 inactive-component exemption to lean on.
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+    const gatedToggle = screen.getByRole("button", { name: "Not accepting calls" });
+    expect(gatedToggle.className).toContain("bg-muted");
+    // Never element opacity — that is the trap this recipe exists to avoid.
+    expect(gatedToggle.className).not.toMatch(/(^|\s)opacity-/);
+
+    cleanup();
+    hydration = { onDuty: true, accepting: true };
+    renderSoftphone("AGENT");
+    const liveToggle = await screen.findByRole("button", { name: "Accepting calls" });
+    expect(liveToggle.className).not.toContain("bg-muted");
+  });
+
+  it("leaves ADMIN with the static Covering copy and no Accepting toggle, ring control included", async () => {
+    // The Accepting toggle is AGENT-only and stays that way: an admin is dialed
+    // in via each property's Covering flag, not a personal AWAY switch. Duty
+    // itself is not role-scoped though, so the ring is still her way on shift.
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("ADMIN");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    expect(screen.getByText("You're dialed in for properties set to Covering.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /accepting calls/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Go on duty" })).toBeTruthy();
+  });
+
+  it("OFFERS to start the shift when the gated toggle is clicked (the guard's other half)", async () => {
+    // The withholding half is pinned above; this is the half that justifies
+    // leaving the control enabled at all. Without it, unmounting
+    // OffDutyPromptProvider from app-shell would leave every softphone test
+    // green while the agent got a dead click and no explanation.
+    hydration = { onDuty: false, accepting: true };
+    const user = userEvent.setup();
+    renderSoftphoneWithPrompt("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    await user.click(screen.getByRole("button", { name: "Not accepting calls" }));
+
+    expect(await screen.findByText("You're off duty")).toBeTruthy();
+    // Off duty, not on a break: the action must be Start my shift, never Resume
+    // (resume's route has a BREAK-only guard and would no-op).
+    expect(screen.getByRole("button", { name: "Start my shift" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+    // Still withheld — offering is not doing.
+    expect(presencePosts()).toHaveLength(0);
+  });
+
+  it("offers RESUME rather than Start my shift when the gated toggle is clicked on a break", async () => {
+    // Routing a break through goOnDuty would POST go-on-duty, whose openShift()
+    // closes her live shift and inserts a new one: one night, two rows.
+    const user = userEvent.setup();
+    renderSoftphoneWithPrompt("AGENT");
+    await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+
+    await user.click(screen.getByRole("button", { name: /probe-take-break/i }));
+    await waitFor(() => expect(screen.getByTestId("duty-onbreak").textContent).toBe("true"));
+
+    await user.click(await screen.findByRole("button", { name: "Not accepting calls" }));
+
+    expect(await screen.findByText("You're on a break")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start my shift" })).toBeNull();
+  });
+
+  it("still toggles Accepting normally while on duty (the guard must not over-block)", async () => {
+    const user = userEvent.setup();
+    renderSoftphone("AGENT");
+    // Hydration witness (see the BREAK test) — the label is the fail-open
+    // default and would match before the GET resolved.
+    await waitFor(() => expect(presencePosts().length).toBeGreaterThan(0));
+    await waitFor(() => screen.getByRole("button", { name: "Accepting calls" }));
+
+    await user.click(screen.getByRole("button", { name: "Accepting calls" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Not accepting calls" }));
+    await waitFor(() => {
+      const away = presencePosts().some((post) => {
+        const body = JSON.parse((post[1] as RequestInit).body as string) as { status: string };
+        return body.status === "AWAY";
+      });
+      expect(away).toBe(true);
+    });
   });
 
   it("an OFF-duty tab resyncs to ON duty via focus when the shift resumed elsewhere", async () => {

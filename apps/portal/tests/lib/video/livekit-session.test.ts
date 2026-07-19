@@ -51,8 +51,17 @@ const lk = vi.hoisted(() => {
       TrackSubscribed: "trackSubscribed",
       ParticipantDisconnected: "participantDisconnected",
       AudioPlaybackStatusChanged: "audioPlaybackChanged",
+      Disconnected: "disconnected",
     },
     Track: { Kind: { Video: "video", Audio: "audio" } },
+    // Numeric TS enum, so the real one carries a reverse mapping the session
+    // relies on to name the reason. Values match @livekit/protocol 1.49.0.
+    DisconnectReason: {
+      CLIENT_INITIATED: 1,
+      SIGNAL_CLOSE: 9,
+      1: "CLIENT_INITIATED",
+      9: "SIGNAL_CLOSE",
+    },
     RoomCtor,
     VideoPreset,
   };
@@ -62,10 +71,14 @@ vi.mock("livekit-client", () => ({
   Room: lk.RoomCtor,
   RoomEvent: lk.RoomEvent,
   Track: lk.Track,
+  DisconnectReason: lk.DisconnectReason,
   VideoPreset: lk.VideoPreset,
   createLocalAudioTrack: lk.createLocalAudioTrack,
   createLocalVideoTrack: lk.createLocalVideoTrack,
 }));
+
+const { captureMessage } = vi.hoisted(() => ({ captureMessage: vi.fn() }));
+vi.mock("@sentry/nextjs", () => ({ captureMessage }));
 
 import { joinLiveKitCall } from "@/lib/video/livekit-session";
 
@@ -147,6 +160,52 @@ describe("joinLiveKitCall", () => {
     expect(lk.localAudio.unmute).toHaveBeenCalled();
     await s.leave();
     expect(lk.room.disconnect).toHaveBeenCalled();
+  });
+
+  describe("unexpected disconnect reporting (spec 8 / D14)", () => {
+    it("reports an unexpected disconnect to Sentry, named and with page visibility", async () => {
+      await joinLiveKitCall({ url: "wss://x", token: "t", ...callbacks() });
+      lk.emit("disconnected", lk.DisconnectReason.SIGNAL_CLOSE);
+      expect(captureMessage).toHaveBeenCalledTimes(1);
+      expect(captureMessage.mock.calls[0]![1]).toMatchObject({
+        level: "warning",
+        extra: { reason: "SIGNAL_CLOSE", visibility: "visible" },
+      });
+    });
+
+    it("stays silent when the app called leave()", async () => {
+      const s = await joinLiveKitCall({ url: "wss://x", token: "t", ...callbacks() });
+      await s.leave();
+      lk.emit("disconnected", lk.DisconnectReason.CLIENT_INITIATED);
+      // Our own teardown is not an incident.
+      expect(captureMessage).not.toHaveBeenCalled();
+    });
+
+    // THE regression guard. livekit-client disconnects the room ITSELF on a
+    // main-window pagehide/beforeunload/freeze, and reports that as
+    // CLIENT_INITIATED -- identical to the reason our own leave() produces.
+    // Filtering on the reason instead of on our own flag would silence exactly
+    // the bug this handler exists to catch. Do not "simplify" it that way.
+    it("reports a CLIENT_INITIATED disconnect we did NOT ask for", async () => {
+      await joinLiveKitCall({ url: "wss://x", token: "t", ...callbacks() });
+      lk.emit("disconnected", lk.DisconnectReason.CLIENT_INITIATED);
+      expect(captureMessage).toHaveBeenCalledTimes(1);
+      expect(captureMessage.mock.calls[0]![1]).toMatchObject({
+        extra: { reason: "CLIENT_INITIATED" },
+      });
+    });
+
+    it("falls back to the raw code for a reason the enum does not name", async () => {
+      await joinLiveKitCall({ url: "wss://x", token: "t", ...callbacks() });
+      lk.emit("disconnected", 99);
+      expect(captureMessage.mock.calls[0]![1]).toMatchObject({ extra: { reason: "99" } });
+    });
+
+    it("falls back to 'unknown' when no reason is supplied", async () => {
+      await joinLiveKitCall({ url: "wss://x", token: "t", ...callbacks() });
+      lk.emit("disconnected", undefined);
+      expect(captureMessage.mock.calls[0]![1]).toMatchObject({ extra: { reason: "unknown" } });
+    });
   });
 
   it("applies the shared H.264 tuning to the room + capture", async () => {

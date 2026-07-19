@@ -6,8 +6,8 @@ import { BellOff } from "lucide-react";
 
 import { useCallSurface, type IncomingRing } from "@/components/dashboard/call-surface-provider";
 import { ConnectButton } from "@/components/dashboard/connect-button";
-import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { KioskCallButton } from "@/components/dashboard/kiosk-call-button";
+import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 import { Button } from "@/components/ui/button";
 
@@ -30,16 +30,16 @@ export function UnmatchedRingCards({
   unmatched: IncomingRing[];
 }): React.JSX.Element | null {
   const { actions, silencedKeys, silenceRing } = useCallSurface();
-  const duty = useDutyOptional();
+  // Spec §3.6, both channels — same gate as PropertyCard's Answer, for the same
+  // reasons. This fallback is a LIVE answer path: leaving it ungated while the
+  // real cards intercept would mean an audible ring that silently refuses.
+  const { guard } = useDutyGuard();
   if (unmatched.length === 0) return null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {unmatched.map((ring) => {
         const silenced = silencedKeys.has(ring.key);
-        // Task 17 (shift-tracking plan): same video-only UI defense-in-depth as
-        // PropertyCard's Answer — see the comment there. No-op with no DutyProvider.
-        const answerGated = ring.channel === "VIDEO" && duty != null && !duty.canWork;
         return (
           <div
             key={ring.key}
@@ -51,23 +51,26 @@ export function UnmatchedRingCards({
               Incoming {ring.channel === "AUDIO" ? "phone" : "video"} call
             </p>
             <div className="mt-3 flex items-center gap-2">
+              {/* Never `disabled` off duty, label never swaps, and no gated
+                  fill — spec §3.4/D8. Mirrors PropertyCard's Answer exactly;
+                  the reasoning for all three lives there. */}
               <Button
-                onClick={
-                  answerGated
-                    ? undefined
-                    : () =>
-                        ring.channel === "AUDIO"
-                          ? actions.acceptAudio?.()
-                          : ring.callId && actions.acceptVideo?.(ring.callId)
+                onClick={() =>
+                  guard(() =>
+                    ring.channel === "AUDIO"
+                      ? actions.acceptAudio?.()
+                      : ring.callId && actions.acceptVideo?.(ring.callId),
+                  )
                 }
-                disabled={answerGated}
-                className={answerGated ? undefined : "animate-pulse"}
-                title={answerGated ? "Go on duty to answer" : undefined}
+                size="sm"
+                className="animate-pulse"
               >
-                {answerGated ? "Go on duty" : "Answer"}
+                Answer
               </Button>
+              {/* Silenced is real unavailability, not a duty gate (spec §3.4). */}
               <Button
                 variant="neutral"
+                size="sm"
                 onClick={() => silenceRing(ring.key)}
                 disabled={silenced}
                 aria-pressed={silenced}
@@ -93,7 +96,13 @@ export function PodCardGrid({
   properties: PropertyCardData[];
   /** Admins: gated by covering (D11), keyed by property id. Omitted => canAnswer defaults true (agents). */
   canAnswerByProperty?: Record<string, boolean>;
-  /** Optional per-property Connect override; defaults to <ConnectButton> (Phase E). */
+  /**
+   * Optional per-property Connect override; defaults to <ConnectButton> (Phase E).
+   * Must be ALL-OR-NOTHING across the grid: returning a slot for some properties
+   * and null for others gives sibling cards different heights (property-card.tsx
+   * renders that row conditionally, and no reservation can size an arbitrary
+   * slot). Return a disabled control rather than null.
+   */
   connectFor?: (propertyId: string) => React.ReactNode;
   /** Task 9: the admin fleet board injects the per-property Covering toggle here. */
   footerFor?: (propertyId: string) => React.ReactNode;

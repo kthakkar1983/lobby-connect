@@ -105,6 +105,134 @@ describe("DutyProvider", () => {
     expect(postsTo("/api/presence/go-on-duty")).toHaveLength(1);
   });
 
+  it("a REJECTING armPush cannot prevent the duty flip (push failure != duty failure)", async () => {
+    // armPush() resolves false on the paths it handles, but
+    // ensurePushSubscription leaves Notification.requestPermission() and
+    // pushManager.getSubscription() unguarded (only subscribe() is wrapped), so
+    // a rejection propagates out. Unguarded, it aborts goOnDuty BEFORE
+    // setOnDuty(true) and before the POST — and every caller invokes this as
+    // `void goOnDuty()`, so the rejection is swallowed and the prompt closes
+    // looking like success while she is still off duty and the server never
+    // heard. Arming notifications is a best-effort side errand; it must never
+    // be able to fail the shift.
+    presenceGetBody = {
+      onDuty: false,
+      onBreak: false,
+      accepting: true,
+      shiftStartedAt: null,
+    };
+    push.armPush.mockRejectedValue(new Error("permission request failed"));
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(false));
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(postsTo("/api/presence/go-on-duty")).toHaveLength(1);
+    expect(result.current.onDuty).toBe(true);
+    // A rejection is "not armed" just as much as a false return, so she is told.
+    expect(result.current.pushBlocked).toBe(true);
+  });
+
+  it("SERIALIZES concurrent goOnDuty calls — a double-click must not open two shifts", async () => {
+    // goOnDuty stays mid-flight for a long, fully interactive stretch: armPush()
+    // registers a service worker and then raises Notification.requestPermission(),
+    // a browser-chrome prompt that leaves the page underneath clickable. onDuty
+    // does not flip until after all of it, so the ring keyed on !onDuty is still
+    // mounted and still clickable the whole time.
+    //
+    // Two POSTs would mean openShift() runs twice, and it is close-then-insert:
+    // the second closes the shift the first just opened (stamped `auto`, ~0s)
+    // and inserts another. One continuous night becomes two shifts in the table
+    // the admin timesheet reads. Modeled here by holding armPush open so both
+    // calls are genuinely in flight at once.
+    presenceGetBody = { onDuty: false, onBreak: false, accepting: true, shiftStartedAt: null };
+    let releaseArm: (value: boolean) => void = () => {};
+    push.armPush.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        releaseArm = resolve;
+      }),
+    );
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(false));
+
+    await act(async () => {
+      const first = result.current.goOnDuty();
+      const second = result.current.goOnDuty(); // the second click, mid-prompt
+      releaseArm(true);
+      await Promise.all([first, second]);
+    });
+
+    expect(postsTo("/api/presence/go-on-duty")).toHaveLength(1);
+    expect(result.current.onDuty).toBe(true);
+  });
+
+  it("releases the lock so a LATER go-on-duty still works (the shift can be retried)", async () => {
+    // The lock is per-attempt, not once-per-page: after End shift she must be
+    // able to clock back in on the same page load.
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(true));
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+    await act(async () => {
+      await result.current.endShift();
+    });
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(postsTo("/api/presence/go-on-duty")).toHaveLength(2);
+    expect(result.current.onDuty).toBe(true);
+  });
+
+  it("ROLLS BACK the optimistic flip when the go-on-duty POST fails", async () => {
+    // Swallowing the failure leaves her reading "on duty" with the shift clock
+    // running while the server never opened a shift and never left OFFLINE —
+    // she is not in the dial set and has no way to know. Rolling back restores
+    // the ring, which is the retry affordance.
+    presenceGetBody = { onDuty: false, onBreak: false, accepting: true, shiftStartedAt: null };
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/presence/go-on-duty") {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(presenceGetBody) });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) });
+    });
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(false));
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(result.current.onDuty).toBe(false);
+    expect(result.current.shiftStartedAt).toBeNull();
+  });
+
+  it("rolls back when the go-on-duty POST rejects outright (offline)", async () => {
+    presenceGetBody = { onDuty: false, onBreak: false, accepting: true, shiftStartedAt: null };
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/presence/go-on-duty") return Promise.reject(new Error("offline"));
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(presenceGetBody) });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) });
+    });
+    const { result } = renderDuty();
+    await waitFor(() => expect(result.current.onDuty).toBe(false));
+
+    await act(async () => {
+      await result.current.goOnDuty();
+    });
+
+    expect(result.current.onDuty).toBe(false);
+  });
+
   it("takeBreak POSTs /api/presence/take-break and flips onBreak; resume POSTs /api/presence/resume and flips it back", async () => {
     const { result } = renderDuty();
     await waitFor(() => expect(result.current.onDuty).toBe(true));

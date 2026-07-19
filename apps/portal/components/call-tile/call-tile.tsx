@@ -11,6 +11,8 @@ import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-prov
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { ChatDock } from "@/components/call/chat-dock";
+import { PropertyActionButton } from "@/components/dashboard/property-action-button";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 
 // How long the armed "Confirm 911" state stays live before auto-reverting.
 const EMERGENCY_ARM_WINDOW_MS = 5_000;
@@ -95,6 +97,13 @@ export function CallTile(): React.JSX.Element | null {
   // after EMERGENCY_ARM_WINDOW_MS so an accidental first tap doesn't stay armed.
   const [armed, setArmed] = useState(false);
   const armTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Task 14 / spec §7 — the behavioural gap. Connect called connectToProperty as
+  // a bare `void` with no catch, so a failed remote-access launch was SILENT.
+  // That matters most here: this is the surface she is looking at when she
+  // presses it, with the tab already backgrounded behind RustDesk. Declared up
+  // here with the other per-call UI state because the reset effect below clears
+  // it alongside them.
+  const [connectError, setConnectError] = useState<string | null>(null);
   useEffect(
     () => () => {
       if (armTimerRef.current) clearTimeout(armTimerRef.current);
@@ -103,7 +112,7 @@ export function CallTile(): React.JSX.Element | null {
   );
   useEffect(() => {
     // A new call (or the call ending) must not carry a stale armed state, chat
-    // mode, or chat-unread badge into the next one.
+    // mode, chat-unread badge, or Connect failure into the next one.
     setArmed(false);
     if (armTimerRef.current) {
       clearTimeout(armTimerRef.current);
@@ -111,6 +120,7 @@ export function CallTile(): React.JSX.Element | null {
     }
     setChatMode("video");
     setChatUnread(false);
+    setConnectError(null);
     lastChatIdRef.current = undefined;
   }, [active?.callId]);
 
@@ -166,6 +176,27 @@ export function CallTile(): React.JSX.Element | null {
 
   const elapsed = useElapsed(active?.answeredAt ?? 0);
   const localTime = useHotelClock(active?.timeZone ?? null);
+
+  const connectPropertyId = active?.propertyId ?? null;
+  const connectToProperty = surface?.connectToProperty;
+  async function handleConnect() {
+    if (!connectPropertyId || !connectToProperty) return;
+    try {
+      // Invoked synchronously inside the click, before any await, so a pre-warmed
+      // cache hit still launches on the click's transient activation.
+      // "compact": this window is 380x300 and the bar already carries four
+      // controls — the full wording wraps to several lines in what is left.
+      setConnectError(connectErrorMessage(await connectToProperty(connectPropertyId), "compact"));
+    } catch {
+      // connectToProperty runs openTileForCall() and launchRustdesk()
+      // synchronously and fetchRemoteCredentials behind an await. A throw from
+      // any of them would skip setConnectError entirely and surface as an
+      // unhandled rejection — restoring the exact silence this handler exists
+      // to end. A thrown connect is not evidence of a missing credential, so it
+      // maps to the transient "try again".
+      setConnectError(connectErrorMessage({ launched: false }, "compact"));
+    }
+  }
 
   if (!active) return null; // defensive — the tile should be closed by then
 
@@ -320,17 +351,55 @@ export function CallTile(): React.JSX.Element | null {
           <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} compact />
           {/* Connect = the remote-in action: teal accent + monitor icon,
               matching the in-tab overlays. 911 is NOT here — it's pinned to
-              the face corner above. */}
-          <button
-            type="button"
-            disabled={!active.propertyId}
-            onClick={() => {
-              if (active.propertyId) void surface?.connectToProperty(active.propertyId);
-            }}
-            className="ml-auto flex items-center gap-1 rounded-button bg-accent px-2 py-1 text-xs font-semibold text-accent-foreground disabled:opacity-50"
-          >
-            <Monitor size={13} /> Connect
-          </button>
+              the face corner above.
+
+              Task 14 moved it onto the shared <PropertyActionButton>, the fifth
+              and last of the hand-rolled copies. Three props carry decisions
+              that were previously baked into this file's className and would
+              otherwise be lost:
+
+              - `tone="teal"` — NOT the default. The 2026-07-10 batch-1 polish
+                split the fill navy on the property cards / teal on all three
+                in-call Connects; the component defaults to navy.
+              - `surface="dark"` — this bar is navy. It buys the error in blaze
+                (red would read ~2.5:1 here) and a disabled treatment that mutes
+                the FILL instead of dimming the element, which on navy drops the
+                label to roughly 2:1.
+              - `size="xs"` — the PiP window is the size of a postcard; the
+                card scale (`sm`, h-8) is visibly oversized in it.
+
+              `ml-auto` moves to the WRAPPER: with an error slot attached, the
+              wrapper is the flex item, not the button.
+
+              - `gate="none"` — NOT decoration either. Duty CAN be revoked while
+                this call is live: /api/presence/end-shift flips the profile
+                OFFLINE with no ON_CALL guard, so End shift pressed in a SECOND
+                dashboard tab (whose own mid-call suppression sees no live call,
+                that state being per-tab) gates this one within a heartbeat via
+                markOffDuty. Gated, this Connect would be a DEAD CLICK: the
+                prompt is an AlertDialog in the main document, and the tile is
+                used precisely when that document is backgrounded behind
+                RustDesk, so she would see nothing happen at all, mid guest-call.
+                Remoting into the hotel PC during a live call is not an off-duty
+                action anyway — the guest is on the line whatever the shift row
+                says. Withholding it is the failure, not the safeguard.
+              - `errorPlacement="float"` — the failure message must not lay out
+                in this bar. In flow it wraps to several lines in a 380x300
+                window and permanently shrinks the guest's video face. */}
+          <PropertyActionButton
+            label="Connect"
+            icon={<Monitor aria-hidden="true" />}
+            tone="teal"
+            surface="dark"
+            size="xs"
+            gate="none"
+            onAction={handleConnect}
+            unavailableReason={connectPropertyId ? null : "This call has no property to connect to"}
+            error={connectError}
+            errorPlacement="float"
+            className="font-semibold"
+            wrapperClassName="ml-auto"
+          />
         </div>
       )}
     </div>

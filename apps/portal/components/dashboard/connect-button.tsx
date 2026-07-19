@@ -2,60 +2,47 @@
 
 // Per-property "Connect" — launches the RustDesk native client for the hotel PC
 // (spec §3.5). D10/D11 (Phase E): never gated by call phase — agents AND
-// admins, quiet / ringing / on-call alike. Task 17 (shift-tracking plan) adds
-// ONE additional gate on top of that: off-duty/on-break. The server 403 on
-// GET /api/remote-access/[propertyId] (requireOnDuty) is the real lock — this
-// is UI defense-in-depth, and only applies when a DutyProvider is actually
-// mounted (owner surfaces + isolated component tests render this button with
-// no DutyProvider, so useDutyOptional() no-ops and behavior is unchanged).
+// admins, quiet / ringing / on-call alike.
+//
+// The off-duty/on-break gate this file used to compute itself now lives in
+// <PropertyActionButton> via useDutyGuard (spec §3.4/D8). Same condition
+// (`!canWork`), same no-op when no DutyProvider is mounted — but the control
+// now stays ENABLED and the click is intercepted with an offer to start the
+// shift, instead of being disabled and relabelled per card. A disabled button
+// fires no click event, so it could never be intercepted.
+//
+// The server 403 on GET /api/remote-access/[propertyId] (requireOnDuty) remains
+// the real lock; all of the above is UI defense-in-depth.
+//
 // Renders nothing outside the CallSurfaceProvider.
 
+import { Monitor } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
-import { useDutyOptional } from "@/components/dashboard/duty-provider";
+import { PropertyActionButton } from "@/components/dashboard/property-action-button";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 
 export function ConnectButton({ propertyId }: { propertyId: string }) {
   const surface = useCallSurfaceOptional();
-  const duty = useDutyOptional();
   const [error, setError] = useState<string | null>(null);
 
   if (!surface) return null;
   // Captured after the guard so `connectToProperty` is non-null here (no `!`).
   const { connectToProperty } = surface;
 
-  const gated = duty != null && !duty.canWork;
-
   async function handleClick() {
-    if (gated) return;
-    const r = await connectToProperty(propertyId);
-    if (r.launched) {
-      setError(null);
-      return;
-    }
-    setError(
-      r.notConfigured
-        ? "No remote access configured — ask an admin."
-        : "Could not fetch credentials — try again.",
-    );
+    // Task 14: the wording moved to lib/remote-access/connect-error so the three
+    // in-call Connects, which had no error handling at all, could adopt this
+    // one's behaviour without minting three more copies of the strings.
+    setError(connectErrorMessage(await connectToProperty(propertyId)));
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <Button
-        variant="neutral"
-        size="sm"
-        onClick={handleClick}
-        disabled={gated}
-        title={gated ? "Go on duty to start" : undefined}
-      >
-        {gated ? "Go on duty to start" : "Connect"}
-      </Button>
-      {error ? (
-        <p className="text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <PropertyActionButton
+      label="Connect"
+      icon={<Monitor aria-hidden="true" />}
+      onAction={handleClick}
+      error={error}
+    />
   );
 }

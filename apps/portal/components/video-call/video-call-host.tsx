@@ -164,6 +164,15 @@ export function VideoCallHost({ operatorId }: { operatorId: string }) {
 
   return active ? (
     <VideoCall
+      // Keyed so an A-to-B call transition REMOUNTS. Both setters above
+      // (acceptVideoForCards, startOutboundForHost) call setActive with a new
+      // object unconditionally, without passing through null, so back-to-back
+      // calls would otherwise reuse one instance and carry its per-call state —
+      // the Connect failure message above all — into the next guest's call.
+      // Audio gets this for free (its overlay unmounts between calls) and the
+      // tile does it explicitly (a [active?.callId] reset effect); this makes
+      // video's lifetime as explicit as both.
+      key={active.id}
       callId={active.id}
       propertyName={active.propertyName}
       propertyId={active.propertyId}
