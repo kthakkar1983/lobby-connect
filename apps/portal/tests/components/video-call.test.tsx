@@ -63,6 +63,27 @@ vi.mock("@/lib/captions/use-captions", () => ({
   },
 }));
 
+// Document-PiP harness (Task 13). jsdom has no documentPictureInPicture, so the
+// real docPipSupported() is false and the reopen control could never render.
+// `openCallTile` deliberately NEVER invokes onReady: leaving the provider's tile
+// handle unset keeps `tileMount` null (so no real CallTile is portaled into the
+// test DOM) while still letting a later openTileForCall() through — the provider
+// short-circuits only when a handle exists.
+const tile = vi.hoisted(() => {
+  const cbs: { onClosed: (() => void) | null } = { onClosed: null };
+  return {
+    cbs,
+    docPipSupported: vi.fn(() => true),
+    openCallTile: vi.fn((_onReady: unknown, onClosed: () => void) => {
+      cbs.onClosed = onClosed;
+    }),
+  };
+});
+vi.mock("@/lib/duty-tile/call-tile-manager", () => ({
+  docPipSupported: tile.docPipSupported,
+  openCallTile: tile.openCallTile,
+}));
+
 import { VideoCall } from "@/components/video-call/video-call";
 import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
 
@@ -72,6 +93,35 @@ function EnableCaptions() {
   return <button onClick={toggleCaptions}>enable captions</button>;
 }
 
+// `tileClosedByUser` and `openTileForCall` are CONTEXT, not props (the plan said
+// otherwise). The only way into the closed-tile state is the provider's own
+// path: a live call, an opened tile, then the PiP window's pagehide. This probe
+// drives exactly that. propertyId is null on purpose — a non-null one would
+// trip the provider's credential pre-warm and put an unrelated fetch in flight.
+function TileProbe() {
+  const { publishActive, openTileForCall } = useCallSurface();
+  return (
+    <>
+      <button
+        onClick={() =>
+          publishActive("VIDEO", {
+            callId: "call-active",
+            channel: "VIDEO",
+            propertyId: null,
+            propertyName: "The Sample Hotel",
+            onHold: false,
+            answeredAt: Date.now(),
+            timeZone: null,
+          })
+        }
+      >
+        go active
+      </button>
+      <button onClick={openTileForCall}>open tile</button>
+    </>
+  );
+}
+
 describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -79,6 +129,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     vi.clearAllMocks();
     lk.joined.opts = null;
     lk.resetSession();
+    tile.cbs.onClosed = null;
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/answer-video")) {
         return Promise.resolve({
@@ -483,5 +534,100 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const end = screen.getByRole("button", { name: /^end call$/i });
     expect(end.className).toContain("bg-primary");
     expect(end.className).not.toContain("bg-attention");
+  });
+
+  // ---- Task 13: the reopen-tile control (spec §6) ----------------------------
+
+  /** Mount inside a real surface, take a call live, open the tile, then close it
+   *  the way the agent does — the PiP window's pagehide. Returns the user so the
+   *  caller can keep interacting. */
+  async function renderWithClosedTile(callId = "call-reopen") {
+    const user = userEvent.setup();
+    const view = render(
+      <CallSurfaceProvider>
+        <TileProbe />
+        <VideoCall callId={callId} onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    await user.click(screen.getByText("go active"));
+    await user.click(screen.getByText("open tile"));
+    // The provider only flips tileClosedByUser when the close was NOT its own.
+    await act(async () => {
+      tile.cbs.onClosed!();
+    });
+    return { user, view };
+  }
+
+  // Removing the visible label must not remove the NAME. An icon-only control
+  // with no aria-label is announced as "button" and is unusable by voice
+  // control; the title is additionally how a new agent learns the glyph.
+  it("keeps an accessible name and a tooltip on the icon-only reopen control", async () => {
+    await renderWithClosedTile("call-reopen-name");
+    const btn = screen.getByRole("button", { name: "Reopen tile" });
+    // Icon-only: the name comes from aria-label, not from rendered text.
+    expect(btn.textContent).toBe("");
+    expect(btn.getAttribute("title")).toBe("Reopen tile");
+  });
+
+  it("reopens the tile when the corner control is pressed", async () => {
+    const { user } = await renderWithClosedTile("call-reopen-click");
+    const before = tile.openCallTile.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Reopen tile" }));
+    expect(tile.openCallTile.mock.calls.length).toBe(before + 1);
+  });
+
+  it("renders no reopen control while the tile is still open", async () => {
+    const user = userEvent.setup();
+    render(
+      <CallSurfaceProvider>
+        <TileProbe />
+        <VideoCall callId="call-tile-open" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    await user.click(screen.getByText("go active"));
+    await user.click(screen.getByText("open tile"));
+
+    expect(screen.queryByRole("button", { name: "Reopen tile" })).toBeNull();
+  });
+
+  // Spec §6: the control sits in the TRUE bottom-right corner, so the caption
+  // band has to give the corner up rather than the button floating on top of
+  // the band. Without this the band's own backdrop sits under a 40px circle and
+  // the last words of the guest's sentence are the ones covered.
+  it("insets the caption band's right edge while the corner control is present", async () => {
+    const user = userEvent.setup();
+    render(
+      <CallSurfaceProvider>
+        <TileProbe />
+        <EnableCaptions />
+        <VideoCall callId="call-band-inset" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joined.opts).not.toBeNull());
+
+    // Go active BEFORE enabling captions: the provider resets captionsEnabled to
+    // false on every callId transition (spec D7), so the other order silently
+    // switches them back off and the band never renders.
+    await user.click(screen.getByText("go active"));
+    await act(async () => screen.getByText("enable captions").click());
+    await act(async () => {
+      (lk.joined.opts!.onRemoteAudioTrack as (t: MediaStreamTrack) => void)({
+        kind: "audio",
+      } as unknown as MediaStreamTrack);
+    });
+
+    const band = () => screen.getByText(/could I get a late checkout/i).closest("div") as HTMLElement;
+    // Tile still open — no corner control, so the band spans the full stage.
+    expect(band().className).toContain("right-3");
+    expect(band().className).not.toContain("right-16");
+
+    await user.click(screen.getByText("open tile"));
+    await act(async () => {
+      tile.cbs.onClosed!();
+    });
+
+    expect(band().className).toContain("right-16");
   });
 });

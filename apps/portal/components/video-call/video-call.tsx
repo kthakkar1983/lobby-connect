@@ -125,6 +125,9 @@ export function VideoCall({
   const registerCallControls = surface?.registerCallControls;
   const tileClosedByUser = surface?.tileClosedByUser ?? false;
   const openTileForCall = surface?.openTileForCall;
+  // Hoisted because TWO things key off it: the corner control itself, and the
+  // caption band, which gives the corner up while it is there (spec §6).
+  const showReopenTile = tileClosedByUser && docPipSupported();
 
   // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
   // overlay + tile toggles, default OFF, reset per call). No provider (standalone
@@ -507,22 +510,49 @@ export function VideoCall({
             ref={localRef}
             className="absolute right-4 top-4 h-28 w-40 overflow-hidden rounded-md border-2 [border-image:var(--gradient-seam)_1]"
           />
+          {/* left/right rather than `inset-x-3` so ONLY the right edge moves:
+              the band yields the corner to the reopen control instead of the
+              control floating on top of it (spec §6). Covering the band would
+              hide the tail of the guest's sentence — the newest words, which are
+              the ones the caption is there for. */}
           <CaptionBand
             finals={captions.finals}
             partial={captions.partial}
-            className="absolute inset-x-3 bottom-3"
+            className={`absolute bottom-3 left-3 ${showReopenTile ? "right-16" : "right-3"}`}
           />
-          {/* Task 17 (repositioned 2026-07-09): reopen the call tile if the agent
-              closed it mid-call. A small teal pill floating at the bottom-right of
-              the guest stage, seated above the caption band — replaces the flat
-              grey header pill that read as easy to miss. */}
-          {tileClosedByUser && docPipSupported() && (
+          {/* Reopen the call tile if the agent closed it mid-call. Icon-only and
+              round, in the TRUE bottom-right corner (spec §6). It was a teal
+              filled pill at bottom-16 — chrome sitting mid-frame over a guest
+              who fills the shot, and a second teal fill competing with Connect.
+              A 40px circle in the corner is a far smaller footprint over a live
+              person.
+
+              MINT OUTLINE ON A SCRIM — the app's FIRST outline-only mint
+              treatment, called out in the spec so it reads as a choice. Mint is
+              the live/connect role in the brand, so it says "available action"
+              without adding another filled button.
+
+              CONTRAST (WCAG 1.4.11, 3:1 — this is a real control, and its
+              boundary is what identifies it). The guest video underneath is
+              arbitrary, so the ring is measured against the SCRIM, and the scrim
+              is held at 90% for that reason: mint #06D6A0 (L 0.5067) on the
+              scrim is 8.72:1 over pure navy and 6.47:1 in the worst case
+              (a blown-out white frame under the 10% that shows through). At the
+              /60 this was first written with, that worst case is 2.33:1 — a
+              fail — which is why the alpha is where it is. Hover DEEPENS the
+              scrim rather than lightening it, for the same reason: a mint-tinted
+              hover fill would put the ring back over raw video. */}
+          {showReopenTile && (
             <button
               type="button"
               onClick={() => openTileForCall?.()}
-              className="absolute bottom-16 right-3 z-10 flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground shadow-md"
+              /* Icon-only, so the name has to come from aria-label; `title` is
+                 additionally how a new agent learns the glyph. */
+              title="Reopen tile"
+              aria-label="Reopen tile"
+              className="absolute bottom-3 right-3 z-10 grid h-10 w-10 place-items-center rounded-full border border-live bg-call/90 text-live shadow-md transition-colors hover:bg-call focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live focus-visible:ring-offset-2 focus-visible:ring-offset-call"
             >
-              <PictureInPicture2 size={14} /> Reopen tile
+              <PictureInPicture2 size={17} aria-hidden="true" />
             </button>
           )}
           {/* Task 13: outbound pre-connect phase. An opaque overlay (not a

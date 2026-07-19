@@ -133,6 +133,30 @@ describe("AudioCallOverlay", () => {
     expect(onReopenTile).toHaveBeenCalledOnce();
   });
 
+  // Spec §6: video tucks this into the bottom-right corner of the guest stage;
+  // audio has no stage to tuck it into, so it is a LABELLED control in the bar —
+  // the one placement that survives. It must not go back onto the call card:
+  // `collapsed` hides that card, and the tile is closed in exactly the state
+  // this control exists for, so a card-mounted reopen is unreachable precisely
+  // when it is needed.
+  it("puts the reopen control in the control bar, not on the call card", () => {
+    const { container } = render(<AudioCallOverlay {...baseProps} showReopenTile onReopenTile={vi.fn()} />);
+    const reopen = screen.getByRole("button", { name: /reopen tile/i });
+    const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
+
+    expect(card.contains(reopen)).toBe(false);
+    // Same container as End call — i.e. the shell's control bar.
+    const bar = screen.getByRole("button", { name: /^end call$/i }).parentElement as HTMLElement;
+    expect(bar.contains(reopen)).toBe(true);
+    // Sized to its neighbours (spec §6): the shared `sm` control scale.
+    expect(reopen.className).toContain("h-8");
+  });
+
+  it("renders no reopen control while the tile is up", () => {
+    render(<AudioCallOverlay {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /reopen tile/i })).toBeNull();
+  });
+
   it("collapses the call card (hidden) when the tile is up (collapsed)", () => {
     const { container } = render(<AudioCallOverlay {...baseProps} collapsed />);
     const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;

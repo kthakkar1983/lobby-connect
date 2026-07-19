@@ -204,8 +204,11 @@ export function AudioCallOverlay({
       stage={(basis) => (
         <div
           data-testid="audio-call-card"
+          /* No `relative`: the reopen pill that needed this positioning context
+             moved to the control bar (spec §6), and nothing else here is
+             absolutely positioned against the card. */
           className={cn(
-            "relative flex flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white",
+            "flex flex-col bg-[var(--color-call)] px-4 pb-6 pt-4 text-white",
             basis,
             collapsed && "hidden",
           )}
@@ -227,19 +230,6 @@ export function AudioCallOverlay({
               </div>
             )}
           </div>
-          {/* Task 17 (repositioned 2026-07-09): reopen the call tile if the agent
-              closed it mid-call. A small teal pill floating at the bottom-right of
-              the call card — was a flat grey pill in the header that read as easy
-              to miss. Mirrors the video overlay's placement over the guest stage. */}
-          {showReopenTile && (
-            <button
-              type="button"
-              onClick={onReopenTile}
-              className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground shadow-md"
-            >
-              <PictureInPicture2 size={14} /> Reopen tile
-            </button>
-          )}
         </div>
       )}
       panel={(basis) => <PlaybookPanel callId={callId} basis={collapsed ? "basis-full" : basis} />}
@@ -331,6 +321,38 @@ export function AudioCallOverlay({
             />
           </CallControlTray>
           <CallControlDivider />
+          {/* Reopen the call tile, closed by the agent mid-call. Video tucks
+              this into the bottom-right corner of its guest stage; audio has no
+              stage, so the control bar is the only sane placement — and it is
+              the ONE place that placement survives (spec §6).
+
+              It sits after the divider with Connect and End call rather than in
+              the toggle tray: like Connect (which hands off to RustDesk), it
+              moves the agent to another window. It is not a toggle and carries
+              no pressed state, so the tray — whose whole vocabulary is
+              `aria-pressed` call-adjusting toggles — would be the wrong group.
+
+              `outline` is the house's existing light-surface secondary
+              treatment: quieter than the teal Connect and the blaze End call,
+              which is right for a control that only appears because the agent
+              closed something herself. It DOES appear and disappear, which §5.3
+              otherwise forbids — but that is a control arriving on her own
+              action in another window, not a label swapping under her cursor,
+              and it is unavoidable for a conditional affordance. */}
+          {showReopenTile && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onReopenTile}
+              /* No `title` here, unlike video's: the label is visible, and per
+                 the accessible-name computation a title never enters the name
+                 once content has supplied one. Video needs it because it is
+                 icon-only. */
+            >
+              <PictureInPicture2 aria-hidden="true" /> Reopen tile
+            </Button>
+          )}
           {/* Task 14 replaces this with <PropertyActionButton tone="teal"> to
               pick up the duty guard and the inline error the card Connect has;
               the treatment here is already that component's. */}
