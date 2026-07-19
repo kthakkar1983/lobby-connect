@@ -34,17 +34,17 @@ const baseProps = {
 
 describe("CallShell", () => {
   it("renders the title in the header", () => {
-    render(<CallShell {...baseProps} playbookBasis="63%" />);
+    render(<CallShell {...baseProps} playbookBasis="70%" />);
     expect(screen.getByText(/On call · The Sample Hotel/)).toBeTruthy();
   });
 
   // The body ratio is named by the PLAYBOOK's share — the RIGHT-hand panel and
   // the larger half. If these two assertions ever read as the stage being the
   // larger side, the map has been inverted.
-  it("gives the playbook 63% and the stage 37% at playbookBasis=63%", () => {
-    render(<CallShell {...baseProps} playbookBasis="63%" />);
-    expect(screen.getByTestId("panel").className).toBe("basis-[63%]");
-    expect(screen.getByTestId("stage").className).toBe("basis-[37%]");
+  it("gives the playbook 70% and the stage 30% at playbookBasis=70%", () => {
+    render(<CallShell {...baseProps} playbookBasis="70%" />);
+    expect(screen.getByTestId("panel").className).toBe("basis-[70%]");
+    expect(screen.getByTestId("stage").className).toBe("basis-[30%]");
   });
 
   it("gives the playbook 3/5 and the stage 2/5 at playbookBasis=60%", () => {
@@ -65,7 +65,7 @@ describe("CallShell", () => {
     render(
       <CallShell
         {...baseProps}
-        playbookBasis="63%"
+        playbookBasis="70%"
         bannersAboveBody={<div data-testid="above" />}
         bannersBelowBody={<div data-testid="below" />}
       />,
@@ -84,7 +84,7 @@ describe("CallShell", () => {
     render(
       <CallShell
         {...baseProps}
-        playbookBasis="63%"
+        playbookBasis="70%"
         emergency={<button type="button">Call 911</button>}
       />,
     );

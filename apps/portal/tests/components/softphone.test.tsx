@@ -371,7 +371,7 @@ describe("Softphone — stale-closure regression (H1)", () => {
     await waitFor(() => screen.getByText(/On call · The Sample Hotel/i));
     // The in-call controls (now inside the overlay) are still present.
     expect(screen.getByPlaceholderText("Room #")).toBeTruthy();
-    expect(screen.getByText("Hang up")).toBeTruthy();
+    expect(screen.getByText("End call")).toBeTruthy();
   });
 
   it("captions the guest after answering a phone call", async () => {

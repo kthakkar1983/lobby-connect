@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PictureInPicture2, Monitor, CornerDownLeft, Check, Loader2, AlertTriangle } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 import {
   MAX_CALL_DURATION_MS,
@@ -21,6 +21,13 @@ import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { ChatDock } from "@/components/call/chat-dock";
 import { CallShell } from "@/components/call/call-shell";
+import {
+  CallControlDivider,
+  CallControlTray,
+  CallToggleButton,
+  EndCallButton,
+} from "@/components/call/call-controls";
+import { Button } from "@/components/ui/button";
 import { useCaptions } from "@/lib/captions/use-captions";
 import { reliableFetch } from "@/lib/http/reliable-fetch";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
@@ -609,98 +616,98 @@ export function VideoCall({
           </div>
         )
       }
-      controlBarClassName="gap-2"
+      /* Control bar — Room#/Notes (left, Enter-to-save) · tray (Mute, Camera,
+         Captions) · divider · Connect, End call. Same order and the same shared
+         controls as the audio overlay (spec §5.4). The input group is capped in
+         REM so it tracks the 112.5% root font at `lg`. */
       controls={
         <>
-          <input
-            value={roomNumber}
-            onChange={(e) => setRoomNumber(e.target.value)}
-            onKeyDown={onKeyDownSave}
-            placeholder="Room #"
-            className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
-          />
-          <div className="relative flex flex-1 items-center">
+          <div className="flex min-w-0 max-w-[35rem] flex-1 items-center gap-2">
             <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
               onKeyDown={onKeyDownSave}
-              placeholder="Notes…"
-              className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              placeholder="Room #"
+              className="w-24 rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute right-2.5 flex items-center"
-            >
-              {saveState === "saving" ? (
-                <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
-              ) : saveState === "saved" ? (
-                <Check size={16} className="text-live-foreground" />
-              ) : saveState === "failed" ? (
-                <AlertTriangle size={15} className="text-destructive" />
-              ) : (
-                <CornerDownLeft size={16} className="text-text-muted" />
-              )}
-            </span>
-            <span role="status" aria-live="polite" className="sr-only">
-              {saveState === "saving"
-                ? "Saving notes"
-                : saveState === "saved"
-                  ? "Notes saved"
-                  : saveState === "failed"
-                    ? "Notes save failed — retries after the call"
-                    : ""}
-            </span>
+            <div className="relative flex flex-1 items-center">
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onKeyDown={onKeyDownSave}
+                placeholder="Notes…"
+                className="w-full rounded-input border border-border bg-background py-2 pl-3 pr-9 text-sm text-foreground"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2.5 flex items-center"
+              >
+                {saveState === "saving" ? (
+                  <Loader2 size={16} className="animate-spin text-text-muted motion-reduce:animate-none" />
+                ) : saveState === "saved" ? (
+                  <Check size={16} className="text-live-foreground" />
+                ) : saveState === "failed" ? (
+                  <AlertTriangle size={15} className="text-destructive" />
+                ) : (
+                  <CornerDownLeft size={16} className="text-text-muted" />
+                )}
+              </span>
+              <span role="status" aria-live="polite" className="sr-only">
+                {saveState === "saving"
+                  ? "Saving notes"
+                  : saveState === "saved"
+                    ? "Notes saved"
+                    : saveState === "failed"
+                      ? "Notes save failed — retries after the call"
+                      : ""}
+              </span>
+            </div>
           </div>
-          <button
+          {/* Hold and Swap are gone (spec §5.1 / D10). Both were hardcoded
+              `disabled` with title="Coming soon", and Hold was deferred
+              entirely to multi-property when the Phase-3 plan was gated — they
+              held prime control-bar space doing nothing, and removing them is
+              what pays for `End call`'s longer label. */}
+          <CallControlTray>
+            <CallToggleButton
+              label="Mute"
+              icon={muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
+              pressed={muted}
+              title={muted ? "Turn your microphone on" : "Turn your microphone off"}
+              onToggle={toggleMute}
+            />
+            <CallToggleButton
+              label="Camera"
+              icon={cameraOff ? <VideoOff aria-hidden="true" /> : <Video aria-hidden="true" />}
+              pressed={cameraOff}
+              title={cameraOff ? "Turn your camera on" : "Turn your camera off"}
+              onToggle={toggleCamera}
+            />
+            <CaptionToggle
+              enabled={captionsEnabled}
+              onToggle={toggleCaptions}
+              /* Fixed box so the label swap ("Captions" / "Captions off") can't
+                 widen the tray and shift Connect and End call sideways. */
+              className="h-8 w-36 justify-center py-0"
+            />
+          </CallControlTray>
+          <CallControlDivider />
+          {/* Task 14 replaces this with <PropertyActionButton tone="teal"> to
+              pick up the duty guard and the inline error the card Connect has;
+              the treatment here is already that component's. */}
+          <Button
             type="button"
-            onClick={toggleMute}
-            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-          >
-            {muted ? <MicOff size={16} /> : <Mic size={16} />}
-            {muted ? "Unmute" : "Mute"}
-          </button>
-          <button
-            type="button"
-            onClick={toggleCamera}
-            className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm"
-          >
-            {cameraOff ? <VideoOff size={16} /> : <Video size={16} />}
-            {cameraOff ? "Cam on" : "Cam off"}
-          </button>
-          <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} />
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-          >
-            Hold
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="rounded-button border border-border px-3 py-2 text-sm text-muted-foreground opacity-50"
-          >
-            Swap
-          </button>
-          <button
-            type="button"
+            variant="accent"
+            size="sm"
             disabled={!propertyId || !surface}
             onClick={() => {
               if (propertyId) void surface?.connectToProperty(propertyId);
             }}
-            className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+            className="font-semibold"
           >
-            <Monitor size={16} /> Connect
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleEnd()}
-            className="flex items-center gap-1.5 rounded-button bg-primary px-3 py-2 text-[1.1875rem] font-bold leading-none text-primary-foreground"
-          >
-            <PhoneOff size={18} /> End
-          </button>
+            <Monitor aria-hidden="true" /> Connect
+          </Button>
+          <EndCallButton tone="navy" onEnd={() => void handleEnd()} />
         </>
       }
     />

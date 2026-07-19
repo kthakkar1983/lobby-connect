@@ -380,7 +380,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
 
     // Notes must be non-empty or saveNotes short-circuits as "nothing to save".
     await user.type(screen.getByPlaceholderText("Notes…"), "extra towels");
-    await user.click(screen.getByRole("button", { name: /^end$/i }));
+    await user.click(screen.getByRole("button", { name: /^end call$/i }));
 
     const affordance = await screen.findByText(/couldn't save notes/i);
     const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
@@ -403,5 +403,52 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
 
     expect(screen.queryByRole("button", { name: /^chat$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^playbook$/i })).toBeNull();
+  });
+
+  // Spec §5.1 / D10. Both were hardcoded `disabled` with title="Coming soon",
+  // and Hold was deferred entirely to multi-property when the Phase-3 plan was
+  // gated. Removing them is what pays for `End call`'s longer label — so if
+  // either comes back, the bar no longer fits what replaced it.
+  it("no longer renders the dead Hold and Swap controls", async () => {
+    render(<VideoCall callId="call-nodead" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    expect(screen.queryByRole("button", { name: /^hold$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^swap$/i })).toBeNull();
+  });
+
+  // §5.3: the bar must not move under the agent's cursor mid-call. Both toggles
+  // keep a fixed label and carry their state in the fill plus aria-pressed.
+  it("keeps Mute and Camera labelled the same once toggled", async () => {
+    const user = userEvent.setup();
+    render(<VideoCall callId="call-noreflow" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const mute = screen.getByRole("button", { name: /^mute$/i });
+    const camera = screen.getByRole("button", { name: /^camera$/i });
+    expect(mute.getAttribute("aria-pressed")).toBe("false");
+    expect(camera.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(mute);
+    await user.click(camera);
+
+    // Same elements, same labels — only the pressed state changed.
+    expect(screen.getByRole("button", { name: /^mute$/i })).toBe(mute);
+    expect(screen.getByRole("button", { name: /^camera$/i })).toBe(camera);
+    expect(mute.getAttribute("aria-pressed")).toBe("true");
+    expect(camera.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: /unmute|cam on|cam off/i })).toBeNull();
+  });
+
+  // D11: `End call` on both surfaces, but VIDEO's fill is navy. Audio's blaze is
+  // a deliberate punch-list-B1 override and must not leak here — video has no
+  // 911 control to be confused with, and blaze is the needs-attention colour.
+  it("ends the call with a navy 'End call' (audio's blaze must not leak here)", async () => {
+    render(<VideoCall callId="call-endtone" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const end = screen.getByRole("button", { name: /^end call$/i });
+    expect(end.className).toContain("bg-primary");
+    expect(end.className).not.toContain("bg-attention");
   });
 });

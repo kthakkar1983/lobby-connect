@@ -48,7 +48,7 @@ describe("AudioCallOverlay", () => {
     const onHangUp = vi.fn();
     render(<AudioCallOverlay {...baseProps} onToggleMute={onToggleMute} onHangUp={onHangUp} />);
     await user.click(screen.getByText("Mute"));
-    await user.click(screen.getByText("Hang up"));
+    await user.click(screen.getByText("End call"));
     expect(onToggleMute).toHaveBeenCalledOnce();
     expect(onHangUp).toHaveBeenCalledOnce();
   });
@@ -158,16 +158,17 @@ describe("AudioCallOverlay", () => {
     expect(band.className).not.toContain("hidden");
   });
 
-  // Characterization (Task 11 → 12). The audio body is deliberately playbook-
-  // heavy: the call card needs less room than the document the agent reads to
-  // handle the guest. Nothing pinned this before — a reviewer inverted the
-  // shell's SPLITS map and the whole suite stayed green. Task 12 widens the
-  // playbook to 70%, at which point this expectation changes DELIBERATELY.
-  it("gives the playbook 63% of the body and the call card 37%", () => {
+  // The audio body is deliberately playbook-heavy: the call card needs less room
+  // than the document the agent reads to handle the guest, and audio has no
+  // video to show at all. Task 12 widened it from 63% to 70% (spec §4, D9) —
+  // 63/37 was barely distinguishable from video's 60/40, which is the drift the
+  // shared shell exists to stop. Nothing pinned this before Task 11: a reviewer
+  // inverted the shell's SPLITS map and the whole suite stayed green.
+  it("gives the playbook 70% of the body and the call card 30%", () => {
     const { container } = render(<AudioCallOverlay {...baseProps} />);
     const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
-    expect(card.className).toContain("basis-[37%]");
-    expect(screen.getByTestId("playbook").getAttribute("data-basis")).toBe("basis-[63%]");
+    expect(card.className).toContain("basis-[30%]");
+    expect(screen.getByTestId("playbook").getAttribute("data-basis")).toBe("basis-[70%]");
   });
 
   it("gives the playbook the full width when collapsed (the tile owns the call)", () => {
@@ -213,5 +214,43 @@ describe("AudioCallOverlay", () => {
     await user.click(screen.getByRole("button", { name: /yes — call 911/i }));
 
     expect(onTriggerEmergency).toHaveBeenCalledOnce();
+  });
+
+  // LIFE SAFETY, the colour half. This is the ONE surface where a red 911 button
+  // and the end-call button are on screen together. `End call` is blaze rather
+  // than navy precisely because red was reading as the "end call" cue
+  // (punch-list B1, Kumar 2026-06-18), and 911 stays red and alone in the
+  // header. Both facts have to hold, or a mistap reaches 911 mid-shift.
+  it("keeps 911 red in the header and End call blaze, never the same colour", () => {
+    render(<AudioCallOverlay {...baseProps} />);
+
+    const emergency = screen.getByRole("button", { name: /call 911/i });
+    const end = screen.getByRole("button", { name: /^end call$/i });
+
+    expect(emergency.className).toContain("bg-destructive");
+    expect(end.className).toContain("bg-attention");
+    expect(end.className).not.toContain("bg-destructive");
+    // 911 is not a sibling of End call — it lives alone in the header strip.
+    expect(emergency.parentElement === end.parentElement).toBe(false);
+  });
+
+  // §5.3: the bar must not move under the agent's cursor mid-call. Audio has no
+  // camera control, so Mute is the only toggle that could reflow it.
+  it("keeps Mute labelled the same once toggled, carrying state in aria-pressed", () => {
+    const { rerender } = render(<AudioCallOverlay {...baseProps} muted={false} />);
+    const mute = screen.getByRole("button", { name: /^mute$/i });
+    expect(mute.getAttribute("aria-pressed")).toBe("false");
+
+    rerender(<AudioCallOverlay {...baseProps} muted />);
+    expect(screen.getByRole("button", { name: /^mute$/i }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: /unmute/i })).toBeNull();
+  });
+
+  // Neither ever existed on this surface — pinned so a later "make the two bars
+  // the same" pass cannot import video's dead controls instead of deleting them.
+  it("has no Hold or Swap controls", () => {
+    render(<AudioCallOverlay {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /^hold$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^swap$/i })).toBeNull();
   });
 });

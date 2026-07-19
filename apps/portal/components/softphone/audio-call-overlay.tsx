@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Mic,
   MicOff,
-  PhoneOff,
   AlertTriangle,
   CornerDownLeft,
   Check,
@@ -27,6 +26,13 @@ import { PlaybookPanel } from "@/components/call/playbook-panel";
 import { CaptionBand } from "@/components/call/caption-band";
 import { CaptionToggle } from "@/components/call/caption-toggle";
 import { CallShell } from "@/components/call/call-shell";
+import {
+  CallControlDivider,
+  CallControlTray,
+  CallToggleButton,
+  EndCallButton,
+} from "@/components/call/call-controls";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function formatElapsed(totalSeconds: number): string {
@@ -192,8 +198,9 @@ export function AudioCallOverlay({
           )}
         </>
       }
-      /* Body — call card (~37%) + playbook (~63%). */
-      playbookBasis="63%"
+      /* Body — call card (~30%) + playbook (~70%). Audio has no video to show,
+         so the card needs less room than video's stage (spec §4, D9). */
+      playbookBasis="70%"
       stage={(basis) => (
         <div
           data-testid="audio-call-card"
@@ -252,11 +259,15 @@ export function AudioCallOverlay({
           className={cn("mx-3 mb-2", collapsed && "hidden")}
         />
       }
-      /* Control bar — Room#/Notes (left, Enter-to-save) · Mute/Hang up (right). */
-      controlBarClassName="justify-between gap-3"
+      /* Control bar — Room#/Notes (left, Enter-to-save) · tray (Mute, Captions)
+         · divider · Connect, End call. Same order and the same shared controls
+         as the video overlay; audio simply has no camera to toggle (spec §5.4).
+         The input group's cap is in REM, not the 560px it used to be inline:
+         the root font scales to 112.5% at `lg`, so a px cap stops tracking the
+         type scale exactly where it matters (same reasoning as §3.6b). */
       controls={
         <>
-          <div className="flex flex-1 items-center gap-2" style={{ maxWidth: 560 }}>
+          <div className="flex min-w-0 max-w-[35rem] flex-1 items-center gap-2">
             <input
               value={roomNumber}
               onChange={(e) => onRoomNumberChange(e.target.value)}
@@ -298,35 +309,39 @@ export function AudioCallOverlay({
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <CaptionToggle enabled={captionsEnabled} onToggle={onToggleCaptions} />
-            <button
-              type="button"
-              disabled={!onConnect}
-              onClick={onConnect}
-              className="flex items-center gap-1 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
-            >
-              <Monitor size={16} /> Connect
-            </button>
-            <button
-              type="button"
-              onClick={onToggleMute}
-              className="flex items-center gap-1 rounded-button border border-border px-3 py-2 text-sm text-foreground"
-            >
-              {muted ? <MicOff size={16} /> : <Mic size={16} />}
-              {muted ? "Unmute" : "Mute"}
-            </button>
-            {/* Hang up is blaze (not navy): red=911 was reading as the "end call" cue.
-                Intentional override of "blaze = needs-attention, never a CTA" for this
-                one control (punch-list B1, Kumar 2026-06-18). 911 stays red, top-right. */}
-            <button
-              type="button"
-              onClick={onHangUp}
-              className="flex items-center gap-1.5 rounded-button bg-attention px-4 py-2 text-sm font-semibold text-attention-foreground"
-            >
-              <PhoneOff size={16} /> Hang up
-            </button>
-          </div>
+          <CallControlTray>
+            <CallToggleButton
+              label="Mute"
+              icon={muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
+              pressed={muted}
+              title={muted ? "Turn your microphone on" : "Turn your microphone off"}
+              onToggle={onToggleMute}
+            />
+            <CaptionToggle
+              enabled={captionsEnabled}
+              onToggle={onToggleCaptions}
+              /* Fixed box so the label swap ("Captions" / "Captions off") can't
+                 widen the tray and shift Connect and End call sideways. */
+              className="h-8 w-36 justify-center py-0"
+            />
+          </CallControlTray>
+          <CallControlDivider />
+          {/* Task 14 replaces this with <PropertyActionButton tone="teal"> to
+              pick up the duty guard and the inline error the card Connect has;
+              the treatment here is already that component's. */}
+          <Button
+            type="button"
+            variant="accent"
+            size="sm"
+            disabled={!onConnect}
+            onClick={onConnect}
+            className="font-semibold"
+          >
+            <Monitor aria-hidden="true" /> Connect
+          </Button>
+          {/* Blaze, not navy — see <EndCallButton>'s `tone`. This is the one
+              surface where a red 911 and the end-call button coexist. */}
+          <EndCallButton tone="blaze" onEnd={onHangUp} />
         </>
       }
     />

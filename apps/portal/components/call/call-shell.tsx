@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 /**
  * Shared chrome for the two in-call surfaces — the audio overlay
@@ -39,13 +38,12 @@ import { cn } from "@/lib/utils";
  * stop that: these keys read in the same direction as spec §4's table, and
  * tests/components/call-shell.test.tsx pins the mapping.
  *
- * Today: audio playbook 63%, video playbook 60% — both preserved exactly by the
- * Task 11 extraction. Task 12 widens audio's playbook to 70% (spec §4, D9),
- * which takes TWO edits: add a "70%" entry here AND change the
- * `playbookBasis` passed at audio-call-overlay.tsx's call site.
+ * Audio playbook 70%, video playbook 60% (spec §4, D9). Audio has no video to
+ * show, so its call card genuinely needs less room than video's stage; the 63%
+ * it shipped with was, in Kumar's words, "barely noticeable compared to 60-40".
  */
 const SPLITS = {
-  "63%": { stage: "basis-[37%]", panel: "basis-[63%]" },
+  "70%": { stage: "basis-[30%]", panel: "basis-[70%]" },
   "60%": { stage: "basis-2/5", panel: "basis-3/5" },
 } as const;
 
@@ -60,7 +58,6 @@ export function CallShell({
   panel,
   bannersBelowBody,
   controls,
-  controlBarClassName,
 }: {
   /** Header text after the live beacon, e.g. "On call · The Sample Hotel". */
   readonly title: ReactNode;
@@ -97,13 +94,16 @@ export function CallShell({
    * notes-save Retry/Discard affordance live here.
    */
   readonly bannersBelowBody?: ReactNode;
-  readonly controls: ReactNode;
   /**
-   * Per-surface control-bar arrangement. The chrome (border, background,
-   * padding) is shared; the two bars lay their contents out differently today
-   * — audio `justify-between gap-3`, video `gap-2`. Task 12 converges them.
+   * The control bar's contents. Its chrome — border, background, padding and
+   * gap — is owned here and is now IDENTICAL on both surfaces: Task 11 needed a
+   * `controlBarClassName` escape hatch to keep the extraction a pure move
+   * (audio laid out `justify-between gap-3`, video `gap-2`), and Task 12
+   * converged them, so the hatch is gone. Both bars now read: inputs, then the
+   * control tray pushed right by its own `ml-auto`, then Connect and End call.
+   * The shared vocabulary lives in components/call/call-controls.tsx.
    */
-  readonly controlBarClassName?: string;
+  readonly controls: ReactNode;
 }) {
   const basis = SPLITS[playbookBasis];
 
@@ -127,9 +127,7 @@ export function CallShell({
 
       {bannersBelowBody}
 
-      <div className={cn("flex items-center border-t border-border bg-card p-3", controlBarClassName)}>
-        {controls}
-      </div>
+      <div className="flex items-center gap-3 border-t border-border bg-card p-3">{controls}</div>
     </div>
   );
 }
