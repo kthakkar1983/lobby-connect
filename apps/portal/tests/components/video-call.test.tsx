@@ -130,6 +130,10 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     lk.joined.opts = null;
     lk.resetSession();
     tile.cbs.onClosed = null;
+    // Re-arm explicitly: clearAllMocks() clears calls but NOT a mockReturnValue,
+    // so the unsupported-DocPiP test's `false` would otherwise leak forward and
+    // silently blank the reopen control for every test declared after it.
+    tile.docPipSupported.mockReturnValue(true);
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/answer-video")) {
         return Promise.resolve({
@@ -567,7 +571,42 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const btn = screen.getByRole("button", { name: "Reopen tile" });
     // Icon-only: the name comes from aria-label, not from rendered text.
     expect(btn.textContent).toBe("");
+    // BOTH attributes, asserted directly. Resolving the control by its
+    // accessible name does NOT prove aria-label is present: per the
+    // accessible-name computation `title` is a valid last-resort name source,
+    // so getByRole({name}) alone stays green if aria-label is deleted (verified
+    // by mutation). The two are not interchangeable — components/call/
+    // call-controls.tsx documents that assistive tech exposes title-derived
+    // names inconsistently (VoiceOver commonly drops it), which is exactly why
+    // spec §6 requires the explicit label as well as the tooltip.
+    expect(btn.getAttribute("aria-label")).toBe("Reopen tile");
     expect(btn.getAttribute("title")).toBe("Reopen tile");
+  });
+
+  // The two things this task exists to change about the control's appearance —
+  // where it sits and how legible its boundary is — were otherwise pinned by
+  // nothing. Reverting either (bottom-3 -> bottom-16, /90 -> /60) left the whole
+  // suite green, so a later tidy-up could silently undo both: the mid-frame
+  // placement over the guest's face, and a scrim alpha whose contrast figure is
+  // load-bearing (see the source comment — /60 puts the worst case at 2.33:1,
+  // an outright 1.4.11 failure).
+  it("keeps the reopen control in the corner, on a scrim heavy enough to read", async () => {
+    await renderWithClosedTile("call-reopen-corner");
+    const btn = screen.getByRole("button", { name: "Reopen tile" });
+    expect(btn.className).toContain("bottom-3");
+    expect(btn.className).toContain("right-3");
+    expect(btn.className).toContain("bg-call/90");
+  });
+
+  // DocPiP unsupported => there is no window to reopen INTO, so the affordance
+  // must not be offered. Every other test in this file runs with the support
+  // probe forced true (jsdom has no documentPictureInPicture, so the control
+  // could otherwise never render at all), which left this branch — the one that
+  // decides whether a whole class of browser sees a dead button — uncovered.
+  it("offers no reopen control when Document PiP is unsupported", async () => {
+    tile.docPipSupported.mockReturnValue(false);
+    await renderWithClosedTile("call-reopen-nopip");
+    expect(screen.queryByRole("button", { name: "Reopen tile" })).toBeNull();
   });
 
   it("reopens the tile when the corner control is pressed", async () => {

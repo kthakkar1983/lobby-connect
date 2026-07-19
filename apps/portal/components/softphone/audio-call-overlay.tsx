@@ -338,7 +338,28 @@ export function AudioCallOverlay({
               closed something herself. It DOES appear and disappear, which §5.3
               otherwise forbids — but that is a control arriving on her own
               action in another window, not a label swapping under her cursor,
-              and it is unavoidable for a conditional affordance. */}
+              and it is unavoidable for a conditional affordance.
+
+              What §5.3 costs here, stated plainly: the tray is `ml-auto`, so
+              everything after it packs right. Connect and End call — the two
+              most-pressed controls, and the ones §5.3 was written for — stay
+              pinned to the right edge, but the tray and the divider DO shift
+              left by this button's width when it appears. That is the lesser
+              evil of the two available reflows and the reason this sits here
+              rather than before the tray; reserving permanent width for a
+              control the agent sees rarely is the worse trade.
+
+              Boundary contrast, so it is a recorded decision and not an
+              oversight: `outline` is `border-border` on `bg-card`, i.e.
+              #DBE4E5 on #FFFFFF = 1.29:1, under the 3:1 that 1.4.11 asks of a
+              boundary that IDENTIFIES a control. Identification here rests on
+              the visible high-contrast label instead — this is the only control
+              in the bar identified by a boundary rather than a fill. It is
+              inherited house debt (the same variant is used in a dozen other
+              places), not something this control invented, so it is deliberately
+              NOT diverged from here: a one-off treatment would trade a known
+              house-wide question for an inconsistency. Worth settling across
+              the `outline` variant as a whole, not in this file. */}
           {showReopenTile && (
             <Button
               type="button"

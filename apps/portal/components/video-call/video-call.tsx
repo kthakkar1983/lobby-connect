@@ -525,7 +525,8 @@ export function VideoCall({
               filled pill at bottom-16 — chrome sitting mid-frame over a guest
               who fills the shot, and a second teal fill competing with Connect.
               A 40px circle in the corner is a far smaller footprint over a live
-              person.
+              person. (40px = `h-10`, the nearest step on the spacing scale to
+              the spec's "~38px" — the spec figure is approximate, not a target.)
 
               MINT OUTLINE ON A SCRIM — the app's FIRST outline-only mint
               treatment, called out in the spec so it reads as a choice. Mint is
@@ -533,15 +534,24 @@ export function VideoCall({
               without adding another filled button.
 
               CONTRAST (WCAG 1.4.11, 3:1 — this is a real control, and its
-              boundary is what identifies it). The guest video underneath is
-              arbitrary, so the ring is measured against the SCRIM, and the scrim
-              is held at 90% for that reason: mint #06D6A0 (L 0.5067) on the
-              scrim is 8.72:1 over pure navy and 6.47:1 in the worst case
-              (a blown-out white frame under the 10% that shows through). At the
-              /60 this was first written with, that worst case is 2.33:1 — a
-              fail — which is why the alpha is where it is. Hover DEEPENS the
-              scrim rather than lightening it, for the same reason: a mint-tinted
-              hover fill would put the ring back over raw video. */}
+              boundary is what identifies it). Read the figures below for what
+              they are: the ring has an INNER boundary against its own scrim and
+              an OUTER one against whatever the guest's camera happens to be
+              showing. Only the inner one can be measured, and the outer one
+              cannot be guaranteed by construction — a blown-out white or
+              mint-adjacent frame puts it well under 3:1. Holding the scrim
+              opaque enough that the ring is identified against IT is the
+              defensible reading of the SC here, not a claim that every edge of
+              this control clears 3:1 against arbitrary video.
+
+              So: the scrim is held at 90%, and the numbers are mint #06D6A0
+              (L 0.5067) on the scrim — 8.72:1 over pure navy, 6.47:1 in the
+              worst case (a blown-out white frame under the 10% that shows
+              through). At the /60 this was first written with, that worst case
+              is 2.33:1 — an outright fail — which is why the alpha is where it
+              is, and why a test now pins it. Hover DEEPENS the scrim rather
+              than lightening it, for the same reason: a mint-tinted hover fill
+              would put the ring back over raw video. */}
           {showReopenTile && (
             <button
               type="button"

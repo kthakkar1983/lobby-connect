@@ -148,6 +148,14 @@ describe("AudioCallOverlay", () => {
     // Same container as End call — i.e. the shell's control bar.
     const bar = screen.getByRole("button", { name: /^end call$/i }).parentElement as HTMLElement;
     expect(bar.contains(reopen)).toBe(true);
+    // ...but NOT in the toggle tray, which sits inside that same bar. `contains`
+    // is recursive, so the assertion above is satisfied by tray membership too
+    // (verified by mutation: moving the control into the tray left this file
+    // green). The tray's entire vocabulary is `aria-pressed` call-adjusting
+    // toggles; reopen carries no pressed state and, like Connect, hands the
+    // agent to another window. Grouping it with Mute and Captions would say it
+    // adjusts the call.
+    expect(screen.getByTestId("call-control-tray").contains(reopen)).toBe(false);
     // Sized to its neighbours (spec §6): the shared `sm` control scale.
     expect(reopen.className).toContain("h-8");
   });
