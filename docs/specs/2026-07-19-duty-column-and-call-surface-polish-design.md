@@ -115,7 +115,17 @@ Gated controls **stay enabled and focusable.** Clicking one opens a small dialog
 
 **Why not `disabled`:** a `disabled` button fires no click event, so it cannot be intercepted. It also gives touch users no feedback whatsoever and is low-contrast for everyone. Keeping the control live and responding on use is both the only way to build this and the better accessibility outcome.
 
-**Applies to:** the Accepting toggle, and property-card `Connect` and `Answer`.
+**Applies to:** the Accepting toggle, and property-card `Answer`, `Connect`, and `Kiosk`.
+
+**The guard is duty-specific, not a blanket disabled-handler.** `KioskCallButton` computes `disabled = !kioskOnline || dutyGated || busy` (`kiosk-call-button.tsx:39`). Only `dutyGated` is a duty problem:
+
+| Reason | Treatment |
+|---|---|
+| `dutyGated` | Visually gated, intercepts, opens the guard dialog |
+| `!kioskOnline` | Stays genuinely `disabled`, label `Kiosk offline`, `title="Kiosk offline"` |
+| `busy` | Stays genuinely `disabled` — transient, an in-flight request |
+
+Offering "start your shift" for an offline kiosk would be a lie: starting the shift would not make that button work. The guard must key on the duty reason alone.
 
 **Security note:** this is presentation only. The authoritative gates stay exactly where they are — `softphone.tsx:587` (`if (!canWorkRef.current) return;`) and the server-side D13 duty check. The guard must **not** become the only thing preventing an off-duty action.
 
@@ -137,7 +147,16 @@ This also **retires the audio/video asymmetry** noted during exploration: video 
 
 Kumar's rationale: with five properties per pod and more later, a per-tile "Go on duty" repeated across every card reads as noise.
 
-**Card anatomy, for the record** (verified at `property-card.tsx:95-143`): a kiosk online/offline dot beside the name; `Answer` and `Silence` rendered **only while ringing**; and `{connectSlot}`. There is **no "Kiosk" button** — an early mockup invented one.
+**Card anatomy, for the record.** `PropertyCard` is **slot-based**, so reading the component alone does not tell you what renders — the buttons arrive through `connectSlot` and `footerSlot` from `pod-card-grid.tsx:115-136`. In full:
+
+- kiosk online/offline dot beside the name (`property-card.tsx:95-101`, title-only, `aria-hidden`)
+- `Answer` and `Silence` — rendered **only while ringing** (`property-card.tsx:123-143`)
+- `connectSlot` → `<ConnectButton>` **and** `<KioskCallButton>` side by side (`pod-card-grid.tsx:121-134`)
+- `footerSlot` → supplied only by `fleet-board.tsx:84` (admin); null on the agent grid
+
+`Kiosk` (`components/dashboard/kiosk-call-button.tsx`, Task 14 of the outbound-video-calls plan) starts an **outbound video call to that property's lobby kiosk**. It mirrors `ConnectButton`'s shape exactly — `variant="neutral"` `size="sm"`, wrapped in `flex flex-col gap-1` with an error `<p role="alert">` beneath — which is why §7 folds it into the shared control.
+
+So a **quiet card off duty shows two visually gated buttons**, `Connect` and `Kiosk`, not one.
 
 ### 3.7 Clocks card
 
@@ -223,7 +242,9 @@ Rejected alternatives: keeping the teal pill (chrome over the guest, and a secon
 | `components/video-call/video-call.tsx:683-692` | teal `bg-accent` + `Monitor` — `className` **byte-identical** to the above |
 | `components/call-tile/call-tile.tsx:324-333` | same recipe scaled for the tile |
 
-One `<ConnectControl>` replaces all four, taking icon, label, tone and click delegation as props.
+A fifth site shares the same shape: `components/dashboard/kiosk-call-button.tsx` is `variant="neutral"` `size="sm"` in a `flex flex-col gap-1` wrapper with an error `<p role="alert">` — structurally identical to `connect-button.tsx`, differing only in label, action, and its extra `kioskOnline` disabled reason.
+
+One shared control replaces all five, taking icon, label, tone, disabled-reason and click delegation as props. Name it for what it is — a **card action button** — rather than `<ConnectControl>`, since `Kiosk` is not a Connect.
 
 **The navy/teal split is kept**, deliberately: teal-on-white and teal-on-navy read differently, and the in-call surfaces are dark. The shared component makes unifying a one-prop change if Kumar later wants to test it.
 
