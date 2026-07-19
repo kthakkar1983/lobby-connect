@@ -486,7 +486,7 @@ export function VideoCall({
           )}
         </>
       }
-      split="40/60"
+      playbookBasis="60%"
       /* 40% guest video (left) — deep-navy video stage */
       stage={(basis) => (
         <div
@@ -545,7 +545,10 @@ export function VideoCall({
         collapsed ? (
           <PlaybookPanel callId={callId} basis="basis-full" />
         ) : (
-          <div className={`flex ${basis} flex-col overflow-hidden border-l border-border`}>
+          <div
+            data-testid="video-right-panel"
+            className={`flex ${basis} flex-col overflow-hidden border-l border-border`}
+          >
             <div className="flex shrink-0 border-b border-border bg-card text-sm">
               <button
                 type="button"

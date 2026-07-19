@@ -2,9 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+// `basis` is mirrored onto the stub so the body split is assertable — it is the
+// overlay's, not the panel's, decision and Task 12 changes it.
 vi.mock("@/components/call/playbook-panel", () => ({
-  PlaybookPanel: ({ callId }: { callId: string }) => (
-    <div data-testid="playbook" data-call-id={callId} />
+  PlaybookPanel: ({ callId, basis }: { callId: string; basis?: string }) => (
+    <div data-testid="playbook" data-call-id={callId} data-basis={basis} />
   ),
 }));
 
@@ -154,5 +156,62 @@ describe("AudioCallOverlay", () => {
     render(<AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} />);
     const band = screen.getByText(/I need extra towels/i).closest("div") as HTMLElement;
     expect(band.className).not.toContain("hidden");
+  });
+
+  // Characterization (Task 11 → 12). The audio body is deliberately playbook-
+  // heavy: the call card needs less room than the document the agent reads to
+  // handle the guest. Nothing pinned this before — a reviewer inverted the
+  // shell's SPLITS map and the whole suite stayed green. Task 12 widens the
+  // playbook to 70%, at which point this expectation changes DELIBERATELY.
+  it("gives the playbook 63% of the body and the call card 37%", () => {
+    const { container } = render(<AudioCallOverlay {...baseProps} />);
+    const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
+    expect(card.className).toContain("basis-[37%]");
+    expect(screen.getByTestId("playbook").getAttribute("data-basis")).toBe("basis-[63%]");
+  });
+
+  it("gives the playbook the full width when collapsed (the tile owns the call)", () => {
+    render(<AudioCallOverlay {...baseProps} collapsed />);
+    expect(screen.getByTestId("playbook").getAttribute("data-basis")).toBe("basis-full");
+  });
+
+  // The two banner positions are structurally distinct. The emergency strips
+  // carry the instruction to relay the property address during a live 911
+  // conference; pushed below the body they would sit under the playbook,
+  // potentially off-screen. Swapping the shell's two slots is invisible without
+  // these two assertions.
+  it("renders the emergency banner ABOVE the call card", () => {
+    const { container } = render(<AudioCallOverlay {...baseProps} emergencyActive />);
+    const banner = screen.getByText(/Emergency active/i);
+    const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
+    expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders the caption band BELOW the call card", () => {
+    const { container } = render(
+      <AudioCallOverlay {...baseProps} captionFinals={["I need extra towels"]} />,
+    );
+    const band = screen.getByText(/I need extra towels/i).closest("div") as HTMLElement;
+    const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
+    expect(card.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // LIFE SAFETY. `collapsed` hides the call card and the caption band — never
+  // the header. When DocPiP is unsupported or the agent closed the call tile,
+  // this dialog is the ONLY 911. The header renders unconditionally inside the
+  // shared CallShell, a file Tasks 12 and 13 edit for VIDEO reasons; without
+  // this test, gating the header would silently remove audio's last-resort 911
+  // and every other test would still pass.
+  it("keeps 911 reachable while the call tile is up (collapsed)", async () => {
+    const user = userEvent.setup();
+    const onTriggerEmergency = vi.fn();
+    render(
+      <AudioCallOverlay {...baseProps} collapsed onTriggerEmergency={onTriggerEmergency} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /call 911/i }));
+    await user.click(screen.getByRole("button", { name: /yes — call 911/i }));
+
+    expect(onTriggerEmergency).toHaveBeenCalledOnce();
   });
 });

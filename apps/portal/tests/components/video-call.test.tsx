@@ -317,6 +317,76 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(screen.getByPlaceholderText(/type/i)).toBeTruthy();
   });
 
+  // Characterization (Task 11 → 12). Video's body is 40/60 — the guest stage is
+  // the SMALLER half, the playbook/chat panel the larger. Nothing pinned this
+  // before: a reviewer inverted the shell's SPLITS map, swapping both surfaces'
+  // stage and panel classes, and the whole jsdom suite stayed green. Video's
+  // ratio is unchanged by Task 12; audio's is not, and this is the guard that
+  // the audio edit does not drag video along with it.
+  it("gives the playbook panel 3/5 of the body and the guest stage 2/5", async () => {
+    const { container } = render(
+      <VideoCall callId="call-split" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    const panel = container.querySelector('[data-testid="video-right-panel"]') as HTMLElement;
+    expect(stage.className).toContain("basis-2/5");
+    expect(panel.className).toContain("basis-3/5");
+  });
+
+  // The two banner positions are structurally distinct slots on the shared
+  // shell, and swapping them is invisible without an ordering assertion. The
+  // media warning tells the agent she is connected audio-only; the notes
+  // retry/discard affordance belongs beside the control bar, not above the call.
+  it("renders the media warning ABOVE the guest stage", async () => {
+    lk.session.localVideo = null;
+    lk.session.mediaWarning = "camera";
+    const { container } = render(
+      <VideoCall callId="call-warnpos" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(screen.getByText(/camera is unavailable/i)).toBeTruthy());
+
+    const warning = screen.getByText(/camera is unavailable/i);
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(warning.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders the notes retry/discard affordance BELOW the guest stage", async () => {
+    const user = userEvent.setup();
+    // A 4xx is not retried by reliableFetch, so the save fails immediately and
+    // handleEnd keeps the overlay mounted with the retry affordance up.
+    fetchMock.mockImplementation((url: string) => {
+      if (typeof url === "string" && url === "/api/calls/notes") {
+        return Promise.resolve({ ok: false, status: 400 });
+      }
+      if (typeof url === "string" && url.includes("/answer-video")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ channelName: "ch-test" }) });
+      }
+      if (typeof url === "string" && url.includes("/api/video/token")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ provider: "livekit", url: "wss://lk", token: "jwt", channelName: "ch-test" }),
+        });
+      }
+      return Promise.resolve({ ok: true });
+    });
+
+    const { container } = render(
+      <VideoCall callId="call-savepos" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    // Notes must be non-empty or saveNotes short-circuits as "nothing to save".
+    await user.type(screen.getByPlaceholderText("Notes…"), "extra towels");
+    await user.click(screen.getByRole("button", { name: /^end$/i }));
+
+    const affordance = await screen.findByText(/couldn't save notes/i);
+    const stage = container.querySelector('[data-testid="guest-video-stage"]') as HTMLElement;
+    expect(stage.compareDocumentPosition(affordance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   // Spec §4.3: when the tile is up, the overlay is collapsed to playbook-only —
   // the tile owns chat, so the collapsed overlay must render no tab strip at all.
   it("renders no Playbook/Chat tab when collapsed (tile owns chat)", async () => {

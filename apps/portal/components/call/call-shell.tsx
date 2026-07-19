@@ -14,37 +14,48 @@ import { cn } from "@/lib/utils";
  * live beacon, the body split, and the control-bar chrome. It owns NO call
  * behaviour — every handler stays in its overlay.
  *
- * The audio/video differences that Kumar called DELIBERATE are props here, so
+ * Two of the audio/video differences Kumar called DELIBERATE are props here, so
  * they stop diverging by accident:
- *   - `split`     — the body ratio (see the ⚠ below; it is easy to read backwards)
- *   - `stage`     — video shows guest video; audio shows a call card instead
- *   - `emergency` — 911 is AUDIO ONLY. Video has no 911 machinery anywhere in
- *                   the codebase (video-call.tsx omits `triggerEmergency` when
- *                   registering tile controls). Absent here means absent, not
- *                   forgotten.
+ *   - `playbookBasis` — the body ratio, named by the PLAYBOOK's width
+ *   - `emergency`     — 911 is AUDIO ONLY. Video has no 911 machinery anywhere
+ *                       in the codebase (video-call.tsx omits `triggerEmergency`
+ *                       when registering tile controls). Absent here means
+ *                       absent, not forgotten.
+ *
+ * The third difference — video shows a guest video feed where audio shows a
+ * call card — is NOT expressed as a prop and deliberately so: `stage` is an
+ * opaque render function and this shell cannot tell the two apart. Audio
+ * genuinely needs a left panel too, so a nullable stage would have been worse.
+ * That difference stays CALLER-OWNED. Do not describe it as enforced here.
  */
 
 /**
- * ⚠ READ THE DIRECTION. These are `stage` (LEFT) / `panel` (RIGHT) basis
- * classes, and the RIGHT-hand panel — the playbook side — is the LARGER of the
- * two on both surfaces. A ratio quoted as "70/30" in the spec means 70% to the
- * PLAYBOOK, not to the stage.
+ * Body ratio, keyed by the PLAYBOOK's share — the right-hand panel, and the
+ * LARGER half on both surfaces.
  *
- * Today: audio 37/63, video 40/60 — both preserved exactly by the extraction.
- * Task 12 moves audio to 30/70 (spec §4, D9) by editing this map alone.
+ * Naming this by the playbook (rather than a bare "37/63") is deliberate: the
+ * plan documented the direction backwards, and a reviewer demonstrated that
+ * swapping `stage` and `panel` here left the entire suite green. Two things now
+ * stop that: these keys read in the same direction as spec §4's table, and
+ * tests/components/call-shell.test.tsx pins the mapping.
+ *
+ * Today: audio playbook 63%, video playbook 60% — both preserved exactly by the
+ * Task 11 extraction. Task 12 widens audio's playbook to 70% (spec §4, D9),
+ * which takes TWO edits: add a "70%" entry here AND change the
+ * `playbookBasis` passed at audio-call-overlay.tsx's call site.
  */
 const SPLITS = {
-  "37/63": { stage: "basis-[37%]", panel: "basis-[63%]" },
-  "40/60": { stage: "basis-2/5", panel: "basis-3/5" },
+  "63%": { stage: "basis-[37%]", panel: "basis-[63%]" },
+  "60%": { stage: "basis-2/5", panel: "basis-3/5" },
 } as const;
 
-export type CallSplit = keyof typeof SPLITS;
+export type PlaybookBasis = keyof typeof SPLITS;
 
 export function CallShell({
   title,
   emergency,
   bannersAboveBody,
-  split,
+  playbookBasis,
   stage,
   panel,
   bannersBelowBody,
@@ -66,7 +77,8 @@ export function CallShell({
    * address), video's audio-blocked and media-warning strips.
    */
   readonly bannersAboveBody?: ReactNode;
-  readonly split: CallSplit;
+  /** The PLAYBOOK's share of the body (the right-hand panel). See SPLITS. */
+  readonly playbookBasis: PlaybookBasis;
   /**
    * Left panel, rendered by the caller with the basis this shell hands it.
    * The caller keeps ownership of its own test id, its collapsed handling and
@@ -93,7 +105,7 @@ export function CallShell({
    */
   readonly controlBarClassName?: string;
 }) {
-  const basis = SPLITS[split];
+  const basis = SPLITS[playbookBasis];
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">

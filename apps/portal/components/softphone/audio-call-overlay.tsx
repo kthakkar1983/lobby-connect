@@ -193,7 +193,7 @@ export function AudioCallOverlay({
         </>
       }
       /* Body — call card (~37%) + playbook (~63%). */
-      split="37/63"
+      playbookBasis="63%"
       stage={(basis) => (
         <div
           data-testid="audio-call-card"
@@ -239,8 +239,12 @@ export function AudioCallOverlay({
       /* Captions hide while the tile is up (symmetric with the video overlay,
          whose band sits inside the collapsing guest stage) — when the tile owns
          the call surface, live captions belong ONLY in the tile, never doubled.
-         ⚠ The hidden class must stay on CaptionBand's OWN root: a test resolves
-         the band with getByText(...).closest("div"). Do not wrap it. */
+         ⚠ `hidden` must ride CaptionBand's own className, i.e. land on ITS root.
+         A test resolves the band with getByText(...).closest("div"), which walks
+         UP from the <p> to CaptionBand's own root div — so an outer wrapper is
+         harmless, but moving `hidden` onto a wrapper would leave the resolved
+         element unhidden and fail. (An earlier version of this comment claimed
+         wrapping itself would break the test; it does not.) */
       bannersBelowBody={
         <CaptionBand
           finals={captionFinals}
