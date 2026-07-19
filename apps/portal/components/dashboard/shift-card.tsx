@@ -38,10 +38,32 @@ import { useDuty } from "@/components/dashboard/duty-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
+/**
+ * The shift start as epoch ms, or NaN if there isn't a usable one.
+ *
+ * Nothing upstream guarantees a date string: duty-provider.tsx:100 and :135
+ * assign `b.shiftStartedAt ?? null` straight off untrusted JSON, without the
+ * `typeof === "boolean"` validation they apply to onDuty/onBreak. An
+ * unparseable value would reach `elapsed` as NaN, and `Math.max(0, NaN)` is
+ * NaN — the zero-clamp below does not cover it — so the card would render
+ * "NaN:NaN:NaN" as a 3xl headline over "On duty since Invalid Date".
+ *
+ * So an unusable start time is treated exactly like a missing one: withhold the
+ * figures, keep the actions. Same reasoning as the `shiftStartedAt: null`
+ * transient documented on the render branch below — the actions must never
+ * depend on a figure we could not compute.
+ */
+function startMsOf(startedAtIso: string | null): number {
+  return startedAtIso === null ? Number.NaN : Date.parse(startedAtIso);
+}
+
 /** Elapsed shift as H:MM:SS. Clamped at zero so clock skew reads 0:00:00, not a
- *  negative stopwatch. */
-function elapsed(startedAtIso: string, nowMs: number): string {
-  const totalSeconds = Math.floor(Math.max(0, nowMs - Date.parse(startedAtIso)) / 1000);
+ *  negative stopwatch. Hours are deliberately unbounded: the 10h MAX_SHIFT_MS
+ *  cap is enforced server-side by the daily cron, so she can be looking at this
+ *  card while a shift is over cap, and a wrapped reading would misreport it as
+ *  one that just started. */
+function elapsed(startMs: number, nowMs: number): string {
+  const totalSeconds = Math.floor(Math.max(0, nowMs - startMs) / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -51,8 +73,8 @@ function elapsed(startedAtIso: string, nowMs: number): string {
 /** Shift start on HER clock, 24-hour. `hour12: false` is explicit rather than
  *  locale-dependent: the spec writes it HH:MM, and the clocks card below reads
  *  24-hour for the same AM/PM-ambiguity reason. */
-function startedAtLabel(startedAtIso: string): string {
-  return new Date(startedAtIso).toLocaleTimeString([], {
+function startedAtLabel(startMs: number): string {
+  return new Date(startMs).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -83,6 +105,13 @@ function EndShiftButton({
     // The Button base carries `disabled:pointer-events-none`, so a title on a
     // disabled button never surfaces on hover. The wrapper is the hover target
     // that actually shows the reason -- same recipe as PropertyActionButton.
+    // Note this makes the reason reachable by SIGHTED HOVER only: a native
+    // `title` on a button that already has text content is generally not
+    // announced by NVDA or JAWS, which take the accessible name from the
+    // content. That is exact parity with the retired duty-control.tsx:84, so it
+    // is not a regression -- but it is not an a11y guarantee either, and if it
+    // is ever fixed it should be fixed on PropertyActionButton at the same time
+    // so the two do not drift.
     <span className="flex-1" title={reason}>
       <Button
         type="button"
@@ -90,6 +119,9 @@ function EndShiftButton({
         size="sm"
         className="w-full whitespace-nowrap"
         disabled={onCall}
+        // Kept in step with the wrapper deliberately. The WRAPPER is the working
+        // hover mechanism (above); this one is what shift-card.test.tsx asserts,
+        // so dropping it silently loses that assertion's subject.
         title={reason}
         onClick={onEndShift}
       >
@@ -112,15 +144,18 @@ export function ShiftCard() {
   // card still renders outside a CallSurfaceProvider.
   const onCall = useCallSurfaceOptional()?.active != null;
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const startMs = startMsOf(shiftStartedAt);
+  const hasStart = Number.isFinite(startMs);
 
   // Per-second only while there is a running clock to move. An agent parked off
   // duty all evening should not be re-rendering 3600 times an hour to update
-  // nothing.
+  // nothing. Gated on `hasStart` rather than on the raw string, so an
+  // unparseable start time does not spin an interval whose output is withheld.
   useEffect(() => {
-    if (!onDuty || !shiftStartedAt) return;
+    if (!onDuty || !hasStart) return;
     const id = setInterval(() => setNowMs(Date.now()), 1_000);
     return () => clearInterval(id);
-  }, [onDuty, shiftStartedAt]);
+  }, [onDuty, hasStart]);
 
   const blockedHint = pushBlocked ? <NotificationsBlockedHint /> : null;
 
@@ -145,11 +180,11 @@ export function ShiftCard() {
     <Card className="gap-3 p-4">
       {CARD_LABEL}
       <div>
-        {shiftStartedAt ? (
+        {hasStart ? (
           // tabular-nums matters here specifically: this re-renders every second,
           // and proportional digits would jitter the whole line.
           <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
-            {elapsed(shiftStartedAt, nowMs)}
+            {elapsed(startMs, nowMs)}
           </p>
         ) : null}
         {onBreak ? (
@@ -159,7 +194,7 @@ export function ShiftCard() {
           </span>
         ) : (
           <p className="mt-0.5 text-xs text-text-muted tabular-nums">
-            {shiftStartedAt ? `On duty since ${startedAtLabel(shiftStartedAt)}` : "On duty"}
+            {hasStart ? `On duty since ${startedAtLabel(startMs)}` : "On duty"}
           </p>
         )}
       </div>

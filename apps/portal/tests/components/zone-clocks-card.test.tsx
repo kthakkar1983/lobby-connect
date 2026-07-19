@@ -33,9 +33,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // cleanup() first, so unmount's clearInterval still runs against the fake
-  // clock; only then hand the timers back, so nothing leaks into the next file.
+  // Strict order. cleanup() first, so unmount's clearInterval still runs against
+  // the fake clock. Then restore the setInterval/clearInterval spies the unmount
+  // test installs, which puts back the FAKE implementations they wrapped. Only
+  // then hand the timers back, so nothing leaks into the next file -- doing
+  // useRealTimers() before restoreAllMocks() would let the restore overwrite the
+  // real timers with the fake ones again.
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -166,16 +171,30 @@ describe("ZoneClocksCard", () => {
   });
 
   it("releases its interval on unmount", () => {
+    // Spies on the card's OWN scheduling rather than vi.getTimerCount(), which
+    // counts every pending timer on the shared fake clock -- React's scheduler
+    // and anything RTL leaves behind included. An absolute `toBe(1)` on a global
+    // count fails for defects this test does not own. Same idiom as
+    // call-back-shortcut.test.tsx:195 and video-call-outbound.test.tsx:140.
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
     const { unmount } = render(<ZoneClocksCard />);
-    expect(vi.getTimerCount()).toBe(1);
+
+    // Located by cadence, so this identifies the card's tick specifically.
+    // 20_000 as a literal, not an import: TICK_MS is module-private, and the
+    // cadence test above pins the same figure the same way.
+    const tickIndex = setIntervalSpy.mock.calls.findIndex((call) => call[1] === 20_000);
+    expect(tickIndex).toBeGreaterThanOrEqual(0);
+    const tickId = setIntervalSpy.mock.results[tickIndex]?.value;
 
     unmount();
 
     // A leaked interval would keep calling setState on an unmounted tree for
     // the life of the tab -- and this card is mounted on every dashboard route
     // change (the aside is hidden off-home, not unmounted, but the component
-    // still remounts across sign-in/out).
-    expect(vi.getTimerCount()).toBe(0);
+    // still remounts across sign-in/out). Asserting on the ID, not just on
+    // "clearInterval fired", so clearing some OTHER timer cannot satisfy this.
+    expect(clearIntervalSpy).toHaveBeenCalledWith(tickId);
   });
 
   it("renders no clock reading on the server", () => {

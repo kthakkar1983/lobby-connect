@@ -89,9 +89,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // cleanup() first, so unmount's clearInterval still runs against the fake
-  // clock; only then hand the timers back.
+  // Strict order. cleanup() first, so unmount's clearInterval still runs against
+  // the fake clock. Then restore the setInterval/clearInterval spies some tests
+  // install, which puts back the FAKE implementations they wrapped. Only then
+  // hand the timers back -- doing useRealTimers() before restoreAllMocks() would
+  // let the restore overwrite the real timers with the fake ones again.
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -134,6 +138,48 @@ describe("ShiftCard — on duty", () => {
       vi.advanceTimersByTime(55_000);
     });
     expect(screen.getByText("4:13:01")).toBeTruthy();
+  });
+
+  it("keeps counting past the 10h max-shift cap instead of wrapping", () => {
+    // MAX_SHIFT_MS is 10h, but the cap is enforced server-side by the daily
+    // presence cron, so it is asynchronous: she can be looking at this card
+    // while the shift is already over cap. Hours are unbounded by design -- a
+    // reading that wrapped to "0:00:10" would misreport a 10-hour shift as one
+    // that just started, on the one boundary the product actually enforces.
+    useDuty.mockReturnValue(dutyStub({ shiftStartedAt: "2026-07-19T15:59:55.000Z" }));
+    render(<ShiftCard />);
+
+    expect(screen.getByText("10:00:10")).toBeTruthy();
+  });
+
+  it("withholds the figures when the start time is unparseable, but keeps the actions", () => {
+    // duty-provider.tsx:100 and :135 take shiftStartedAt straight off untrusted
+    // JSON with none of the typeof guards they apply to onDuty/onBreak, so a
+    // non-date can reach this card. Math.max(0, NaN) is NaN, so the zero-clamp
+    // above does NOT cover it: unguarded this renders "NaN:NaN:NaN" as the 3xl
+    // headline over "On duty since Invalid Date".
+    useDuty.mockReturnValue(dutyStub({ shiftStartedAt: "not a date" }));
+    render(<ShiftCard />);
+
+    expect(screen.queryByText(/NaN/)).toBeNull();
+    expect(screen.queryByText(/invalid date/i)).toBeNull();
+    expect(screen.queryByText(/on duty since/i)).toBeNull();
+    expect(screen.getByText("On duty")).toBeTruthy();
+    // Treated as a missing start time, not as being off duty -- stranding her
+    // with no way to end the shift is the one outcome worse than a blank clock,
+    // now that the header carries no duty control at all.
+    expect(screen.getByRole("button", { name: /^end shift$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^break$/i })).toBeTruthy();
+  });
+
+  it("runs no interval when the start time is unparseable", () => {
+    // The clock is withheld, so a per-second re-render would update nothing --
+    // the same waste the off-duty gate exists to avoid.
+    useDuty.mockReturnValue(dutyStub({ shiftStartedAt: "not a date" }));
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    render(<ShiftCard />);
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 
   it("floors a start time in the future at zero rather than counting backwards", () => {
@@ -202,21 +248,36 @@ describe("ShiftCard — off duty", () => {
     // agent parked off duty all evening would re-render every second to update
     // nothing that renders.
     useDuty.mockReturnValue(dutyStub({ onDuty: false, shiftStartedAt: SHIFT_START }));
-    const before = vi.getTimerCount();
+    // Spy on the component's OWN scheduling. vi.getTimerCount() is a count of
+    // every pending timer on the shared fake clock -- React's scheduler and
+    // anything RTL leaves behind included -- so asserting on it makes this test
+    // fail for defects it does not own, at random, on an unmodified tree. Same
+    // idiom as call-back-shortcut.test.tsx:195 and video-call-outbound.test.tsx:140.
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
     render(<ShiftCard />);
 
     expect(screen.getByText("Not on duty")).toBeTruthy();
-    expect(vi.getTimerCount()).toBe(before);
+    expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 
   it("releases the interval on unmount", () => {
     useDuty.mockReturnValue(dutyStub());
-    const before = vi.getTimerCount();
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
     const { unmount } = render(<ShiftCard />);
-    expect(vi.getTimerCount()).toBe(before + 1);
+
+    // Located by its cadence rather than by position, so this identifies the
+    // card's own tick even if something else on the page ever schedules one.
+    const tickIndex = setIntervalSpy.mock.calls.findIndex((call) => call[1] === 1_000);
+    expect(tickIndex).toBeGreaterThanOrEqual(0);
+    const tickId = setIntervalSpy.mock.results[tickIndex]?.value;
 
     unmount();
-    expect(vi.getTimerCount()).toBe(before);
+
+    // A leaked interval would keep calling setState on an unmounted tree for the
+    // life of the tab. Asserting on the ID, not just on "clearInterval fired",
+    // so clearing some OTHER timer cannot satisfy this.
+    expect(clearIntervalSpy).toHaveBeenCalledWith(tickId);
   });
 });
 
@@ -251,7 +312,11 @@ describe("ShiftCard — mid-call rules", () => {
 
     // The Button base carries `disabled:pointer-events-none`, so a title on a
     // disabled button never fires a tooltip. Without a hoverable ancestor the
-    // reason is unreachable to everyone but a screen-reader user.
+    // reason is unreachable, full stop -- including to a screen-reader user: a
+    // native `title` on a button that already has text content is generally NOT
+    // announced by NVDA or JAWS, which take the accessible name from the content
+    // and ignore the title. So the wrapper is not a sighted-only nicety with an
+    // AT fallback behind it; it is the only delivery mechanism there is.
     const endShift = screen.getByRole("button", { name: /^end shift$/i });
     const hoverTarget = endShift.parentElement;
     expect(hoverTarget?.getAttribute("title")).toBe("Finish the call first");
@@ -265,6 +330,13 @@ describe("ShiftCard — mid-call rules", () => {
 
     // Deliberate symmetry with the on-duty branch (duty-control.tsx:175):
     // ending from a break mid-call un-clocks the call tail just the same.
+    //
+    // KEEP BOTH THIS AND THE ON-DUTY ASSERTION even though today they cannot
+    // fail independently: EndShiftButton has a single call site outside the
+    // onBreak conditional, so one covers the other. That single call site is an
+    // improvement on duty-control.tsx's two (:147 and :175), where the symmetry
+    // could drift -- but if the branches are ever split again, these two stop
+    // being duplicates and the missing one becomes an uncovered path.
     const endShift = screen.getByRole("button", { name: /^end shift$/i });
     expect((endShift as HTMLButtonElement).disabled).toBe(true);
   });
