@@ -21,18 +21,46 @@
  * that a second press probably fixes.
  */
 
-/** The shape `CallSurfaceProvider.connectToProperty` resolves to. */
+/**
+ * The shape `CallSurfaceProvider.connectToProperty` resolves to.
+ *
+ * The provider IMPORTS this rather than re-declaring its return type inline.
+ * It was hand-copied in both places at first, linked only by an incidental
+ * assignment that happened to typecheck — so a shape change could have
+ * desynced the mapping below from the thing it maps, silently.
+ */
 export type ConnectOutcome = {
   readonly launched: boolean;
   readonly notConfigured?: boolean;
 };
 
-export function connectErrorMessage(outcome: ConnectOutcome): string | null {
+/**
+ * How much room the message has.
+ *
+ * `compact` is the Document-PiP call tile, a fixed 380x300 window
+ * (lib/duty-tile/call-tile-manager.ts) whose control bar already carries Mute,
+ * Hang up, the Video/Chat toggle and the caption toggle. The full strings below
+ * wrap to several lines in what is left, so the tile gets shorter ones that say
+ * the same two things: whose problem it is, and whether pressing again helps.
+ */
+export type ConnectErrorLength = "full" | "compact";
+
+export function connectErrorMessage(
+  outcome: ConnectOutcome,
+  length: ConnectErrorLength = "full",
+): string | null {
   if (outcome.launched) return null;
   // `notConfigured` is optional, so absent means "we don't know it's a config
   // gap" — treat it as transient. Sending her to an admin for what was really a
-  // dropped fetch costs a guest-facing minute chasing the wrong fix.
-  return outcome.notConfigured
-    ? "No remote access configured — ask an admin."
+  // dropped fetch costs a guest-facing minute chasing the wrong fix. A THROWN
+  // connect lands here too (the call sites map it to `{ launched: false }`),
+  // which is right: an exception is not evidence of a missing credential.
+  if (outcome.notConfigured) {
+    return length === "compact"
+      ? "No credentials — ask an admin."
+      : "No remote access configured — ask an admin.";
+  }
+  return length === "compact"
+    ? "Connect failed — try again."
     : "Could not fetch credentials — try again.";
 }

@@ -164,6 +164,36 @@ describe("AudioCallOverlay", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
+  // A REJECTED onConnect would otherwise skip setConnectError entirely and
+  // surface as an unhandled rejection — the exact silence this control exists
+  // to end. It maps to the transient wording: an exception is not evidence the
+  // property has no credentials configured.
+  it("surfaces a thrown Connect as a retryable failure, not silence", async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn().mockRejectedValue(new Error("boom"));
+    render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
+
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Could not fetch credentials — try again.",
+    );
+  });
+
+  // The control bar's geometry is fixed on purpose so it cannot move under her
+  // hand mid-call; a flow error would grow it and lift End call and Mute the
+  // moment one appeared. jsdom does no layout, so the mechanism is what is
+  // pinned: out of flow.
+  it("floats the Connect failure so it cannot resize the control bar mid-call", async () => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn().mockResolvedValue({ launched: false, notConfigured: true });
+    render(<AudioCallOverlay {...baseProps} onConnect={onConnect} />);
+
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+
+    expect((await screen.findByRole("alert")).className).toContain("absolute");
+  });
+
   it("saves notes on Tab as well as Enter (audio↔video parity)", async () => {
     const user = userEvent.setup();
     const onSaveNotes = vi.fn().mockResolvedValue(true);

@@ -15,6 +15,9 @@ import {
   launchRustdesk,
   type RemoteCredentials,
 } from "@/lib/remote-access/connect";
+// Imported, not re-declared: connect-error.ts maps this shape to the wording
+// every Connect renders, and a hand-copy in both places could desync silently.
+import type { ConnectOutcome } from "@/lib/remote-access/connect-error";
 
 export interface IncomingRing {
   key: string; // channel-prefixed for cross-channel uniqueness: "audio:<callId>" | "video:<calls.id>"
@@ -191,7 +194,7 @@ interface CallSurfaceValue extends CallSurfaceSnapshot {
    * blocks a click). Returns `{ launched }` and, on a failed launch, whether
    * the property simply has no remote access configured.
    */
-  connectToProperty: (propertyId: string) => Promise<{ launched: boolean; notConfigured?: boolean }>;
+  connectToProperty: (propertyId: string) => Promise<ConnectOutcome>;
   /**
    * Live-caption ENABLED state (spec D6/D7). Shared by the overlay toggle AND
    * the tile toggle. Default OFF, non-persistent, reset to false on every call
@@ -453,7 +456,7 @@ export function CallSurfaceProvider({ children }: { children: React.ReactNode })
   // click never trusts the negative cache. Click-fetched creds are NOT written
   // back into prewarmRef (no long-lived plaintext parked in tab memory).
   const connectToProperty = useCallback(
-    async (propertyId: string): Promise<{ launched: boolean; notConfigured?: boolean }> => {
+    async (propertyId: string): Promise<ConnectOutcome> => {
       // The tile follows her into RustDesk (2026-07-11): if a call is live and the
       // tile was closed ("Back to tab"), reopen it in THIS click — DocPiP needs the
       // gesture — BEFORE launching RustDesk, so her call surface isn't stranded in

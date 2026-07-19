@@ -154,9 +154,15 @@ export function AudioCallOverlay({
   const [connectError, setConnectError] = useState<string | null>(null);
   async function handleConnect() {
     if (!onConnect) return;
-    // Invoked synchronously inside the click, before any await, so a pre-warmed
-    // credential cache still launches on the click's transient activation.
-    setConnectError(connectErrorMessage(await onConnect()));
+    try {
+      // Invoked synchronously inside the click, before any await, so a pre-warmed
+      // credential cache still launches on the click's transient activation.
+      setConnectError(connectErrorMessage(await onConnect()));
+    } catch {
+      // A throw would skip setConnectError and surface as an unhandled
+      // rejection — the exact silence this handler exists to end.
+      setConnectError(connectErrorMessage({ launched: false }));
+    }
   }
 
   function onKeyDownSave(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -414,14 +420,25 @@ export function AudioCallOverlay({
               ringing call carried no propertyId, and starting a shift would not
               give it one. It must stay natively `disabled` and must never reach
               the duty guard, which would otherwise offer to fix it by starting
-              a shift — a lie. */}
+              a shift — a lie.
+
+              `gate="none"`: duty can be revoked mid-call from a second tab
+              (end-shift has no ON_CALL guard), and remoting into the hotel PC
+              during a live call is not an off-duty action. See the header note
+              in property-action-button.tsx.
+
+              `errorPlacement="float"`: this bar's geometry is fixed on purpose
+              so it cannot move under her hand mid-call; a flow error would grow
+              it by ~20px and lift End call and Mute the moment one appeared. */}
           <PropertyActionButton
             label="Connect"
             icon={<Monitor aria-hidden="true" />}
             tone="teal"
+            gate="none"
             onAction={handleConnect}
             unavailableReason={onConnect ? null : "This call has no property to connect to"}
             error={connectError}
+            errorPlacement="float"
             className="font-semibold"
           />
           {/* Blaze, not navy — see <EndCallButton>'s `tone`. This is the one

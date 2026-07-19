@@ -27,7 +27,7 @@
  * silently.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 // Type-only, so it is erased and cannot execute before the hoisted vi.mock.
 import type * as OffDutyPrompt from "@/components/dashboard/off-duty-prompt";
 
@@ -114,10 +114,12 @@ describe("PropertyActionButton", () => {
   it("applies no gated cue on a dark surface, deliberately", () => {
     // There is no honest one-size treatment on the tile's navy: bg-primary/70
     // composites straight back to navy (no cue at all) and bg-accent/70 leaves
-    // the ink label at 3.65:1. Nothing is invented here because the three
-    // in-call Connects are gate-unreachable in practice — a break cannot start
-    // and a shift cannot end mid-call. This pins that as a decision rather than
-    // an oversight; Task 14 owns specifying one if that stops being true.
+    // the ink label at 3.65:1. Nothing is invented here, and the reason is now
+    // structural: the only dark-surface caller is the call tile, which passes
+    // `gate="none"`, so it has no gated state to cue. An earlier version of this
+    // comment justified it by claiming the state was unreachable because a shift
+    // cannot end mid-call — that was WRONG (end-shift from a second tab has no
+    // ON_CALL guard), which is exactly why the tile stopped relying on it.
     gate.gated = true;
     render(
       <PropertyActionButton label="Connect" tone="teal" surface="dark" onAction={vi.fn()} />,
@@ -125,6 +127,48 @@ describe("PropertyActionButton", () => {
     const cls = screen.getByRole("button", { name: "Connect" }).className;
     expect(cls).not.toContain("bg-accent/70");
     expect(cls).not.toContain("opacity-60");
+  });
+
+  // gate="none" — the three IN-CALL Connects. Remoting into the hotel PC during
+  // a call that is already live is not an off-duty action: the guest is on the
+  // line whatever the shift row says, and it is the one action the product
+  // exists to enable.
+  //
+  // This is not hypothetical. POST /api/presence/end-shift flips the profile to
+  // OFFLINE with NO ON_CALL guard, and the mid-call suppression on the shift
+  // card is sourced per-tab from that tab's own useCallSurfaceOptional()?.active
+  // — so End shift pressed in a SECOND dashboard tab (which sees no live call)
+  // gates the first tab within one heartbeat, via the gated beat's markOffDuty().
+  // Gated, the tile's Connect would be a DEAD CLICK: the prompt is an
+  // AlertDialog in the MAIN document, and the tile is used precisely when that
+  // document is backgrounded behind RustDesk.
+  it("runs a gate='none' action while gated, instead of withholding it", () => {
+    gate.gated = true;
+    const onAction = vi.fn();
+    render(<PropertyActionButton label="Connect" gate="none" onAction={onAction} />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    // And it must not even consult the guard — reaching it and being let
+    // through would be luck, not a decision.
+    expect(guard).not.toHaveBeenCalled();
+  });
+
+  it("shows no gated cue on a gate='none' control", () => {
+    // A control that is never withheld must never LOOK withheld. Both halves of
+    // the gate opt out together, or the button reads unavailable while working.
+    gate.gated = true;
+    render(<PropertyActionButton label="Connect" tone="teal" gate="none" onAction={vi.fn()} />);
+    const cls = screen.getByRole("button", { name: "Connect" }).className;
+    expect(cls).not.toContain("bg-accent/70");
+    expect(cls).toContain("bg-accent");
+  });
+
+  it("still gates by default, so the opt-out has to be asked for", () => {
+    gate.gated = true;
+    const onAction = vi.fn();
+    render(<PropertyActionButton label="Connect" onAction={onAction} />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(onAction).not.toHaveBeenCalled();
   });
 
   it("keeps the same label off duty — no per-card 'Go on duty' swap", () => {
@@ -203,6 +247,86 @@ describe("PropertyActionButton", () => {
   it("renders no alert region when there is no error", () => {
     render(<PropertyActionButton label="Connect" onAction={vi.fn()} />);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // ERROR GEOMETRY. The block placement is right for the property cards, whose
+  // action row is their own. It is WRONG for the three in-call control bars: a
+  // dedicated commit fixed every width and height in those bars so the row
+  // cannot move under the agent's hand during a live guest call, and a flow
+  // error reintroduces exactly that. On the overlays it grows the bar ~20px and
+  // lifts End call and Mute; in the tile's fixed 380x300 Document-PiP window the
+  // wrapper shrinks toward min-content, so the message wraps to several lines
+  // and permanently eats a third of the guest's video face — with no dismissal
+  // short of a successful retry.
+  //
+  // jsdom does no layout (offsetHeight is 0 for everything), so what these pin
+  // is the MECHANISM: out of flow, bounded, and titled for the full text.
+  it("floats the error out of flow so it cannot resize a control bar", () => {
+    render(
+      <PropertyActionButton
+        label="Connect"
+        onAction={vi.fn()}
+        errorPlacement="float"
+        error="Could not fetch credentials — try again."
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.className).toContain("absolute");
+    // Bounded both ways, so no string can grow it without limit over the video.
+    expect(alert.className).toContain("max-w-64");
+    expect(alert.className).toContain("line-clamp-2");
+    // Clamped text still has to be readable in full somewhere.
+    expect(alert.getAttribute("title")).toBe("Could not fetch credentials — try again.");
+  });
+
+  it("keeps the error in flow by default, where the row is the card's own", () => {
+    render(
+      <PropertyActionButton label="Connect" onAction={vi.fn()} error="No remote access configured." />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.className).not.toContain("absolute");
+    expect(alert.hasAttribute("title")).toBe(false);
+  });
+
+  it("gives a floated error an opaque backing, because it lands over video", () => {
+    render(
+      <PropertyActionButton
+        label="Connect"
+        onAction={vi.fn()}
+        surface="dark"
+        errorPlacement="float"
+        error="No credentials — ask an admin."
+      />,
+    );
+    // The tile floats over the guest's face; transparent text on it is a
+    // legibility problem the contrast tokens alone cannot solve.
+    expect(screen.getByRole("alert").className).toContain("bg-primary");
+  });
+
+  // Two rapid presses used to fire two overlapping actions with no sequencing,
+  // so whichever settled LAST won: a slow failure could paint an error over a
+  // launch that already succeeded, or a slow success could wipe a real one.
+  it("ignores a second press while the first action is still in flight", async () => {
+    let release: (() => void) | undefined;
+    const onAction = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(<PropertyActionButton label="Connect" onAction={onAction} />);
+    const btn = screen.getByRole("button", { name: "Connect" });
+
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledTimes(1);
+
+    // Once it settles the control is live again — this must not latch.
+    await act(async () => {
+      release?.();
+    });
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the error legible on a dark surface", () => {

@@ -149,9 +149,15 @@ export function VideoCall({
 
   async function handleConnect() {
     if (!propertyId || !connectToProperty) return;
-    // Called synchronously inside the click, before any await, so a pre-warmed
-    // cache hit still launches on the click's transient activation.
-    setConnectError(connectErrorMessage(await connectToProperty(propertyId)));
+    try {
+      // Called synchronously inside the click, before any await, so a pre-warmed
+      // cache hit still launches on the click's transient activation.
+      setConnectError(connectErrorMessage(await connectToProperty(propertyId)));
+    } catch {
+      // A throw would skip setConnectError and surface as an unhandled
+      // rejection — the exact silence this handler exists to end.
+      setConnectError(connectErrorMessage({ launched: false }));
+    }
   }
 
   // Captions (spec D6–D8): enabled state now lives in the surface (shared by the
@@ -772,14 +778,25 @@ export function VideoCall({
               the property cards / teal on all three in-call Connects, and this
               component defaults to navy, so omitting it silently reverts that.
               `surface` stays light — this bar is `bg-card`, unlike the tile's
-              navy one. */}
+              navy one.
+
+              `gate="none"`: duty can be revoked mid-call from a second tab
+              (end-shift has no ON_CALL guard), and remoting into the hotel PC
+              during a live call is not an off-duty action. See the header note
+              in property-action-button.tsx.
+
+              `errorPlacement="float"`: this bar's geometry is fixed on purpose
+              so it cannot move under her hand mid-call; a flow error would grow
+              it by ~20px and lift End call and Mute the moment one appeared. */}
           <PropertyActionButton
             label="Connect"
             icon={<Monitor aria-hidden="true" />}
             tone="teal"
+            gate="none"
             onAction={handleConnect}
             unavailableReason={connectUnavailable}
             error={connectError}
+            errorPlacement="float"
             className="font-semibold"
           />
           <EndCallButton tone="navy" onEnd={() => void handleEnd()} />

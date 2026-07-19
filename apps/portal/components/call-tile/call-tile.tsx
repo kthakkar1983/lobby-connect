@@ -181,9 +181,21 @@ export function CallTile(): React.JSX.Element | null {
   const connectToProperty = surface?.connectToProperty;
   async function handleConnect() {
     if (!connectPropertyId || !connectToProperty) return;
-    // Invoked synchronously inside the click, before any await, so a pre-warmed
-    // cache hit still launches on the click's transient activation.
-    setConnectError(connectErrorMessage(await connectToProperty(connectPropertyId)));
+    try {
+      // Invoked synchronously inside the click, before any await, so a pre-warmed
+      // cache hit still launches on the click's transient activation.
+      // "compact": this window is 380x300 and the bar already carries four
+      // controls — the full wording wraps to several lines in what is left.
+      setConnectError(connectErrorMessage(await connectToProperty(connectPropertyId), "compact"));
+    } catch {
+      // connectToProperty runs openTileForCall() and launchRustdesk()
+      // synchronously and fetchRemoteCredentials behind an await. A throw from
+      // any of them would skip setConnectError entirely and surface as an
+      // unhandled rejection — restoring the exact silence this handler exists
+      // to end. A thrown connect is not evidence of a missing credential, so it
+      // maps to the transient "try again".
+      setConnectError(connectErrorMessage({ launched: false }, "compact"));
+    }
   }
 
   if (!active) return null; // defensive — the tile should be closed by then
@@ -356,30 +368,35 @@ export function CallTile(): React.JSX.Element | null {
               - `size="xs"` — the PiP window is the size of a postcard; the
                 card scale (`sm`, h-8) is visibly oversized in it.
 
-              `ml-auto` moves to the WRAPPER: with an error slot underneath, the
+              `ml-auto` moves to the WRAPPER: with an error slot attached, the
               wrapper is the flex item, not the button.
 
-              One deliberate gap, inherited and re-confirmed here. A dark surface
-              gets no duty-GATED cue (see PropertyActionButton's `gatedFill`):
-              there is no honest recipe on navy — navy/70 composites back to
-              navy, teal/70 strands the ink label at 3.65:1. That stays
-              acceptable because the state is unreachable on this surface: the
-              tile only exists during a live call, and the mid-call rule means a
-              shift cannot end and a break cannot start while one is up. Worth
-              stating plainly, because if that ever changes the missing fill is
-              the SMALLER problem — the prompt is an AlertDialog rendered in the
-              MAIN document, so an agent looking at the PiP would see the click
-              do nothing at all. Reachable gating here needs a tile-local
-              answer, not a colour. */}
+              - `gate="none"` — NOT decoration either. Duty CAN be revoked while
+                this call is live: /api/presence/end-shift flips the profile
+                OFFLINE with no ON_CALL guard, so End shift pressed in a SECOND
+                dashboard tab (whose own mid-call suppression sees no live call,
+                that state being per-tab) gates this one within a heartbeat via
+                markOffDuty. Gated, this Connect would be a DEAD CLICK: the
+                prompt is an AlertDialog in the main document, and the tile is
+                used precisely when that document is backgrounded behind
+                RustDesk, so she would see nothing happen at all, mid guest-call.
+                Remoting into the hotel PC during a live call is not an off-duty
+                action anyway — the guest is on the line whatever the shift row
+                says. Withholding it is the failure, not the safeguard.
+              - `errorPlacement="float"` — the failure message must not lay out
+                in this bar. In flow it wraps to several lines in a 380x300
+                window and permanently shrinks the guest's video face. */}
           <PropertyActionButton
             label="Connect"
             icon={<Monitor aria-hidden="true" />}
             tone="teal"
             surface="dark"
             size="xs"
+            gate="none"
             onAction={handleConnect}
             unavailableReason={connectPropertyId ? null : "This call has no property to connect to"}
             error={connectError}
+            errorPlacement="float"
             className="font-semibold"
             wrapperClassName="ml-auto"
           />

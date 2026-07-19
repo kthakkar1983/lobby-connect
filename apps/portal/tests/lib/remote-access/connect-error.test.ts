@@ -29,9 +29,42 @@ describe("connectErrorMessage", () => {
   it("treats an absent notConfigured flag as a transient failure, not a config gap", () => {
     // connectToProperty's type makes the flag OPTIONAL. Telling an agent to
     // "ask an admin" for what is really a dropped request sends her chasing
-    // the wrong fix in the middle of a guest call.
+    // the wrong fix in the middle of a guest call. A THROWN connect maps here
+    // too, for the same reason: an exception is not evidence of a missing
+    // credential.
     expect(connectErrorMessage({ launched: false })).toBe(
       "Could not fetch credentials — try again.",
     );
+  });
+
+  // The call tile is a fixed 380x300 Document-PiP window whose control bar
+  // already carries Mute, Hang up and the caption toggle. The full strings wrap
+  // to several lines in what is left of it, over the guest's video face, so it
+  // gets shorter ones — saying the same two things: whose problem it is, and
+  // whether pressing again helps.
+  describe("compact (the Document-PiP call tile)", () => {
+    it("still says nothing on success", () => {
+      expect(connectErrorMessage({ launched: true }, "compact")).toBeNull();
+    });
+
+    it("keeps 'ask an admin' — the actionable half survives the shortening", () => {
+      const msg = connectErrorMessage({ launched: false, notConfigured: true }, "compact");
+      expect(msg).toBe("No credentials — ask an admin.");
+      expect(msg!.length).toBeLessThan(
+        connectErrorMessage({ launched: false, notConfigured: true })!.length,
+      );
+    });
+
+    it("keeps 'try again' — likewise", () => {
+      const msg = connectErrorMessage({ launched: false }, "compact");
+      expect(msg).toBe("Connect failed — try again.");
+      expect(msg!.length).toBeLessThan(connectErrorMessage({ launched: false })!.length);
+    });
+
+    it("defaults to the full wording, so a caller has to ask to be terse", () => {
+      expect(connectErrorMessage({ launched: false, notConfigured: true })).toBe(
+        "No remote access configured — ask an admin.",
+      );
+    });
   });
 });

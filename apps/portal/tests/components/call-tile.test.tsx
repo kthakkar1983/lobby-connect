@@ -473,11 +473,23 @@ describe("CallTile", () => {
       expect(pipDoc.body.querySelector('[role="alert"]')).not.toBeNull(),
     );
     const alert = pipDoc.body.querySelector('[role="alert"]') as HTMLElement;
-    expect(alert.textContent).toBe("No remote access configured — ask an admin.");
+    // The COMPACT wording, deliberately not the overlays' full string. This
+    // window is 380x300 (TILE_WIDTH/TILE_HEIGHT) and the bar beside this button
+    // already carries Mute, Hang up and the caption toggle, so the wrapper
+    // shrinks toward min-content: "No remote access configured — ask an admin."
+    // wraps to roughly four lines of text-xs there. Both strings say the same
+    // two things — whose problem it is, and whether pressing again helps.
+    expect(alert.textContent).toBe("No credentials — ask an admin.");
     // Blaze, not the light surfaces' red: `text-destructive` (#C81E1E) reads at
     // roughly 2.5:1 on the tile's navy bar and fails AA. This is what
     // `surface="dark"` buys, and it is the whole reason the prop exists.
     expect(alert.className).toContain("text-attention");
+    // OUT OF FLOW. Rendering this must not resize the control bar it belongs
+    // to: in flow it grows the bar from ~40px to ~100px of a 300px window and
+    // permanently shrinks the guest's video face, with no dismissal short of a
+    // successful retry. jsdom does no layout, so the mechanism is what can be
+    // pinned here — offsetHeight is 0 for everything either way.
+    expect(alert.className).toContain("absolute");
   });
 
   it("clears a previous Connect failure once a later attempt launches", async () => {

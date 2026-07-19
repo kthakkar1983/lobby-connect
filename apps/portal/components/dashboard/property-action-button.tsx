@@ -20,6 +20,19 @@
  * When both apply, real unavailability wins and no prompt is offered, for the
  * same reason.
  *
+ * AND A THIRD CASE: `gate="none"`, for an action that is legitimate REGARDLESS
+ * of duty. The three in-call Connects pass it. Remoting into the hotel PC during
+ * a call that is already live and connected is not an off-duty action — the
+ * guest is on the line whatever the shift row says, and it is the single action
+ * the product exists to enable. Duty state CAN be revoked mid-call from outside
+ * this tab: POST /api/presence/end-shift sets `status: "OFFLINE"` with no
+ * ON_CALL guard, so pressing End shift in a SECOND dashboard tab (whose own
+ * mid-call suppression sees no live call, because that state is per-tab) gates
+ * the first tab within one heartbeat via markOffDuty(). Gating Connect there
+ * would withhold it mid-guest-call; on the tile it would withhold it INVISIBLY,
+ * since the prompt is an AlertDialog in the main document and the tile is used
+ * precisely when that document is backgrounded behind RustDesk.
+ *
  * PRESENTATION ONLY. The authoritative gates stay where they are —
  * softphone.tsx:587 (`if (!canWorkRef.current) return;`) and the server-side
  * D13 duty check. This must never become the only thing preventing an off-duty
@@ -60,6 +73,8 @@
  * Pick the size; do not fight it.
  */
 
+import { useRef } from "react";
+
 import { Button } from "@/components/ui/button";
 import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
 import { cn } from "@/lib/utils";
@@ -67,15 +82,27 @@ import { cn } from "@/lib/utils";
 export type PropertyActionButtonProps = {
   readonly label: string;
   /** May be async; the guard withholds the call entirely when off duty. */
-  readonly onAction: () => void;
+  readonly onAction: () => void | Promise<void>;
   /** Already-rendered icon element (RSC client-boundary safety). */
   readonly icon?: React.ReactNode;
   /** Non-duty unavailability. Present => genuinely disabled, reason in `title`. */
   readonly unavailableReason?: string | null;
   /** Label while unavailable. Defaults to `label`. */
   readonly unavailableLabel?: string;
-  /** Inline failure message rendered under the button. */
+  /** Inline failure message rendered with the button. */
   readonly error?: string | null;
+  /**
+   * How `error` is laid out. `block` (default) is a flow sibling under the
+   * button — right for the property cards, where the row is the card's own and
+   * growing it costs nothing. `float` takes it OUT of flow entirely, for the
+   * three in-call control bars, whose geometry must not change mid-call.
+   */
+  readonly errorPlacement?: "block" | "float";
+  /**
+   * Whether the duty guard applies. `none` is for actions that stay legitimate
+   * off duty — see the THIRD CASE note in the header. Default gates.
+   */
+  readonly gate?: "duty" | "none";
   /** Button fill. Teal for the in-call surfaces; navy (default) for cards. */
   readonly tone?: "navy" | "teal";
   /** What the control sits on — drives the error colour, the disabled treatment and the gated one. */
@@ -97,6 +124,8 @@ export function PropertyActionButton({
   unavailableReason,
   unavailableLabel,
   error,
+  errorPlacement = "block",
+  gate = "duty",
   tone = "navy",
   surface = "light",
   size = "sm",
@@ -104,7 +133,28 @@ export function PropertyActionButton({
   className,
   wrapperClassName,
 }: PropertyActionButtonProps) {
-  const { gated, guard } = useDutyGuard();
+  const { gated: dutyGated, guard: dutyGuard } = useDutyGuard();
+  // `gate="none"` opts out of BOTH halves — the interception and the recessed
+  // fill. A control that is never withheld must never look withheld.
+  const gated = gate === "duty" && dutyGated;
+  const guard = gate === "duty" ? dutyGuard : (run: () => void) => run();
+
+  // Two rapid presses used to fire two overlapping `onAction`s with no
+  // sequencing, so whichever settled LAST won: a slow failure could paint an
+  // error over a launch that already succeeded, or a slow success could wipe a
+  // real one. Ignoring a press while one is in flight is enough — no disabled
+  // state, because the pre-warm cache makes the common path resolve instantly
+  // and a button that flickers disabled mid-call is its own problem.
+  const inFlightRef = useRef(false);
+  async function runOnce() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    try {
+      await onAction();
+    } finally {
+      inFlightRef.current = false;
+    }
+  }
   // Truthiness, not `!= null`: an empty reason would otherwise disable the
   // control with an empty tooltip and no explanation anywhere. Matches how
   // `error` is consumed below.
@@ -139,11 +189,15 @@ export function PropertyActionButton({
   //
   // LIGHT SURFACES ONLY, deliberately. On the tile's navy there is no honest
   // one-size treatment: bg-primary/70 composites straight back to navy (no cue
-  // at all) and bg-accent/70 leaves the ink label at 3.65:1. No dark recipe is
-  // invented here because the three in-call Connects are gate-unreachable in
-  // practice — a break cannot start and a shift cannot end mid-call (the
-  // mid-call rule the shift card inherits from duty-control). Task 14 owns
-  // specifying one if that ever stops being true.
+  // at all) and bg-accent/70 leaves the ink label at 3.65:1.
+  //
+  // No dark recipe is needed, and the reason is now structural rather than a
+  // bet on reachability. The only dark-surface caller is the call tile, and it
+  // passes `gate="none"` — its Connect is never gated, so there is no gated
+  // state to render a cue for. An earlier version of this comment claimed the
+  // state was unreachable because a shift cannot end mid-call; that was WRONG
+  // (end-shift from a second tab has no ON_CALL guard — see the header), which
+  // is exactly why the tile stopped relying on it.
   const gatedFill =
     gated && !unavailable && surface === "light"
       ? tone === "teal"
@@ -153,7 +207,9 @@ export function PropertyActionButton({
 
   return (
     <div
-      className={cn("flex flex-col gap-1", wrapperClassName)}
+      // `relative` unconditionally: it is the positioning context a floated
+      // error needs, and it changes nothing for a block one.
+      className={cn("relative flex flex-col gap-1", wrapperClassName)}
       // The Button base carries `disabled:pointer-events-none`, so a title on a
       // disabled button never surfaces on hover. The wrapper is the hover
       // target that actually shows the reason.
@@ -165,7 +221,7 @@ export function PropertyActionButton({
         size={size}
         disabled={unavailable}
         title={unavailableReason || undefined}
-        onClick={() => guard(onAction)}
+        onClick={() => guard(() => void runOnce())}
         className={cn(
           // A label swap must not make the control taller (spec §3.6a, §5.3).
           // Width is NOT covered — `unavailableLabel` deliberately swaps
@@ -187,7 +243,28 @@ export function PropertyActionButton({
           className={cn(
             "text-xs",
             surface === "dark" ? "text-attention" : "text-destructive",
+            // FLOATED: out of flow, so rendering it cannot resize the row this
+            // wrapper sits in. That row is a live call's control bar on all
+            // three in-call surfaces, and it must not move under her hand — the
+            // same invariant that fixed the widths of Mute, Camera and Captions
+            // ("the control bar stops moving under her cursor mid-call"). In
+            // flow it does move: on the overlays a one-line error grows the bar
+            // by ~20px, lifting End call and Mute; in the tile's fixed 380x300
+            // window the wrapper shrinks toward min-content, so the message
+            // wraps to several lines and permanently eats a third of the guest's
+            // video face, with no dismissal short of a successful retry.
+            //
+            // It floats ABOVE the button because every one of those bars is
+            // page-bottom. Opaque background + shadow because it lands over
+            // video; `max-w`/`line-clamp-2` + `title` bound the worst case to
+            // two lines whatever the string.
+            errorPlacement === "float" &&
+              cn(
+                "absolute bottom-full right-0 z-30 mb-1 line-clamp-2 max-w-64 rounded-button border px-2 py-1 shadow-md",
+                surface === "dark" ? "border-primary-foreground/25 bg-primary" : "border-border bg-card",
+              ),
           )}
+          title={errorPlacement === "float" ? error : undefined}
           role="alert"
         >
           {error}

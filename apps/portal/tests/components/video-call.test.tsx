@@ -409,6 +409,47 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(remoteAccess.launchRustdesk).toHaveBeenCalledWith({ peerId: "peer-1", password: "pw" });
   });
 
+  // A THROW is the third failure mode, and the one that would restore the
+  // silence completely: connectToProperty runs openTileForCall() and
+  // launchRustdesk() synchronously and fetchRemoteCredentials behind an await,
+  // and an unguarded rejection skips the error state entirely and surfaces as an
+  // unhandled rejection instead. It maps to the TRANSIENT wording — an exception
+  // is not evidence that the property has no credentials configured.
+  it("surfaces a thrown Connect as a retryable failure, not silence", async () => {
+    const user = userEvent.setup();
+    remoteAccess.fetchRemoteCredentials.mockRejectedValue(new Error("boom"));
+    render(
+      <CallSurfaceProvider>
+        <VideoCall callId="call-connect-throw" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Could not fetch credentials — try again.",
+    );
+  });
+
+  // The SECOND unavailable reason, isolated. The disabled test above renders
+  // with propertyId={null} AND without a CallSurfaceProvider, so its first
+  // branch always wins — deleting the `!connectToProperty` branch would leave
+  // that test green. This pins the branch on its own: a property, but nothing
+  // to connect WITH.
+  it("disables Connect outside a CallSurfaceProvider even with a property", async () => {
+    render(
+      <VideoCall callId="call-noprovider" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+    const connect = screen.getByRole("button", { name: /connect/i });
+    expect(connect).toHaveProperty("disabled", true);
+    // And it must read as REAL unavailability, never as duty: starting a shift
+    // would give this call neither a property nor a provider, so offering to is
+    // a lie.
+    expect(connect.getAttribute("title")).toBe("Remote access is unavailable here");
+  });
+
   // Parity with the audio overlay: an explicit in-call notes save on Enter (and
   // Tab) with in-field feedback — not just the teardown-time save.
   it("saves notes on Enter mid-call and shows a saved indicator", async () => {
