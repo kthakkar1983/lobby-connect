@@ -2,11 +2,15 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, act, cleanup } from "@testing-library/react";
 
 import { CallSurfaceProvider, useCallSurface } from "@/components/dashboard/call-surface-provider";
+import { OffDutyPromptProvider } from "@/components/dashboard/off-duty-prompt";
 import { PropertyCard, type PropertyCardData } from "@/components/dashboard/property-card";
 
 // Task 17 (shift-tracking plan): mocked so tests can drive canWork directly,
-// without a real DutyProvider's fetch-hydration cycle (mirrors the pattern in
-// duty-control.test.tsx).
+// without a real DutyProvider's fetch-hydration cycle.
+//
+// Task 4 (duty-column polish plan): PropertyCard no longer imports duty-provider
+// itself — it calls useDutyGuard, and off-duty-prompt.tsx imports exactly this
+// one symbol — so this mock still drives the gate unchanged.
 const { useDutyOptional } = vi.hoisted(() => ({
   useDutyOptional: vi.fn(),
 }));
@@ -254,7 +258,7 @@ describe("PropertyCard", () => {
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
 
-  it("Task 17: canWork=false disables the Answer button + shows the go-on-duty label on a ringing VIDEO call, and does not invoke acceptVideo", async () => {
+  it("Task 4: off duty, Answer keeps its label, stays ENABLED, and does not invoke acceptVideo", async () => {
     const calls: string[] = [];
     acceptVideoSpy = (callId: string) => calls.push(callId);
     useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
@@ -273,9 +277,19 @@ describe("PropertyCard", () => {
       screen.getByText("publish video ring for p1").click();
     });
 
-    const btn = screen.getByRole("button", { name: "Go on duty" });
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+    // Spec §3.6: the per-card label swap is gone. With five properties per pod
+    // (more later) a "Go on duty" repeated on every card reads as noise; the
+    // shared prompt says it once.
+    expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
+    const btn = screen.getByRole("button", { name: "Answer" }) as HTMLButtonElement;
+
+    // THE LOAD-BEARING ASSERTION (spec §3.4/D8). A `disabled` button fires no
+    // click event, so the guard could never intercept it. useDutyGuard has no
+    // power to add or remove a `disabled` attribute, so its own tests cannot
+    // prove this — only a rendered control can.
+    expect(btn.disabled).toBe(false);
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    expect(btn.getAttribute("title")).toBeNull();
 
     await act(async () => {
       btn.click();
@@ -283,7 +297,14 @@ describe("PropertyCard", () => {
     expect(calls).toEqual([]);
   });
 
-  it("Task 17: canWork=false does NOT gate a ringing AUDIO call — Answer stays enabled and invokes acceptAudio", async () => {
+  it("Task 4: off duty, a ringing AUDIO call is withheld too — one guard covers both channels", async () => {
+    // REVERSES the old Task-17 behaviour deliberately. `answerGated` was
+    // VIDEO-only because a server 403 (requireOnDuty on answer-video) backs
+    // video and nothing backs audio-answer, so an off-duty audio Answer stayed
+    // enabled, pulsing, and silently no-opped at softphone.tsx:587 — a button
+    // that looked live and did nothing. Spec §3.6 retires that asymmetry: both
+    // channels route through the one guard, which refuses AND explains. The
+    // video 403 remains the real gate.
     let audioCalls = 0;
     acceptAudioSpy = () => {
       audioCalls += 1;
@@ -304,13 +325,47 @@ describe("PropertyCard", () => {
       screen.getByText("publish audio ring for p1").click();
     });
 
-    const btn = screen.getByRole("button", { name: "Answer" });
-    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    const btn = screen.getByRole("button", { name: "Answer" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
 
     await act(async () => {
       btn.click();
     });
-    expect(audioCalls).toBe(1);
+    expect(audioCalls).toBe(0);
+  });
+
+  it("Task 4: a gated Answer opens the shared off-duty prompt rather than doing nothing", async () => {
+    // The two tests above prove the action is withheld. Withheld-and-silent and
+    // withheld-and-explained are indistinguishable from them, and only one of
+    // those is the feature — so drive the real provider once, end to end.
+    acceptVideoSpy = () => {};
+    useDutyOptional.mockReturnValue({
+      canWork: false,
+      onBreak: false,
+      goOnDuty: vi.fn().mockResolvedValue(undefined),
+      resume: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof useDutyOptional>);
+
+    render(
+      <CallSurfaceProvider>
+        <OffDutyPromptProvider>
+          <Publisher />
+          <PropertyCard property={p1} />
+        </OffDutyPromptProvider>
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Answer" }).click();
+    });
+
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(screen.getByText("You're off duty")).toBeTruthy();
   });
 
   it("Task 17: canWork=true on a ringing VIDEO call behaves exactly like the no-provider case", async () => {

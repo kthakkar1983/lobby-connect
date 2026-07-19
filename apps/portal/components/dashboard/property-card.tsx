@@ -8,7 +8,7 @@ import { BellOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCallSurface } from "@/components/dashboard/call-surface-provider";
-import { useDutyOptional } from "@/components/dashboard/duty-provider";
+import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
 import { cardLiveState, type CardLiveState } from "@/lib/dashboard/pods";
 import { formatTimeOnly } from "@/lib/owner/format";
 import { cn } from "@/lib/utils";
@@ -48,14 +48,21 @@ export function PropertyCard({
   footerSlot?: React.ReactNode;
 }): React.JSX.Element {
   const { rings, active, actions, silencedKeys, silenceRing, openTileForCall } = useCallSurface();
-  const duty = useDutyOptional();
+  // Spec §3.6: ONE duty gate for Answer, on BOTH channels.
+  //
+  // This replaces Task 17's `answerGated`, which was deliberately VIDEO-only:
+  // a server 403 (requireOnDuty on answer-video) backs video and nothing backs
+  // audio-answer, so audio's Answer was left enabled, pulsing, and silently
+  // no-opping at softphone.tsx:587 — a control that looked live and did nothing.
+  // Routing both channels through the guard retires that asymmetry and turns the
+  // refusal into an explanation. The server 403 is still the real gate for
+  // video; this, like every other duty gate in the UI, is presentation only.
+  //
+  // No-op when no DutyProvider is mounted (owner surfaces + isolated tests):
+  // useDutyGuard passes straight through.
+  const { guard } = useDutyGuard();
   const ring = rings.find((r) => r.propertyId === property.id) ?? null;
   const silenced = ring ? silencedKeys.has(ring.key) : false;
-  // Task 17 (shift-tracking plan): UI defense-in-depth on top of the server 403
-  // (requireOnDuty on answer-video) — video only (there's no server 403 backing
-  // audio-answer, and the audio dial already presence-gates who even rings).
-  // No-op when no DutyProvider is mounted (owner surfaces + isolated tests).
-  const answerGated = ring?.channel === "VIDEO" && duty != null && !duty.canWork;
   const onCallHere = active?.propertyId === property.id;
   const state = cardLiveState({
     ringing: !!ring,
@@ -121,21 +128,28 @@ export function PropertyCard({
 
       <div className="mt-3 flex items-center gap-2">
         {ringing && canAnswer && (
+          // Never `disabled` off duty: a disabled button fires no click event,
+          // so the guard could not intercept it and could not offer to start
+          // the shift (spec §3.4/D8). The label never swaps either — see the
+          // useDutyGuard note above.
           <Button
-            onClick={answerGated ? undefined : answer}
-            disabled={answerGated}
-            className={answerGated ? undefined : "animate-pulse"}
-            title={answerGated ? "Go on duty to answer" : undefined}
+            onClick={() => guard(answer)}
+            size="sm"
+            className="animate-pulse whitespace-nowrap"
           >
-            {answerGated ? "Go on duty" : "Answer"}
+            Answer
           </Button>
         )}
         {ringing && ring && (
+          // Silenced is REAL unavailability, not a duty gate, so it stays
+          // genuinely disabled (spec §3.4).
           <Button
             variant="neutral"
+            size="sm"
             onClick={() => silenceRing(ring.key)}
             disabled={silenced}
             aria-pressed={silenced}
+            className="whitespace-nowrap"
           >
             <BellOff aria-hidden="true" />
             {silenced ? "Silenced" : "Silence"}
