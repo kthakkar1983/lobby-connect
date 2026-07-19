@@ -4,6 +4,7 @@ import { SkipLink } from "@/components/skip-link";
 import { LineStatusProvider } from "@/components/dashboard/line-status-provider";
 import { CallSurfaceProvider } from "@/components/dashboard/call-surface-provider";
 import { DutyProvider } from "@/components/dashboard/duty-provider";
+import { OffDutyPromptProvider } from "@/components/dashboard/off-duty-prompt";
 import { DashboardWorkspace } from "@/components/dashboard-workspace";
 
 type Role = "ADMIN" | "AGENT";
@@ -44,27 +45,34 @@ export function AppShell({
             re-rendering synchronously with the provider's onDuty flip — see the
             onDutyRef comment in softphone.tsx. */}
         <DutyProvider>
-          {/* Rest collapsed; the rail hover-expands (see AppSidebar). */}
-          <SidebarProvider defaultOpen={false}>
-            <AppSidebar role={role} />
-            <SidebarInset>
-              {/* The seam — the navy-rail | workspace join, carrying the sign-in split. */}
-              <div
-                className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[2px] bg-[image:var(--gradient-seam-vertical)]"
-                aria-hidden="true"
-              />
-              <SkipLink />
-              <DashboardWorkspace
-                role={role}
-                fullName={fullName}
-                email={email}
-                operatorId={operatorId}
-                firstName={firstName}
-              >
-                {children}
-              </DashboardWorkspace>
-            </SidebarInset>
-          </SidebarProvider>
+          {/* Inside DutyProvider (it reads duty) and outside the workspace (every
+              gated control is below it). A PLAIN context provider with a stable
+              value — deliberately not memoized or suspended, so the invariant
+              above still holds: nothing blocks the softphone from re-rendering
+              synchronously with the provider's onDuty flip. */}
+          <OffDutyPromptProvider>
+            {/* Rest collapsed; the rail hover-expands (see AppSidebar). */}
+            <SidebarProvider defaultOpen={false}>
+              <AppSidebar role={role} />
+              <SidebarInset>
+                {/* The seam — the navy-rail | workspace join, carrying the sign-in split. */}
+                <div
+                  className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[2px] bg-[image:var(--gradient-seam-vertical)]"
+                  aria-hidden="true"
+                />
+                <SkipLink />
+                <DashboardWorkspace
+                  role={role}
+                  fullName={fullName}
+                  email={email}
+                  operatorId={operatorId}
+                  firstName={firstName}
+                >
+                  {children}
+                </DashboardWorkspace>
+              </SidebarInset>
+            </SidebarProvider>
+          </OffDutyPromptProvider>
         </DutyProvider>
       </CallSurfaceProvider>
     </LineStatusProvider>
