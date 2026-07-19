@@ -90,7 +90,16 @@ export function PropertyCard({
   return (
     <div
       data-live-state={state}
-      className={`rounded-[var(--radius-card)] border bg-card p-4 shadow-sm transition-all duration-[var(--duration-standard)] ${
+      // `flex flex-col` exists to make the action block bottom-anchorable
+      // (spec §3.6c): the grid stretches every card to its row height, so
+      // pinning the actions to the bottom aligns them across cards no matter
+      // how many lines each property name takes. "Holiday Inn Express
+      // Southgate" wraps to two at the current width — an ordinary hotel name,
+      // not an edge case — and used to push its own buttons out of line.
+      // Reserving a two-line name height was rejected: it breaks on three lines
+      // and wastes a line on every single-line card. Bottom-anchoring is
+      // indifferent to line count.
+      className={`flex flex-col rounded-[var(--radius-card)] border bg-card p-4 shadow-sm transition-all duration-[var(--duration-standard)] ${
         ringing ? "scale-[1.02] border-live ring-2 ring-live shadow-lg" : "border-border"
       }`}
     >
@@ -121,12 +130,40 @@ export function PropertyCard({
         )}
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
+      {/* The `mb-3` is load-bearing and pairs with the action block's `mt-auto`
+          below. On the TALLEST card in a grid row there is no free space left to
+          distribute, so `mt-auto` computes to 0 — and the tallest card is
+          precisely the two-line-name card §3.6c is about. The minimum gap has to
+          come from an element that contributes it unconditionally. */}
+      <p className="mt-3 mb-3 text-xs text-muted-foreground">
         {property.callsTonight} call{property.callsTonight === 1 ? "" : "s"} tonight
         {property.lastCallAt ? ` · last ${formatTimeOnly(property.lastCallAt, property.timezone)}` : ""}
       </p>
 
-      <div className="mt-3 flex items-center gap-2">
+      {/* Reserve the ringing action row so a ring changes colour and content but
+          never GEOMETRY (spec §3.6b/D16). Answer and Silence render only while
+          ringing, so a ringing card used to be one button-row taller — and CSS
+          Grid sizes a row to its tallest item, so one ring grew every card
+          beside it and shoved everything below down, at the exact moment the
+          agent was reaching for Answer. A target that moves under the cursor
+          when it matters most is the defect; the ragged rows were only the
+          visible symptom.
+
+          The WRAPPER is always rendered at h-8; only its children are
+          conditional. An always-rendered empty row cannot be focused, cannot be
+          read by a screen reader, and needs no invisible/aria-hidden/tabIndex
+          juggling.
+
+          The reserved height is DERIVED from the control (h-8 is the button's
+          own height via size="sm") — never a min-height pixel constant. The root
+          font scales to 112.5% at lg, so a px constant would stop matching the
+          buttons it is reserving for.
+
+          `mt-auto` lives here because this is the FIRST of the two action rows:
+          it pins the whole action block to the bottom of the flex column (§3.6c).
+          Accepted cost: every quiet card is one button row taller than before —
+          a one-time static cost traded for never shifting during a live ring. */}
+      <div className="mt-auto flex h-8 items-center gap-2">
         {ringing && canAnswer && (
           // Never `disabled` off duty: a disabled button fires no click event,
           // so the guard could not intercept it and could not offer to start
@@ -158,8 +195,14 @@ export function PropertyCard({
             {silenced ? "Silenced" : "Silence"}
           </Button>
         )}
-        {connectSlot}
       </div>
+
+      {/* Connect + Kiosk get their OWN row and must stay out of the reserved one
+          above: that row is fixed at h-8, which would crop these buttons and cut
+          off the inline error <p role="alert"> PropertyActionButton renders
+          beneath them on a failed launch. No `mt-auto` here — the row above
+          already anchored the block, and a second one would split it. */}
+      {connectSlot && <div className="mt-2 flex items-center gap-2">{connectSlot}</div>}
       {footerSlot && <div className="mt-3 border-t border-border pt-3">{footerSlot}</div>}
     </div>
   );
