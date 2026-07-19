@@ -40,15 +40,15 @@
   --color-ink: #14202F;               /* text/icons on bright (mint/teal/blaze) fills */
 
   --color-live: #06D6A0;              /* connect / live + primary action */
-  --color-live-foreground: #048765;
+  --color-live-foreground: #046F55;   /* mirror portal — ≥4.5:1 on white AND on its own tint */
 
   --color-accent: #2EA6AA;            /* teal — secondary/interactive */
   --color-accent-foreground: #14202F;
-  --color-accent-text: #248386;
+  --color-accent-text: #1F6E71;       /* mirror portal — ≥4.5:1 on white AND on its own tint */
 
   --color-attention: #FD6734;         /* blaze — needs attention (kiosk uses sparingly) */
   --color-attention-foreground: #14202F;
-  --color-attention-text: #C85129;
+  --color-attention-text: #AB4421;    /* mirror portal — ≥4.5:1 on white AND on its own tint */
 
   --color-destructive: #C81E1E;
   --color-destructive-foreground: #FFFFFF;
