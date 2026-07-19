@@ -42,6 +42,7 @@ Two long-standing complaints, plus a groomed backlog of nits.
 | Property card | The `answerGated` → "Go on duty" label swap is removed |
 | Property card | Normalize the four card actions to one height; stop label-driven reflow |
 | Property card | Reserve the ringing action row so a ring never resizes the card or its grid row |
+| Property card | Bottom-anchor the actions so a wrapping name can't misalign them |
 | Call surfaces | Extract `<CallShell>`; rework both control bars |
 | Call surfaces | Remove `Hold` + `Swap`; normalize `End`; fixed-width toggles; grouping |
 | Video overlay | Reopen-tile becomes a round mint-outlined icon button in the corner |
@@ -193,6 +194,18 @@ Surfaced while reviewing the mockup against the real components. On one card:
 
 **This is the third instance of one pattern** (§3.5 header, §3.6a card sizes, §5.3 control bar): *a state or label change must not change a control's size.* Treat it in the plan as one convention applied in several places, not as unrelated tweaks.
 
+### 3.6c Bottom-anchor the card actions
+
+A property whose **name wraps to two lines** pushes its own buttons down, so its action row no longer aligns with the cards beside it. `Holiday Inn Express Southgate` does this at the current card width — an ordinary hotel name, not an edge case.
+
+**Fix:** make the card a flex column and pin the action block to the bottom (`mt-auto` on the first action row). The grid already stretches every card to its row height, so bottom-anchoring aligns all action rows regardless of how many lines each name takes.
+
+**Rejected:** reserving a fixed two-line height for the name. It is brittle — a three-line name breaks it — and it wastes space on every single-line card. Bottom-anchoring is indifferent to line count.
+
+Same reasoning as §3.6b: derive the layout from content rather than pinning magic heights. Applies to `PodCardGrid` and `FleetBoard` alike.
+
+*Not specified:* whether very long names should be clamped. Bottom-anchoring is self-correcting — a longer name just makes the row taller — so no clamp is needed for alignment. Revisit only if a real property name proves unreasonable.
+
 ### 3.7 Clocks card
 
 Four analog faces, 2×2. Labels: `India` · `US · Eastern` · `US · Central` · `US · Pacific`.
@@ -323,6 +336,7 @@ Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on in
 | **D14** | Keep a `RoomEvent.Disconnected` → Sentry handler | The only durable value salvaged from the closed crash investigation. |
 | **D15** | Normalize card actions to `sm`/`h-8`; no label-driven reflow | Kumar 2026-07-19 asked whether the real dashboard is more consistent than the mockup. It is in radius/font/focus, but **not in size** — `Answer`/`Silence` are `h-9` while `Connect`/`Kiosk` are `h-8`. Same defect as the header's lone `h-9`. |
 | **D16** | Reserve the ringing action row; uniform card height | Kumar 2026-07-19 spotted the ragged top/bottom rows and proposed a uniform height. Adopted — and the stronger reason is that it removes a **layout shift under the cursor at the moment `Answer` appears**. Height derived by hiding a rendered row, never a hardcoded `min-height` (the root font scales to 112.5% at `lg`). |
+| **D17** | Bottom-anchor card actions | Kumar 2026-07-19: `Holiday Inn Express Southgate` wraps to two lines and pushes its buttons out of line with its neighbours. Flex column + `mt-auto` is indifferent to line count; a reserved two-line name height would break on three lines and waste space on one. |
 
 ---
 
