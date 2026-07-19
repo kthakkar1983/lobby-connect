@@ -41,6 +41,7 @@ Two long-standing complaints, plus a groomed backlog of nits.
 | Header | Empties of everything shift-related; `DutyMenu` retires |
 | Property card | The `answerGated` → "Go on duty" label swap is removed |
 | Property card | Normalize the four card actions to one height; stop label-driven reflow |
+| Property card | Reserve the ringing action row so a ring never resizes the card or its grid row |
 | Call surfaces | Extract `<CallShell>`; rework both control bars |
 | Call surfaces | Remove `Hold` + `Swap`; normalize `End`; fixed-width toggles; grouping |
 | Video overlay | Reopen-tile becomes a round mint-outlined icon button in the corner |
@@ -176,6 +177,22 @@ Surfaced while reviewing the mockup against the real components. On one card:
 
 **Also normalize label-driven reflow**, the same failure the control bar has (§5.3). Card labels change length in three places — `Kiosk` → `Kiosk offline`, `Silence` → `Silenced`, and `Answer` (whose "Go on duty" swap §3.6 removes). A longer label currently changes the button's width and can wrap `Kiosk offline` onto two lines, making it taller than `Connect` beside it. Card action buttons get a fixed height and must not wrap.
 
+### 3.6b Reserve the ringing action row so cards never resize
+
+`Answer` and `Silence` render **only while ringing** (`property-card.tsx:123-143`), so a ringing card is one button-row taller than a quiet one. CSS Grid sizes each row to its tallest item, so **one ringing card makes its entire row taller than the others** — visible in the pod grid as a ragged top/bottom row.
+
+**The mismatch is the symptom; the layout shift is the defect.** When a call arrives the card grows, its grid row grows, and every card below it moves down — at the precise moment the agent is reaching for `Answer`. The target moves under the cursor when it matters most.
+
+**Fix:** always reserve the action row's space; hide it when not ringing. Every card is then one height, and a ring changes only colour and content, never geometry.
+
+**The reserved height must be derived, not hardcoded.** Render the row and hide it (`visibility: hidden`, which preserves the layout box while removing the buttons from both the tab order and the accessibility tree) rather than setting a `min-height` constant. A magic pixel value drifts the moment a label or button size changes, and the portal scales its root font to **112.5% at `lg`** (`globals.css`), so px constants do not track the type scale.
+
+**Accepted cost:** every quiet card grows by one button row, so the pod card is taller overall and content below it shifts down once, permanently. That is a one-time static cost traded for never shifting during a live ring.
+
+**Applies to the admin `FleetBoard` too** — it renders `PodCardGrid` per pod group (`fleet-board.tsx:84`) and has the same ragged-row behaviour. Note admin cards also carry `footerSlot` content that agent cards do not, so uniformity is required *within* a grid, not across agent and admin.
+
+**This is the third instance of one pattern** (§3.5 header, §3.6a card sizes, §5.3 control bar): *a state or label change must not change a control's size.* Treat it in the plan as one convention applied in several places, not as unrelated tweaks.
+
 ### 3.7 Clocks card
 
 Four analog faces, 2×2. Labels: `India` · `US · Eastern` · `US · Central` · `US · Pacific`.
@@ -305,6 +322,7 @@ Also fix: disabled `Connect` on the tile is low-contrast on navy (teal@50% on in
 | **D13** | Keep the navy/teal `Connect` split | Surface-appropriate; `<ConnectControl>` makes reversing it one prop. |
 | **D14** | Keep a `RoomEvent.Disconnected` → Sentry handler | The only durable value salvaged from the closed crash investigation. |
 | **D15** | Normalize card actions to `sm`/`h-8`; no label-driven reflow | Kumar 2026-07-19 asked whether the real dashboard is more consistent than the mockup. It is in radius/font/focus, but **not in size** — `Answer`/`Silence` are `h-9` while `Connect`/`Kiosk` are `h-8`. Same defect as the header's lone `h-9`. |
+| **D16** | Reserve the ringing action row; uniform card height | Kumar 2026-07-19 spotted the ragged top/bottom rows and proposed a uniform height. Adopted — and the stronger reason is that it removes a **layout shift under the cursor at the moment `Answer` appears**. Height derived by hiding a rendered row, never a hardcoded `min-height` (the root font scales to 112.5% at `lg`). |
 
 ---
 
