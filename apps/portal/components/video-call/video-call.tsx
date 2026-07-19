@@ -681,14 +681,23 @@ export function VideoCall({
               icon={cameraOff ? <VideoOff aria-hidden="true" /> : <Video aria-hidden="true" />}
               pressed={cameraOff}
               title={cameraOff ? "Turn your camera on" : "Turn your camera off"}
+              /* Without this the screen reader announces "Camera, pressed" at
+                 exactly the moment the camera is OFF — see <CallToggleButton>.
+                 On the surface whose whole point is kiosk eye contact. */
+              stateLabel={cameraOff ? "camera is off" : "camera is on"}
               onToggle={toggleCamera}
             />
             <CaptionToggle
               enabled={captionsEnabled}
               onToggle={toggleCaptions}
               /* Fixed box so the label swap ("Captions" / "Captions off") can't
-                 widen the tray and shift Connect and End call sideways. */
-              className="h-8 w-36 justify-center py-0"
+                 widen the tray and shift Connect and End call sideways.
+                 `shrink-0` because this one is a hand-rolled <button>: every
+                 <Button>-based sibling gets it from the button base, so without
+                 it this is the ONE item in the tray a narrow viewport can
+                 squeeze below w-36 and wrap — the exact reflow the box exists
+                 to prevent. */
+              className="h-8 w-36 shrink-0 justify-center py-0"
             />
           </CallControlTray>
           <CallControlDivider />

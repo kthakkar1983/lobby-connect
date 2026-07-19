@@ -425,19 +425,52 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
 
     const mute = screen.getByRole("button", { name: /^mute$/i });
-    const camera = screen.getByRole("button", { name: /^camera$/i });
+    // Anchored on the VISIBLE label, which is what can reflow. Camera's
+    // accessible name additionally carries an sr-only state (below) — that is
+    // deliberate and adds no layout, so the visible-label anchor still holds.
+    const camera = screen.getByRole("button", { name: /^camera\b/i });
     expect(mute.getAttribute("aria-pressed")).toBe("false");
     expect(camera.getAttribute("aria-pressed")).toBe("false");
 
     await user.click(mute);
     await user.click(camera);
 
-    // Same elements, same labels — only the pressed state changed.
+    // Same elements, same VISIBLE labels — only the pressed state changed.
     expect(screen.getByRole("button", { name: /^mute$/i })).toBe(mute);
-    expect(screen.getByRole("button", { name: /^camera$/i })).toBe(camera);
+    expect(screen.getByRole("button", { name: /^camera\b/i })).toBe(camera);
     expect(mute.getAttribute("aria-pressed")).toBe("true");
     expect(camera.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByRole("button", { name: /unmute|cam on|cam off/i })).toBeNull();
+    // Mute stays bare: "Mute, pressed" is already unambiguous, so it carries no
+    // composed state and its accessible name is exactly its visible label.
+    expect(mute.textContent).toBe("Mute");
+    // Camera's state lives in the NAME, never in the rendered text.
+    expect(camera.textContent).toBe("Camera");
+  });
+
+  // A screen reader announces the accessible name plus the pressed state. On a
+  // control named "Camera", `pressed` is TRUE when the camera is OFF, so the
+  // bare name announces the exact inverse of the truth. `title` does not rescue
+  // it — name-from-content beats the title attribute, so `title` never enters
+  // the name. Failure this pins: an agent using a screen reader toggles her
+  // camera, hears "Camera, pressed", believes she is on air, and completes a
+  // guest check-in with a dead camera — on the surface that exists for kiosk
+  // eye contact.
+  it("announces the camera's true state, not just 'pressed'", async () => {
+    const user = userEvent.setup();
+    render(<VideoCall callId="call-camname" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const camera = screen.getByRole("button", { name: /^camera\b/i });
+    expect(camera.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: /camera is on/i })).toBe(camera);
+
+    await user.click(camera);
+
+    expect(camera.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /camera is off/i })).toBe(camera);
+    // The two states must not share an accessible name.
+    expect(screen.queryByRole("button", { name: /camera is on/i })).toBeNull();
   });
 
   // D11: `End call` on both surfaces, but VIDEO's fill is navy. Audio's blaze is
