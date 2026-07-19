@@ -113,14 +113,26 @@ describe("ConnectButton", () => {
     expect(btn.disabled).toBe(false);
   });
 
-  it("Task 17: DutyProvider present + canWork=false disables the button, shows the go-on-duty label, and never invokes connect", async () => {
+  it("duty-column polish: canWork=false keeps the button ENABLED and labelled Connect, but withholds the action", async () => {
+    // Repointed from Task 17's disabled+relabel assertion. Spec §3.4/D8: a
+    // `disabled` button fires no click event, so the off-duty prompt could
+    // never intercept it and could never offer to start the shift. The gate
+    // moved into <PropertyActionButton>'s useDutyGuard, which keeps the control
+    // live and withholds the call instead.
+    //
+    // THIS IS THE LOAD-BEARING ASSERTION for the enabled half: useDutyGuard has
+    // no power to add or remove a `disabled` attribute, so the hook's own tests
+    // cannot prove it. Only a rendered control can.
     useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
     render(<ConnectButton propertyId="prop-1" />);
 
     const btn = screen.getByRole("button")!;
-    expect(btn.textContent).toBe("Go on duty to start");
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByText("Connect")).toBeNull();
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    expect(btn.hasAttribute("disabled")).toBe(false);
+
+    // Spec §3.6: no per-card "Go on duty" swap — with five properties per pod
+    // it repeats across every card and reads as noise. The prompt says it once.
+    expect(btn.textContent).toBe("Connect");
 
     await act(async () => {
       btn.click();

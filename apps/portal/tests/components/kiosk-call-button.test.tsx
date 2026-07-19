@@ -71,12 +71,39 @@ describe("KioskCallButton", () => {
     expect(btn.hasAttribute("title")).toBe(false);
   });
 
-  it("kioskOnline=true + DutyProvider canWork=false: disabled with a go-on-duty title hint, label stays 'Kiosk', never invokes startOutboundVideo", async () => {
+  it("duty-column polish: kioskOnline=true + canWork=false keeps the button ENABLED, with no duty title, but withholds the action", async () => {
+    // Repointed from Task 17's disabled+title assertion. Spec §3.4/D8: the duty
+    // reason no longer disables — <PropertyActionButton>'s useDutyGuard keeps
+    // the control live so the off-duty prompt can intercept the click and offer
+    // to start the shift. A `disabled` button fires no click event at all.
+    //
+    // THIS IS THE LOAD-BEARING ASSERTION for the enabled half: the hook cannot
+    // add or remove a `disabled` attribute, so only a rendered control proves
+    // it. The `title` is now reserved for REAL unavailability (see the
+    // kioskOnline=false cases above), which is what keeps the two kinds
+    // distinguishable to a hovering agent.
     useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={true} />);
     const btn = screen.getByRole("button", { name: "Kiosk" });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    expect(btn.hasAttribute("title")).toBe(false);
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(startOutboundVideo).not.toHaveBeenCalled();
+  });
+
+  it("kioskOnline=false + canWork=false: real unavailability wins, so it stays genuinely disabled", async () => {
+    // The conflation spec §3.4 forbids. Off duty AND an offline kiosk: starting
+    // the shift would not make that kiosk reachable, so offering to start it
+    // would be a lie. Real unavailability must beat the duty intercept.
+    useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
+    render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={false} />);
+    const btn = screen.getByRole("button", { name: "Kiosk offline" });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
-    expect(btn.getAttribute("title")).toBe("Go on duty to call");
+    expect(btn.getAttribute("title")).toBe("Kiosk offline");
 
     await act(async () => {
       btn.click();
