@@ -154,4 +154,38 @@ describe("createCaptionStream", () => {
     const stream = createCaptionStream("jwt");
     await expect(stream.start({} as MediaStreamTrack, vi.fn(), vi.fn())).rejects.toThrow("connect failed");
   });
+
+  it("stop() swallows a rejecting stopRecognition (WS still CONNECTING) — no unhandled rejection", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      // NOTE: we deliberately do NOT use the shared `sm.client` vi.fn() mock
+      // for stopRecognition here. Vitest's spy wrapper internally attaches a
+      // settled-result handler to any promise a mock returns (to power
+      // toHaveResolved/toHaveRejected), which itself counts as "handling" the
+      // rejection for Node's purposes — that masks the exact bug this test
+      // exists to catch (verified empirically: a vi.fn() returning a rejected
+      // promise never surfaces as unhandledRejection, even when the caller
+      // discards it; a plain function does). A bare stub client, swapped in
+      // for one construction via mockImplementationOnce on RealtimeClient
+      // itself, produces a genuinely unhandled rejection unless cleanup()
+      // catches it.
+      const plainClient = {
+        addEventListener: () => {},
+        start: () => Promise.resolve(undefined),
+        sendAudio: () => {},
+        stopRecognition: () => Promise.reject(new Error("Still in CONNECTING state")),
+      };
+      sm.RealtimeClient.mockImplementationOnce(() => plainClient as unknown as typeof sm.client);
+
+      const stream = createCaptionStream("jwt");
+      await stream.start({} as MediaStreamTrack, vi.fn(), vi.fn());
+      expect(() => stream.stop()).not.toThrow();
+      // Give any unhandled rejection a macrotask to surface.
+      await new Promise((r) => setTimeout(r, 10));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
 });
