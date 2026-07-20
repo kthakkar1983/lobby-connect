@@ -47,16 +47,21 @@ describe("KioskCallButton", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("kioskOnline=false: disabled, labeled 'Kiosk offline', with an offline title hint", () => {
+  it("kioskOnline=false: disabled + greyed, label stays 'Kiosk' (not swapped), with an offline title hint", () => {
+    // Kumar 2026-07-20: an offline kiosk keeps the "Kiosk" label + icon and just
+    // greys out (like the Connect button beside it) -- no "Kiosk offline" label
+    // swap. The reason still rides `title` on hover.
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={false} />);
-    const btn = screen.getByRole("button", { name: "Kiosk offline" });
+    const btn = screen.getByRole("button", { name: "Kiosk" });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect(btn.getAttribute("title")).toBe("Kiosk offline");
+    // The label must NOT swap to "Kiosk offline" anymore.
+    expect(screen.queryByRole("button", { name: "Kiosk offline" })).toBeNull();
   });
 
   it("kioskOnline=false: clicking does not invoke startOutboundVideo", async () => {
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={false} />);
-    const btn = screen.getByRole("button", { name: "Kiosk offline" });
+    const btn = screen.getByRole("button", { name: "Kiosk" });
 
     await act(async () => {
       btn.click();
@@ -101,7 +106,7 @@ describe("KioskCallButton", () => {
     // would be a lie. Real unavailability must beat the duty intercept.
     useDutyOptional.mockReturnValue({ canWork: false } as unknown as ReturnType<typeof useDutyOptional>);
     render(<KioskCallButton propertyId="p1" propertyName="Marlin" kioskOnline={false} />);
-    const btn = screen.getByRole("button", { name: "Kiosk offline" });
+    const btn = screen.getByRole("button", { name: "Kiosk" });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect(btn.getAttribute("title")).toBe("Kiosk offline");
 

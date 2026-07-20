@@ -85,15 +85,9 @@ export function DashboardWorkspace({
         </div>
       </DashboardHeader>
 
-      {/* items-stretch is load-bearing: without it the grid is content-height,
-          the aside's h-full below has nothing to stretch into, and the
-          clocks card's mt-auto pin (spec §5/D7) has no extra row height to
-          push into -- don't "simplify" this back to items-start. */}
-      <div className={onHome ? "grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
+      <div className={onHome ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
         <main id="main">{children}</main>
-        {/* h-full is the other half of the same mechanism -- see the mt-auto
-            comment on the clocks wrapper below (spec §5/D7). */}
-        <aside className={onHome ? "flex h-full flex-col gap-3" : "hidden"}>
+        <aside className={onHome ? "flex flex-col gap-3" : "hidden"}>
           <Softphone role={role} />
           {/* Spec D1: the softphone card keeps its position and is deliberately
               NOT merged into the shift card -- the shift card slots below it.
@@ -104,15 +98,15 @@ export function DashboardWorkspace({
               never hits it, and MAX_SHIFT_MS force-closes a forgotten shift
               regardless). */}
           <ShiftCard />
-          {/* Spec §5/D7: the aside is a full-height flex column (items-stretch
-              on the grid above + h-full here), so mt-auto pins the clocks to
-              the bottom -- aligning with the left column's bottom edge instead
-              of trailing right under the shift card. ZoneClocksCard takes no
-              className prop, so the margin lives on this wrapper rather than
-              threading a prop through the card. */}
-          <div className="mt-auto">
-            <ZoneClocksCard />
-          </div>
+          {/* Clocks trail directly under the shift card (natural stack). An
+              earlier mt-auto pin (Task 7, spec §5/D7) over-shot in production:
+              the aside stretched to the FULL main-column height, so mt-auto
+              pushed the clocks to the very bottom of the page -- far below the
+              properties board they were meant to sit level with. A plain stack
+              lands them right under the shift card, ~= the properties row on the
+              left, and is robust (no magic height tuned to the left content).
+              Do NOT re-add items-stretch / h-full / mt-auto to "pin" them lower. */}
+          <ZoneClocksCard />
           {/* Headless: VideoCallHost renders no chrome of its own (see its
               docblock) — either the fixed full-screen <VideoCall>, which escapes
               this container and blocks nav so the aside never hides mid-call, or
