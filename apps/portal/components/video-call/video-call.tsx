@@ -799,7 +799,7 @@ export function VideoCall({
             errorPlacement="float"
             className="font-semibold"
           />
-          <EndCallButton tone="navy" onEnd={() => void handleEnd()} />
+          <EndCallButton tone="blaze" onEnd={() => void handleEnd()} />
         </>
       }
     />

@@ -197,18 +197,15 @@ export function CallToggleButton({
  * with an 18px icon while every sibling was `text-sm`/16px, and audio's said
  * `Hang up` while video's said `End`.
  *
- * `tone` is the ONE difference, and it is deliberate:
+ * `tone` is BLAZE (`bg-attention`) on BOTH surfaces (spec D2, 2026-07-20). It was
+ * once split — navy on video, blaze on audio — because audio's surface also
+ * carries a red 911 button and blaze separated `End call` from it. Video has no
+ * 911 machinery anywhere, so that per-surface reason bought nothing; the two now
+ * match. `End call` is the far-right bookend, blaze, on every surface.
  *
- *   - VIDEO is navy (`bg-primary`) — spec §5.2 / D11.
- *   - AUDIO is blaze (`bg-attention`), because red=911 was reading as the "end
- *     call" cue. That is an intentional override of "blaze = needs-attention,
- *     never a CTA" for this one control (punch-list B1, Kumar 2026-06-18;
- *     relabelled 2026-07-19). 911 stays red, top-right. Audio is the ONE
- *     surface where a red 911 button and the end-call button coexist, and this
- *     fill is the visual separation that decision bought — on the surface where
- *     a mistap has life-safety consequences. Do NOT "unify" it to navy.
- *
- * Making it a prop is what keeps that a decision instead of drift (spec §4).
+ * `tone` stays a PROP rather than hardcoded, so the fill remains a recorded
+ * decision a future surface could re-diverge deliberately, not silent drift
+ * (spec §4). Today every caller passes `tone="blaze"`.
  */
 export function EndCallButton({
   tone,
