@@ -165,6 +165,23 @@ describe("DashboardWorkspace — the right column", () => {
     expect(main.queryByText("Your shift")).toBeNull();
     expect(main.queryByText("Clocks")).toBeNull();
   });
+
+  it("stretches the aside so the column can align (items-stretch on the home grid, §5)", () => {
+    const { container } = renderWorkspace();
+    const grid = asideOf(container).parentElement as HTMLElement;
+    expect(grid.className).toContain("items-stretch");
+  });
+
+  it("pins the clocks card to the bottom of the aside (mt-auto, §5)", () => {
+    const { container } = renderWorkspace();
+    const aside = asideOf(container);
+    const clocksHeading = within(aside).getByText("Clocks");
+    // the aside's direct child that contains the clocks carries mt-auto (whether a wrapper div or the card root)
+    const clocksChild = Array.from(aside.children).find((c) =>
+      c.contains(clocksHeading),
+    ) as HTMLElement;
+    expect(clocksChild.className).toContain("mt-auto");
+  });
 });
 
 describe("DashboardWorkspace — the agent-only call-back shortcut", () => {

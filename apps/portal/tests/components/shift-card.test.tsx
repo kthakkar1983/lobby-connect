@@ -285,6 +285,18 @@ describe("ShiftCard — off duty", () => {
   });
 });
 
+describe("ShiftCard — layout stability (§5)", () => {
+  it("holds a stable min-height in every duty state so the card doesn't collapse off duty (§5)", () => {
+    useDuty.mockReturnValue(dutyStub({ onDuty: false, shiftStartedAt: null }));
+    const { container, unmount } = render(<ShiftCard />);
+    expect(container.firstElementChild?.className).toMatch(/min-h-\[/);
+    unmount();
+    useDuty.mockReturnValue(dutyStub()); // on duty
+    const { container: c2 } = render(<ShiftCard />);
+    expect(c2.firstElementChild?.className).toMatch(/min-h-\[/);
+  });
+});
+
 describe("ShiftCard — mid-call rules", () => {
   it("removes Break from the tree during a call rather than disabling it", () => {
     useDuty.mockReturnValue(dutyStub());
