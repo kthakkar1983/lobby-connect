@@ -7,10 +7,12 @@
  *   - NO CONTROL CHANGES SIZE WHEN ITS STATE CHANGES. The bar used to shift
  *     under the agent's cursor mid-call every time she muted. A label swap is
  *     the only way that can come back, and it is a one-character regression.
- *   - `End call` IS ONE DEFINITION WITH ONE DELIBERATE DIFFERENCE. Audio's fill
- *     is blaze because red=911 was reading as the "end call" cue (punch-list
- *     B1); video's is navy. Unifying them would erase the visual separation
- *     that decision bought, on the surface where a mistap reaches 911.
+ *   - `End call` IS ONE DEFINITION, BLAZE ON BOTH SURFACES (D2, 2026-07-20).
+ *     The two used to differ — audio's fill was blaze because red=911 was
+ *     reading as the "end call" cue (punch-list B1), video stayed navy — but
+ *     video has no 911 control to separate from, so the split bought nothing
+ *     there and was dropped. `tone` stays a prop so a surface could
+ *     re-diverge deliberately later.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -276,17 +278,19 @@ describe("EndCallButton", () => {
     expect(screen.getByRole("button").textContent).toBe("End call");
   });
 
-  it("is navy on video", () => {
+  // `tone` is a generic prop on the component (see the EndCallButton docblock
+  // in call-controls.tsx) — these two tests pin its class mapping, independent
+  // of which surface calls it with which value. Today every real caller passes
+  // tone="blaze" (D2, 2026-07-20); `tone` stays a prop so a surface could
+  // re-diverge deliberately later.
+  it("renders navy when tone=navy", () => {
     render(<EndCallButton tone="navy" onEnd={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("bg-primary");
     expect(btn.className).not.toContain("bg-attention");
   });
 
-  // ⚠ DO NOT "unify" this to navy. Audio is the one surface where a red 911 and
-  // the end-call button coexist, and blaze is the separation punch-list B1
-  // bought after red was misread as the end-call cue.
-  it("is blaze on audio, deliberately overriding the navy default", () => {
+  it("renders blaze when tone=blaze", () => {
     render(<EndCallButton tone="blaze" onEnd={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("bg-attention");

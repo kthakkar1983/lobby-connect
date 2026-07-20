@@ -25,8 +25,10 @@
  *      it. (The Task-12 commit message overstated this as "every control has a
  *      fixed width"; only the toggles do.)
  *   2. THE TERMINATING CONTROL READS IDENTICALLY ON BOTH SURFACES. `End call`,
- *      sentence case, one definition (D11). Its per-surface FILL is the single
- *      deliberate difference and it is an explicit prop — see <EndCallButton>.
+ *      sentence case, one definition (D11), blaze fill on BOTH surfaces (D2,
+ *      2026-07-20 — it once split navy/blaze; see <EndCallButton> for why that
+ *      stopped buying anything). `tone` stays an explicit prop only so a
+ *      surface COULD re-diverge deliberately later — today none do.
  *
  * Widths are in rem, never px. The portal scales its root font to 112.5% at
  * `lg` (globals.css), so a px width silently stops matching its own label at
