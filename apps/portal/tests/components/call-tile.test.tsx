@@ -519,7 +519,7 @@ describe("CallTile", () => {
     const alert = pipDoc.body.querySelector('[role="alert"]') as HTMLElement;
     // The COMPACT wording, deliberately not the overlays' full string. This
     // window is 380x300 (TILE_WIDTH/TILE_HEIGHT) and the bar beside this button
-    // already carries Mute, Hang up and the caption toggle, so the wrapper
+    // already carries Mute, End call and the caption toggle, so the wrapper
     // shrinks toward min-content: "No remote access configured — ask an admin."
     // wraps to roughly four lines of text-xs there. Both strings say the same
     // two things — whose problem it is, and whether pressing again helps.

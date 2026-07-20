@@ -219,8 +219,8 @@ export function CallTile(): React.JSX.Element | null {
     <div className="flex h-full w-full flex-col bg-primary text-primary-foreground">
       {/* Face */}
       <div className="relative flex flex-1 flex-col overflow-hidden p-2">
-        {/* 911 lives in the face corner (audio-only), isolated from Hang up in
-            the control bar — mirrors the full-screen overlay so a hang-up tap
+        {/* 911 lives in the face corner (audio-only), isolated from End call in
+            the control bar — mirrors the full-screen overlay so an End-call tap
             can never land on 911. Two-tap arm/confirm logic is unchanged. */}
         {controls?.triggerEmergency && (
           <button

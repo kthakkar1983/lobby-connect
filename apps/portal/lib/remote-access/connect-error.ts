@@ -39,7 +39,7 @@ export type ConnectOutcome = {
  *
  * `compact` is the Document-PiP call tile, a fixed 380x300 window
  * (lib/duty-tile/call-tile-manager.ts) whose control bar already carries Mute,
- * Hang up, the Video/Chat toggle and the caption toggle. The full strings below
+ * End call, the Video/Chat toggle and the caption toggle. The full strings below
  * wrap to several lines in what is left, so the tile gets shorter ones that say
  * the same two things: whose problem it is, and whether pressing again helps.
  */

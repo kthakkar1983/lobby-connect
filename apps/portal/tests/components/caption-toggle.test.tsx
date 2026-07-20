@@ -75,7 +75,7 @@ describe("CaptionToggle", () => {
   });
 
   // Spec §3.2 / D4: on the call tile the compact toggle was px-2 py-2 with a
-  // 16px icon while its neighbours (Mute/Hang up in call-tile.tsx) are
+  // 16px icon while its neighbours (Mute/End call in call-tile.tsx) are
   // px-2 py-1 text-xs with 13px icons, so it stood visibly taller. Bring
   // compact onto that same scale; the labelled tray button is untouched.
   it("compact renders at the tile's compact scale (py-1 text-xs, not py-2 text-sm)", () => {

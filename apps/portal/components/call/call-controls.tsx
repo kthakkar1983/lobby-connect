@@ -138,21 +138,23 @@ export function CallControlDivider() {
  * never rendered, so it cannot reflow the bar.
  *
  * CONTRAST — the label owes 4.5:1 (WCAG 1.4.3) in BOTH states: this control is
- * ENABLED, so the inactive-component exemption never applies to it. Measured on
- * the surface it actually renders on, which is the tray, NOT white:
+ * ENABLED, so the inactive-component exemption never applies to it. It renders
+ * directly on the control bar's `bg-card` (#FFFFFF) — the toggles were lifted out
+ * of the old `bg-background` tray in the 2026-07-20 bar reorder (spec §3.1), so
+ * the numbers below are measured on white, a strictly higher-contrast surface
+ * than the tray composite was:
  *
- *   - unpressed `text-text-muted` on the tray's `bg-background`  = 5.08:1  PASS
- *   - pressed   `text-foreground` on `bg-accent/10` over the tray
- *     (the composite is #E0EFEF, not #FFFFFF)                    = 11.86:1 PASS
+ *   - unpressed `text-text-muted` on `bg-card` #FFFFFF               = 5.48:1  PASS
+ *   - pressed   `text-foreground` on `bg-accent/10` over `bg-card`
+ *     (the composite is ~#EAF6F6)                                    = 12.71:1 PASS
  *
- * `text-accent-text` shipped here first and failed on that composite (~3.81:1
- * against the then-current token) — under a comment that asserted it passed
- * because it is the AA-on-white deep teal. The token was later darkened (merge
- * 1ef6ee8, 2026-07-19) so it clears AA on white with more margin, but this
- * control does not render on white; on the tray composite the deep-teal text
- * token is still the wrong choice. State is carried by the border, the fill and
- * the icon, so nothing is lost by holding the label at full strength. Neither
- * state dims the ELEMENT — only the fill — per the standing lesson.
+ * `text-accent-text` shipped here first and failed on the OLD tray composite
+ * (~3.81:1 against the then-current token). It would clear AA on the current
+ * white surface (~5.40:1, and the token was darkened in merge 1ef6ee8), but
+ * `text-foreground` is kept — it shares the pressed fill's recipe and carries far
+ * more margin. State is carried by the border, the fill and the icon, so nothing
+ * is lost by holding the label at full strength. Neither state dims the ELEMENT
+ * — only the fill — per the standing lesson.
  */
 export function CallToggleButton({
   label,

@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
  * states of this control are ENABLED, so the inactive-component exemption never
  * applies — every colour below is measured against the surface it renders on.
  *
- *   - Labelled (`compact === false`) renders only in the light control-bar tray.
- *     Enabled: `text-foreground` on `bg-accent/10` = 11.86:1 (the same recipe
- *     <CallToggleButton> uses, so the two tray toggles cannot re-diverge);
- *     `text-accent-text` there FAILED (~3.81:1 against the then-current token).
- *     Off: `text-text-muted` on white, with the visible "Captions off" label.
+ *   - Labelled (`compact === false`) renders directly on the control bar's
+ *     `bg-card` (#FFFFFF) — lifted out of the old tray in the 2026-07-20 bar
+ *     reorder (spec §3.1). Enabled: `text-foreground` on `bg-accent/10` over
+ *     bg-card = 12.71:1 (the same recipe <CallToggleButton> uses, so the two
+ *     toggles cannot re-diverge; `text-accent-text` there would be ~5.40:1 — it
+ *     passes now, but text-foreground keeps more margin). Off: `text-text-muted`
+ *     on `bg-card` = 5.48:1, with the visible "Captions off" label.
  *   - Compact renders icon-only inside the navy call tile, whose ROOT is
  *     `bg-primary` #0F2D4B (call-tile.tsx:219; the control bar at :299 has no
  *     fill, so the navy shows through — this is NOT the #14202F video stage an

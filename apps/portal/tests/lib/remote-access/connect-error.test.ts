@@ -38,7 +38,7 @@ describe("connectErrorMessage", () => {
   });
 
   // The call tile is a fixed 380x300 Document-PiP window whose control bar
-  // already carries Mute, Hang up and the caption toggle. The full strings wrap
+  // already carries Mute, End call and the caption toggle. The full strings wrap
   // to several lines in what is left of it, over the guest's video face, so it
   // gets shorter ones — saying the same two things: whose problem it is, and
   // whether pressing again helps.
