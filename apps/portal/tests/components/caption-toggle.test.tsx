@@ -73,4 +73,41 @@ describe("CaptionToggle", () => {
     expect(btn.className).toContain("text-primary-foreground/70");
     expect(btn.className).not.toContain("text-text-muted");
   });
+
+  // Spec §3.2 / D4: on the call tile the compact toggle was px-2 py-2 with a
+  // 16px icon while its neighbours (Mute/Hang up in call-tile.tsx) are
+  // px-2 py-1 text-xs with 13px icons, so it stood visibly taller. Bring
+  // compact onto that same scale; the labelled tray button is untouched.
+  it("compact renders at the tile's compact scale (py-1 text-xs, not py-2 text-sm)", () => {
+    render(<CaptionToggle enabled={false} compact onToggle={vi.fn()} />);
+    const btn = screen.getByRole("button", { name: "Captions" });
+    expect(btn.className).toContain("px-2 py-1 text-xs");
+    expect(btn.className).not.toContain("py-2");
+    // tailwind-merge must resolve the font-size conflict in compact's favour
+    // — the base string always carries text-sm, so a leftover text-sm here
+    // would mean the merge order is wrong, not just a missing class.
+    expect(btn.className).not.toContain("text-sm");
+  });
+
+  it("keeps the labelled tray button at its original px-3 py-2 text-sm scale", () => {
+    render(<CaptionToggle enabled={false} onToggle={vi.fn()} />);
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("px-3 py-2");
+    expect(btn.className).toContain("text-sm");
+    expect(btn.className).not.toContain("text-xs");
+  });
+
+  it("shrinks the compact icon to 13px, matching the tile's other bar buttons", () => {
+    render(<CaptionToggle enabled compact onToggle={vi.fn()} />);
+    const icon = screen.getByRole("button").querySelector("svg");
+    expect(icon?.getAttribute("width")).toBe("13");
+    expect(icon?.getAttribute("height")).toBe("13");
+  });
+
+  it("keeps the labelled icon at 16px", () => {
+    render(<CaptionToggle enabled onToggle={vi.fn()} />);
+    const icon = screen.getByRole("button").querySelector("svg");
+    expect(icon?.getAttribute("width")).toBe("16");
+    expect(icon?.getAttribute("height")).toBe("16");
+  });
 });

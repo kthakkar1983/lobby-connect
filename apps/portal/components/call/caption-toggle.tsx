@@ -56,14 +56,14 @@ export function CaptionToggle({
       title={enabled ? "Turn captions off" : "Turn captions on"}
       className={cn(
         "flex items-center gap-1 rounded-button border text-sm",
-        compact ? "px-2 py-2" : "px-3 py-2",
+        compact ? "px-2 py-1 text-xs" : "px-3 py-2",
         enabled
           ? cn("border-accent bg-accent/10", compact ? "text-accent" : "text-foreground")
           : cn("border-border", compact ? "text-primary-foreground/70" : "text-text-muted"),
         className,
       )}
     >
-      {enabled ? <Captions size={16} /> : <CaptionsOff size={16} />}
+      {enabled ? <Captions size={compact ? 13 : 16} /> : <CaptionsOff size={compact ? 13 : 16} />}
       {!compact && (enabled ? "Captions" : "Captions off")}
     </button>
   );
