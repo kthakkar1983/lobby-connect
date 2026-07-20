@@ -608,6 +608,29 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(screen.queryByRole("button", { name: /^swap$/i })).toBeNull();
   });
 
+  // Task 4 (spec §3.1): mirrors audio's Task-3 reorder — Connect now LEADS the
+  // cluster (immediately after the input group), the <CallControlTray> wrapper
+  // is gone (Mute/Camera/Captions sit as flat siblings), and End call stays the
+  // far-right bookend after the divider.
+  it("orders the control bar Connect, Mute, Camera, Captions, End call (spec §3.1)", async () => {
+    render(
+      <VideoCall callId="call-order" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const names = screen.getAllByRole("button").map((b) => b.textContent ?? "");
+    const connect = names.findIndex((n) => /connect/i.test(n));
+    const mute = names.findIndex((n) => /^mute$/i.test(n));
+    const camera = names.findIndex((n) => /camera/i.test(n));
+    const captions = names.findIndex((n) => /captions/i.test(n));
+    const end = names.findIndex((n) => /end call/i.test(n));
+    expect(connect).toBeGreaterThanOrEqual(0);
+    expect(connect).toBeLessThan(mute);
+    expect(mute).toBeLessThan(camera);
+    expect(camera).toBeLessThan(captions);
+    expect(captions).toBeLessThan(end);
+  });
+
   // §5.3: the bar must not move under the agent's cursor mid-call. Both toggles
   // keep a fixed label and carry their state in the fill plus aria-pressed.
   it("keeps Mute and Camera labelled the same once toggled", async () => {

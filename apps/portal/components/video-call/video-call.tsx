@@ -23,7 +23,6 @@ import { ChatDock } from "@/components/call/chat-dock";
 import { CallShell } from "@/components/call/call-shell";
 import {
   CallControlDivider,
-  CallControlTray,
   CallToggleButton,
   EndCallButton,
 } from "@/components/call/call-controls";
@@ -687,10 +686,11 @@ export function VideoCall({
           </div>
         )
       }
-      /* Control bar — Room#/Notes (left, Enter-to-save) · tray (Mute, Camera,
-         Captions) · divider · Connect, End call. Same order and the same shared
-         controls as the audio overlay (spec §5.4). The input group is capped in
-         REM so it tracks the 112.5% root font at `lg`. */
+      /* Control bar — Room#/Notes (left, Enter-to-save) · Connect · Mute ·
+         Camera · Captions · divider · End call. Connect leads the cluster and
+         End call is the far-right bookend, same order as the audio overlay
+         (spec §3.1). The input group is capped in REM so it tracks the 112.5%
+         root font at `lg`. */
       controls={
         <>
           <div className="flex min-w-0 max-w-[35rem] flex-1 items-center gap-2">
@@ -739,39 +739,6 @@ export function VideoCall({
               entirely to multi-property when the Phase-3 plan was gated — they
               held prime control-bar space doing nothing, and removing them is
               what pays for `End call`'s longer label. */}
-          <CallControlTray>
-            <CallToggleButton
-              label="Mute"
-              icon={muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
-              pressed={muted}
-              title={muted ? "Turn your microphone on" : "Turn your microphone off"}
-              onToggle={toggleMute}
-            />
-            <CallToggleButton
-              label="Camera"
-              icon={cameraOff ? <VideoOff aria-hidden="true" /> : <Video aria-hidden="true" />}
-              pressed={cameraOff}
-              title={cameraOff ? "Turn your camera on" : "Turn your camera off"}
-              /* Without this the screen reader announces "Camera, pressed" at
-                 exactly the moment the camera is OFF — see <CallToggleButton>.
-                 On the surface whose whole point is kiosk eye contact. */
-              stateLabel={cameraOff ? "camera is off" : "camera is on"}
-              onToggle={toggleCamera}
-            />
-            <CaptionToggle
-              enabled={captionsEnabled}
-              onToggle={toggleCaptions}
-              /* Fixed box so the label swap ("Captions" / "Captions off") can't
-                 widen the tray and shift Connect and End call sideways.
-                 `shrink-0` because this one is a hand-rolled <button>: every
-                 <Button>-based sibling gets it from the button base, so without
-                 it this is the ONE item in the tray a narrow viewport can
-                 squeeze below w-36 and wrap — the exact reflow the box exists
-                 to prevent. */
-              className="h-8 w-36 shrink-0 justify-center py-0"
-            />
-          </CallControlTray>
-          <CallControlDivider />
           {/* Connect (Task 14, spec §7) — one of five sites now sharing
               <PropertyActionButton>. `tone="teal"` is NOT decoration and NOT
               the default: the 2026-07-10 batch-1 polish split the fill navy on
@@ -787,7 +754,12 @@ export function VideoCall({
 
               `errorPlacement="float"`: this bar's geometry is fixed on purpose
               so it cannot move under her hand mid-call; a flow error would grow
-              it by ~20px and lift End call and Mute the moment one appeared. */}
+              it by ~20px and lift End call and Mute the moment one appeared.
+
+              Task 4 (spec §3.1) moves Connect to LEAD this cluster, right
+              after the input group, instead of trailing just before End call —
+              mirrors audio's Task 3. Its props below are unchanged by the
+              move. */}
           <PropertyActionButton
             label="Connect"
             icon={<Monitor aria-hidden="true" />}
@@ -799,6 +771,41 @@ export function VideoCall({
             errorPlacement="float"
             className="font-semibold"
           />
+          {/* Mute, Camera and Captions are flat siblings now, not wrapped in
+              <CallControlTray> (spec §3.1) — the tray and its `ml-auto` are
+              gone with it; the input group's own `flex-1` above already
+              right-packs this whole cluster, so nothing here needs to replace
+              it. */}
+          <CallToggleButton
+            label="Mute"
+            icon={muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
+            pressed={muted}
+            title={muted ? "Turn your microphone on" : "Turn your microphone off"}
+            onToggle={toggleMute}
+          />
+          <CallToggleButton
+            label="Camera"
+            icon={cameraOff ? <VideoOff aria-hidden="true" /> : <Video aria-hidden="true" />}
+            pressed={cameraOff}
+            title={cameraOff ? "Turn your camera on" : "Turn your camera off"}
+            /* Without this the screen reader announces "Camera, pressed" at
+               exactly the moment the camera is OFF — see <CallToggleButton>.
+               On the surface whose whole point is kiosk eye contact. */
+            stateLabel={cameraOff ? "camera is off" : "camera is on"}
+            onToggle={toggleCamera}
+          />
+          <CaptionToggle
+            enabled={captionsEnabled}
+            onToggle={toggleCaptions}
+            /* Fixed box so the label swap ("Captions" / "Captions off") can't
+               widen the bar and shift End call sideways. `shrink-0` because
+               this one is a hand-rolled <button>: every <Button>-based sibling
+               gets it from the button base, so without it this is the ONE item
+               a narrow viewport can squeeze below w-36 and wrap — the exact
+               reflow the box exists to prevent. */
+            className="h-8 w-36 shrink-0 justify-center py-0"
+          />
+          <CallControlDivider />
           <EndCallButton tone="blaze" onEnd={() => void handleEnd()} />
         </>
       }
