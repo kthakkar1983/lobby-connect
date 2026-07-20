@@ -4,7 +4,7 @@
 // via CallSurfaceProvider (D1/D2). Connect is injected via connectSlot (Phase E).
 
 import { useEffect, useState } from "react";
-import { BellOff } from "lucide-react";
+import { BellOff, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCallSurface } from "@/components/dashboard/call-surface-provider";
@@ -195,6 +195,7 @@ export function PropertyCard({
           // asks only that the label swap go, and a ringing Answer is the one
           // control on this card that must stay maximally findable.
           <Button onClick={() => guard(answer)} size="sm" className="animate-pulse">
+            <Phone aria-hidden="true" />
             Answer
           </Button>
         )}

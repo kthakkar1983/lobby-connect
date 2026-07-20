@@ -527,4 +527,21 @@ describe("PropertyCard", () => {
     const dot = screen.getByTitle("Kiosk offline");
     expect(dot.className).toContain("bg-muted-foreground/40");
   });
+
+  it("Answer renders with a leading icon so it aligns with Silence/Connect/Kiosk (D6)", async () => {
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    const answer = screen.getByRole("button", { name: "Answer" });
+    expect(answer.querySelector("svg")).not.toBeNull();
+  });
 });
