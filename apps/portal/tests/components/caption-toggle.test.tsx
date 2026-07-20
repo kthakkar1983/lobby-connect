@@ -26,14 +26,16 @@ describe("CaptionToggle", () => {
   // WCAG one rather than a stylistic one: a label owes 4.5:1 (1.4.3), a lone
   // icon owes 3:1 (1.4.11). Unifying them breaks one surface or the other.
   //
-  //   labelled -> light control-bar tray. accent-text on bg-accent/10 there is
-  //               3.81:1 (FAIL); foreground is 11.86:1.
+  //   labelled -> flat on the light control bar's bg-card #FFFFFF (no tray since
+  //               the 2026-07-20 reorder). foreground on bg-accent/10 over
+  //               bg-card is 12.71:1; the darkened accent-text now clears AA here
+  //               too (~5.40:1), so foreground is the shared-recipe choice.
   //   compact  -> icon-only on the NAVY call tile (bg-primary #0F2D4B). The teal
   //               `text-accent` icon clears the 3:1 icon bar (~4.1:1 over the
   //               bg-accent/10 composite); foreground would be navy-on-navy,
   //               ~1.0:1, i.e. the captions control would vanish from the tile.
   //               The deep `text-accent-text` measured only ~2.68:1 here (FAIL).
-  it("uses the tray-safe label colour when it renders text", () => {
+  it("uses the shared control-bar label colour when it renders text", () => {
     render(<CaptionToggle enabled onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("text-foreground");
