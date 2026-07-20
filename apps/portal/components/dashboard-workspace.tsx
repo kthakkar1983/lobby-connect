@@ -85,8 +85,14 @@ export function DashboardWorkspace({
         </div>
       </DashboardHeader>
 
+      {/* items-stretch is load-bearing: without it the grid is content-height,
+          the aside's h-full below has nothing to stretch into, and the
+          clocks card's mt-auto pin (spec §5/D7) has no extra row height to
+          push into -- don't "simplify" this back to items-start. */}
       <div className={onHome ? "grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
         <main id="main">{children}</main>
+        {/* h-full is the other half of the same mechanism -- see the mt-auto
+            comment on the clocks wrapper below (spec §5/D7). */}
         <aside className={onHome ? "flex h-full flex-col gap-3" : "hidden"}>
           <Softphone role={role} />
           {/* Spec D1: the softphone card keeps its position and is deliberately

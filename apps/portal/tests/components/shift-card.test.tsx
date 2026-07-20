@@ -289,11 +289,20 @@ describe("ShiftCard — layout stability (§5)", () => {
   it("holds a stable min-height in every duty state so the card doesn't collapse off duty (§5)", () => {
     useDuty.mockReturnValue(dutyStub({ onDuty: false, shiftStartedAt: null }));
     const { container, unmount } = render(<ShiftCard />);
-    expect(container.firstElementChild?.className).toMatch(/min-h-\[/);
+    const offDutyClass = container.firstElementChild?.className;
+    expect(offDutyClass).toMatch(/min-h-\[/);
     unmount();
+
     useDuty.mockReturnValue(dutyStub()); // on duty
     const { container: c2 } = render(<ShiftCard />);
-    expect(c2.firstElementChild?.className).toMatch(/min-h-\[/);
+    const onDutyClass = c2.firstElementChild?.className;
+    expect(onDutyClass).toMatch(/min-h-\[/);
+
+    // The whole point of CARD_CLASS is that both branches share ONE string.
+    // Pin that invariant directly: an edit that inlined min-h-[8rem] on one
+    // branch and min-h-[14rem] on the other would satisfy both checks above
+    // yet still collapse the card off duty -- only an equality check catches it.
+    expect(offDutyClass).toBe(onDutyClass);
   });
 });
 
