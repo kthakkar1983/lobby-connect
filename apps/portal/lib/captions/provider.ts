@@ -75,7 +75,12 @@ export function createCaptionStream(token: string): CaptionStream {
     try { source?.disconnect(); } catch { /* ignore */ }
     try { sink?.disconnect(); } catch { /* ignore */ }
     try { void audioCtx?.close(); } catch { /* ignore */ }
-    try { client?.stopRecognition?.({ noTimeout: true }); } catch { /* ignore */ }
+    try {
+      void Promise.resolve(client?.stopRecognition?.({ noTimeout: true })).catch(() => {
+        /* expected during a connect-then-abort: the WS was still CONNECTING when we
+           tore down, so stopRecognition rejects asynchronously. Not actionable. */
+      });
+    } catch { /* ignore a synchronous throw too */ }
     client = null;
     audioCtx = null;
     source = null;

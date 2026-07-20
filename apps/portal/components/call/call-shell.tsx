@@ -99,9 +99,11 @@ export function CallShell({
    * gap — is owned here and is now IDENTICAL on both surfaces: Task 11 needed a
    * `controlBarClassName` escape hatch to keep the extraction a pure move
    * (audio laid out `justify-between gap-3`, video `gap-2`), and Task 12
-   * converged them, so the hatch is gone. Both bars now read: inputs, then the
-   * control tray pushed right by its own `ml-auto`, then Connect and End call.
-   * The shared vocabulary lives in components/call/call-controls.tsx.
+   * converged them, so the hatch is gone. Both bars now read: inputs
+   * (flex-1, right-packing the cluster), then Connect leading the cluster
+   * (Mute · [Camera] · Captions), a divider, then End call as the far-right
+   * bookend (spec §3.1, 2026-07-20 — the tray wrapper and its `ml-auto` push
+   * were dropped). The shared vocabulary lives in components/call/call-controls.tsx.
    */
   readonly controls: ReactNode;
 }) {

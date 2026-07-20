@@ -418,8 +418,10 @@ describe("CallTile", () => {
 
   // Batch-1 polish (2026-07-10): 911 was 6px from Hang up in the control row —
   // the opposite of the full-screen overlay, which isolates it. It must NOT be a
-  // sibling of Hang up anymore (moved to the tile-face corner).
-  it("keeps 911 out of the Hang up control row (accidental end→911 tap guard)", async () => {
+  // sibling of the terminating button anymore (moved to the tile-face corner).
+  // Task 5 (call-controls-column-polish, spec §3.3) relabelled Hang up → End
+  // call; this test now pins the separation against the new label.
+  it("keeps 911 out of the End call control row (accidental end→911 tap guard)", async () => {
     const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
@@ -427,11 +429,53 @@ describe("CallTile", () => {
 
     const tile = within(pipDoc.body);
     const btn911 = tile.getByText("911").closest("button");
-    const hangUp = tile.getByText("Hang up").closest("button");
+    const endCall = tile.getByText("End call").closest("button");
     expect(btn911).toBeTruthy();
-    expect(hangUp).toBeTruthy();
+    expect(endCall).toBeTruthy();
     // Different parent element => not adjacent in the same control row.
-    expect(btn911!.parentElement).not.toBe(hangUp!.parentElement);
+    expect(btn911!.parentElement).not.toBe(endCall!.parentElement);
+  });
+
+  // Task 5 (call-controls-column-polish, spec §3.3): the bar's terminating
+  // control is relabelled "End call" — "Hang up" must not exist anywhere in
+  // the tile anymore.
+  it('the tile terminating control reads "End call", not "Hang up" (spec §3.3)', async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    const tile = within(pipDoc.body);
+    expect(tile.queryByText("Hang up")).toBeNull();
+    expect(tile.getByText("End call")).toBeTruthy();
+  });
+
+  // Task 5 (spec §3.1): the bar reorders to Connect · Mute · [Video/Chat] ·
+  // Captions · End call — Connect leads, End call bookends the row.
+  it("orders the tile bar Connect … Mute … End call (Connect leads, End call bookends, spec §3.1)", async () => {
+    const controls = makeControls({ triggerEmergency: undefined, sendChat: vi.fn(), sendTyping: vi.fn() });
+    const { pipDoc } = renderTile({ active: videoActive, controls });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    // The control bar's buttons in DOM order (window-less pip → querySelectorAll, not getAllByRole).
+    const texts = Array.from(pipDoc.body.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    const connect = texts.findIndex((t) => /connect/i.test(t));
+    const mute = texts.findIndex((t) => /mute/i.test(t));
+    const end = texts.findIndex((t) => /end call/i.test(t));
+    expect(connect).toBeGreaterThanOrEqual(0);
+    expect(connect).toBeLessThan(mute);
+    expect(mute).toBeLessThan(end);
+  });
+
+  // Task 5 (spec §3.3): "End call" is longer than "Hang up" and must not wrap
+  // in the 380px PiP window.
+  it("keeps End call from wrapping in the narrow PiP window (whitespace-nowrap)", async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    const end = within(pipDoc.body).getByText("End call").closest("button") as HTMLElement;
+    expect(end.className).toContain("whitespace-nowrap");
   });
 
   // Batch-1 polish (2026-07-10): the tile Connect was a near-invisible navy
@@ -475,7 +519,7 @@ describe("CallTile", () => {
     const alert = pipDoc.body.querySelector('[role="alert"]') as HTMLElement;
     // The COMPACT wording, deliberately not the overlays' full string. This
     // window is 380x300 (TILE_WIDTH/TILE_HEIGHT) and the bar beside this button
-    // already carries Mute, Hang up and the caption toggle, so the wrapper
+    // already carries Mute, End call and the caption toggle, so the wrapper
     // shrinks toward min-content: "No remote access configured — ask an admin."
     // wraps to roughly four lines of text-xs there. Both strings say the same
     // two things — whose problem it is, and whether pressing again helps.

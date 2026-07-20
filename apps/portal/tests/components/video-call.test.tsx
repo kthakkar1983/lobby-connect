@@ -608,6 +608,29 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(screen.queryByRole("button", { name: /^swap$/i })).toBeNull();
   });
 
+  // Task 4 (spec §3.1): mirrors audio's Task-3 reorder — Connect now LEADS the
+  // cluster (immediately after the input group), the <CallControlTray> wrapper
+  // is gone (Mute/Camera/Captions sit as flat siblings), and End call stays the
+  // far-right bookend after the divider.
+  it("orders the control bar Connect, Mute, Camera, Captions, End call (spec §3.1)", async () => {
+    render(
+      <VideoCall callId="call-order" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const names = screen.getAllByRole("button").map((b) => b.textContent ?? "");
+    const connect = names.findIndex((n) => /connect/i.test(n));
+    const mute = names.findIndex((n) => /^mute$/i.test(n));
+    const camera = names.findIndex((n) => /camera/i.test(n));
+    const captions = names.findIndex((n) => /captions/i.test(n));
+    const end = names.findIndex((n) => /end call/i.test(n));
+    expect(connect).toBeGreaterThanOrEqual(0);
+    expect(connect).toBeLessThan(mute);
+    expect(mute).toBeLessThan(camera);
+    expect(camera).toBeLessThan(captions);
+    expect(captions).toBeLessThan(end);
+  });
+
   // §5.3: the bar must not move under the agent's cursor mid-call. Both toggles
   // keep a fixed label and carry their state in the fill plus aria-pressed.
   it("keeps Mute and Camera labelled the same once toggled", async () => {
@@ -664,16 +687,20 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(screen.queryByRole("button", { name: /camera is on/i })).toBeNull();
   });
 
-  // D11: `End call` on both surfaces, but VIDEO's fill is navy. Audio's blaze is
-  // a deliberate punch-list-B1 override and must not leak here — video has no
-  // 911 control to be confused with, and blaze is the needs-attention colour.
-  it("ends the call with a navy 'End call' (audio's blaze must not leak here)", async () => {
+  // D2 (2026-07-20): `End call` is blaze on BOTH surfaces now. This test used
+  // to pin D11 (navy on video; audio's blaze kept separate as a deliberate
+  // punch-list-B1 override) — that per-surface split existed only because
+  // audio's surface also carries a red 911 button, and blaze separated `End
+  // call` from it. Video has no 911 machinery anywhere, so the split bought
+  // nothing there; D2 supersedes D11 and unifies the fill. See the
+  // EndCallButton docblock in call-controls.tsx.
+  it("End call is blaze on video (unified with audio, spec D2)", async () => {
     render(<VideoCall callId="call-endtone" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />);
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
 
     const end = screen.getByRole("button", { name: /^end call$/i });
-    expect(end.className).toContain("bg-primary");
-    expect(end.className).not.toContain("bg-attention");
+    expect(end.className).toContain("bg-attention");
+    expect(end.className).not.toContain("bg-primary");
   });
 
   // ---- Task 13: the reopen-tile control (spec §6) ----------------------------

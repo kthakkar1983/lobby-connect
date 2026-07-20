@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
  * states of this control are ENABLED, so the inactive-component exemption never
  * applies — every colour below is measured against the surface it renders on.
  *
- *   - Labelled (`compact === false`) renders only in the light control-bar tray.
- *     Enabled: `text-foreground` on `bg-accent/10` = 11.86:1 (the same recipe
- *     <CallToggleButton> uses, so the two tray toggles cannot re-diverge);
- *     `text-accent-text` there FAILED (~3.81:1 against the then-current token).
- *     Off: `text-text-muted` on white, with the visible "Captions off" label.
+ *   - Labelled (`compact === false`) renders directly on the control bar's
+ *     `bg-card` (#FFFFFF) — lifted out of the old tray in the 2026-07-20 bar
+ *     reorder (spec §3.1). Enabled: `text-foreground` on `bg-accent/10` over
+ *     bg-card = 12.71:1 (the same recipe <CallToggleButton> uses, so the two
+ *     toggles cannot re-diverge; `text-accent-text` there would be ~5.40:1 — it
+ *     passes now, but text-foreground keeps more margin). Off: `text-text-muted`
+ *     on `bg-card` = 5.48:1, with the visible "Captions off" label.
  *   - Compact renders icon-only inside the navy call tile, whose ROOT is
  *     `bg-primary` #0F2D4B (call-tile.tsx:219; the control bar at :299 has no
  *     fill, so the navy shows through — this is NOT the #14202F video stage an
@@ -56,14 +58,14 @@ export function CaptionToggle({
       title={enabled ? "Turn captions off" : "Turn captions on"}
       className={cn(
         "flex items-center gap-1 rounded-button border text-sm",
-        compact ? "px-2 py-2" : "px-3 py-2",
+        compact ? "px-2 py-1 text-xs" : "px-3 py-2",
         enabled
           ? cn("border-accent bg-accent/10", compact ? "text-accent" : "text-foreground")
           : cn("border-border", compact ? "text-primary-foreground/70" : "text-text-muted"),
         className,
       )}
     >
-      {enabled ? <Captions size={16} /> : <CaptionsOff size={16} />}
+      {enabled ? <Captions size={compact ? 13 : 16} /> : <CaptionsOff size={compact ? 13 : 16} />}
       {!compact && (enabled ? "Captions" : "Captions off")}
     </button>
   );

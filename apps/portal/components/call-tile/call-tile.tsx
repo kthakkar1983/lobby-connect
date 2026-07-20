@@ -219,8 +219,8 @@ export function CallTile(): React.JSX.Element | null {
     <div className="flex h-full w-full flex-col bg-primary text-primary-foreground">
       {/* Face */}
       <div className="relative flex flex-1 flex-col overflow-hidden p-2">
-        {/* 911 lives in the face corner (audio-only), isolated from Hang up in
-            the control bar — mirrors the full-screen overlay so a hang-up tap
+        {/* 911 lives in the face corner (audio-only), isolated from End call in
+            the control bar — mirrors the full-screen overlay so an End-call tap
             can never land on 911. Two-tap arm/confirm logic is unchanged. */}
         {controls?.triggerEmergency && (
           <button
@@ -294,61 +294,12 @@ export function CallTile(): React.JSX.Element | null {
         </div>
       )}
 
-      {/* Compact bar — mirror-only when no controls are registered. */}
+      {/* Compact bar — mirror-only when no controls are registered. Task 5
+          (call-controls-column-polish, spec §3.1/§3.2/§3.3/§3.5) reordered this
+          to `Connect · Mute · [Video/Chat] · Captions · End call` — Connect
+          leads, End call bookends the row — and relabelled Hang up → End call. */}
       {controls && (
         <div className="flex items-center gap-1.5 border-t border-primary-foreground/15 p-2">
-          <button
-            type="button"
-            onClick={controls.toggleMute}
-            aria-pressed={controls.muted}
-            className="flex items-center gap-1 rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground"
-          >
-            {controls.muted ? <MicOff size={13} /> : <Mic size={13} />}
-            {controls.muted ? "Unmute" : "Mute"}
-          </button>
-          <button
-            type="button"
-            onClick={controls.hangUp}
-            className="flex items-center gap-1 rounded-button bg-attention px-2 py-1 text-xs font-semibold text-attention-foreground"
-          >
-            <PhoneOff size={13} /> Hang up
-          </button>
-          {/* Video/Chat toggle (Task 9) — video-only, only when the call owner
-              registered sendChat. Segmented control mirrors CaptionToggle's
-              compact footprint; the unread dot clears the moment chat opens. */}
-          {active.channel === "VIDEO" && controls.sendChat && (
-            <div className="flex items-center gap-0.5 rounded-button border border-primary-foreground/25 p-0.5 text-[11px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setChatMode("video")}
-                className={
-                  chatMode === "video"
-                    ? "rounded-[3px] bg-accent px-1.5 py-0.5 text-accent-foreground"
-                    : "rounded-[3px] px-1.5 py-0.5 text-primary-foreground/70"
-                }
-              >
-                Video
-              </button>
-              <button
-                type="button"
-                onClick={() => setChatMode("chat")}
-                className={
-                  chatMode === "chat"
-                    ? "relative rounded-[3px] bg-accent px-1.5 py-0.5 text-accent-foreground"
-                    : "relative rounded-[3px] px-1.5 py-0.5 text-primary-foreground/70"
-                }
-              >
-                Chat
-                {chatUnread && (
-                  <span
-                    data-testid="chat-unread"
-                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-attention"
-                  />
-                )}
-              </button>
-            </div>
-          )}
-          <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} compact />
           {/* Connect = the remote-in action: teal accent + monitor icon,
               matching the in-tab overlays. 911 is NOT here — it's pinned to
               the face corner above.
@@ -367,10 +318,6 @@ export function CallTile(): React.JSX.Element | null {
                 label to roughly 2:1.
               - `size="xs"` — the PiP window is the size of a postcard; the
                 card scale (`sm`, h-8) is visibly oversized in it.
-
-              `ml-auto` moves to the WRAPPER: with an error slot attached, the
-              wrapper is the flex item, not the button.
-
               - `gate="none"` — NOT decoration either. Duty CAN be revoked while
                 this call is live: /api/presence/end-shift flips the profile
                 OFFLINE with no ON_CALL guard, so End shift pressed in a SECOND
@@ -385,7 +332,12 @@ export function CallTile(): React.JSX.Element | null {
                 says. Withholding it is the failure, not the safeguard.
               - `errorPlacement="float"` — the failure message must not lay out
                 in this bar. In flow it wraps to several lines in a 380x300
-                window and permanently shrinks the guest's video face. */}
+                window and permanently shrinks the guest's video face.
+
+              Task 5 moved Connect to LEAD the bar (it was last, pushed right
+              via `wrapperClassName="ml-auto"`). No wrapper margin is needed
+              here anymore since Connect is the first flex child — the
+              right-bookend push now lives on End call's own className. */}
           <PropertyActionButton
             label="Connect"
             icon={<Monitor aria-hidden="true" />}
@@ -398,8 +350,69 @@ export function CallTile(): React.JSX.Element | null {
             error={connectError}
             errorPlacement="float"
             className="font-semibold"
-            wrapperClassName="ml-auto"
           />
+          <button
+            type="button"
+            onClick={controls.toggleMute}
+            aria-pressed={controls.muted}
+            className="flex items-center gap-1 whitespace-nowrap shrink-0 rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground"
+          >
+            {controls.muted ? <MicOff size={13} /> : <Mic size={13} />}
+            {controls.muted ? "Unmute" : "Mute"}
+          </button>
+          {/* Video/Chat toggle (Task 9) — video-only, only when the call owner
+              registered sendChat. Segmented control mirrors CaptionToggle's
+              compact footprint; the unread dot clears the moment chat opens.
+              Task 5/D5: the container drops its gap/padding and clips
+              (`overflow-hidden`) so the active segment's fill reaches the
+              container's rounded corners flush instead of leaving a visible
+              gap; each segment is an equal-width `flex-1` half instead of its
+              own separately-rounded chip. */}
+          {active.channel === "VIDEO" && controls.sendChat && (
+            <div className="flex items-center overflow-hidden rounded-button border border-primary-foreground/25 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setChatMode("video")}
+                className={
+                  chatMode === "video"
+                    ? "flex-1 bg-accent px-1.5 py-0.5 text-center text-accent-foreground"
+                    : "flex-1 px-1.5 py-0.5 text-center text-primary-foreground/70"
+                }
+              >
+                Video
+              </button>
+              <button
+                type="button"
+                onClick={() => setChatMode("chat")}
+                className={
+                  chatMode === "chat"
+                    ? "relative flex-1 bg-accent px-1.5 py-0.5 text-center text-accent-foreground"
+                    : "relative flex-1 px-1.5 py-0.5 text-center text-primary-foreground/70"
+                }
+              >
+                Chat
+                {chatUnread && (
+                  <span
+                    data-testid="chat-unread"
+                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-attention"
+                  />
+                )}
+              </button>
+            </div>
+          )}
+          <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} compact />
+          {/* End call bookends the bar — `ml-auto` pushes it to the right edge,
+              separating it from the Mute/Video-Chat/Captions cluster. Task 5
+              relabelled it from "Hang up" (spec §3.3) and added
+              `whitespace-nowrap shrink-0` so the longer label cannot wrap in
+              the 380px PiP window (the reported "expanding" bug). */}
+          <button
+            type="button"
+            onClick={controls.hangUp}
+            className="ml-auto flex items-center gap-1 whitespace-nowrap shrink-0 rounded-button bg-attention px-2 py-1 text-xs font-semibold text-attention-foreground"
+          >
+            <PhoneOff size={13} /> End call
+          </button>
         </div>
       )}
     </div>

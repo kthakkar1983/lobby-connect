@@ -806,7 +806,7 @@ export function Softphone({ role }: SoftphoneProps) {
         <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
           Softphone
         </span>
-        <LinePill phase={phase} />
+        <LinePill phase={phase} offDuty={!onDuty} />
       </div>
 
       {pendingNotes && (
@@ -1027,10 +1027,11 @@ export function Softphone({ role }: SoftphoneProps) {
   );
 }
 
-function LinePill({ phase }: { readonly phase: Phase }) {
-  const ok = phase === "ready" || phase === "incoming" || phase === "in-call";
-  const label =
-    phase === "in-call"
+function LinePill({ phase, offDuty }: { readonly phase: Phase; readonly offDuty: boolean }) {
+  const ok = !offDuty && (phase === "ready" || phase === "incoming" || phase === "in-call");
+  const label = offDuty
+    ? "Off duty"
+    : phase === "in-call"
       ? "On call"
       : phase === "incoming"
         ? "Incoming"

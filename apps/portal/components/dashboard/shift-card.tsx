@@ -139,6 +139,16 @@ const CARD_LABEL = (
   </p>
 );
 
+// Spec §5/D7: both branches below share ONE class string so they can't drift
+// apart. min-height, never a fixed h-[…] -- the off-duty "Not on duty" branch
+// must occupy the same box as the on-duty branch rather than collapsing to a
+// single line, but the on-duty branch's own height still varies (break pill,
+// blocked-push hint), so a fixed height would clip it. The value is in rem,
+// not px: the root font scales to 112.5% at the `lg` breakpoint, and a px
+// value would stop tracking that scale. Smoke-tuned starting point, sized to
+// the on-duty content -- expected to be retuned at live smoke, not exact math.
+const CARD_CLASS = "min-h-[10rem] gap-3 p-4";
+
 export function ShiftCard() {
   const { onDuty, onBreak, shiftStartedAt, pushBlocked, endShift, takeBreak, resume } = useDuty();
   // The live call, for the two mid-call rules above. The OPTIONAL hook, so this
@@ -162,7 +172,7 @@ export function ShiftCard() {
 
   if (!onDuty) {
     return (
-      <Card className="gap-3 p-4">
+      <Card className={CARD_CLASS}>
         {CARD_LABEL}
         <p className="text-sm text-text-muted">Not on duty</p>
         {blockedHint}
@@ -178,7 +188,7 @@ export function ShiftCard() {
   // strand her with no way to end the shift, now that the header has no duty
   // control at all. So: withhold the figures we do not have, keep the actions.
   return (
-    <Card className="gap-3 p-4">
+    <Card className={CARD_CLASS}>
       {CARD_LABEL}
       <div>
         {hasStart ? (

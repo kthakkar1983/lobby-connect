@@ -210,31 +210,38 @@ describe("AudioCallOverlay", () => {
     expect(onReopenTile).toHaveBeenCalledOnce();
   });
 
-  // Spec §6: video tucks this into the bottom-right corner of the guest stage;
-  // audio has no stage to tuck it into, so it is a LABELLED control in the bar —
-  // the one placement that survives. It must not go back onto the call card:
-  // `collapsed` hides that card, and the tile is closed in exactly the state
-  // this control exists for, so a card-mounted reopen is unreachable precisely
-  // when it is needed.
-  it("puts the reopen control in the control bar, not on the call card", () => {
+  // Spec §3.4/D3: the reopen control now lives in the call-card corner,
+  // matching video's treatment exactly, rather than the control bar. This
+  // reverses the old placement's own reasoning: that comment assumed
+  // `collapsed` hides the call card whenever `showReopenTile` is true, making
+  // a card-mounted reopen unreachable. That assumption is false —
+  // call-surface-provider.tsx's openTileForCall sets `tileMount` (which drives
+  // `collapsed`) AND clears `tileClosedByUser` (which drives `showReopenTile`)
+  // in the same call, and the close callback does the exact opposite pairing.
+  // `collapsed` and `showReopenTile` are therefore mutually exclusive: whenever
+  // this control is shown, the card is visible to host it.
+  it("puts the reopen control in the call-card corner, not in the control bar (spec §3.4)", () => {
     const { container } = render(<AudioCallOverlay {...baseProps} showReopenTile onReopenTile={vi.fn()} />);
     const reopen = screen.getByRole("button", { name: /reopen tile/i });
     const card = container.querySelector('[data-testid="audio-call-card"]') as HTMLElement;
-
-    expect(card.contains(reopen)).toBe(false);
-    // Same container as End call — i.e. the shell's control bar.
+    expect(card.contains(reopen)).toBe(true); // now on the card (matches video)
     const bar = screen.getByRole("button", { name: /^end call$/i }).parentElement as HTMLElement;
-    expect(bar.contains(reopen)).toBe(true);
-    // ...but NOT in the toggle tray, which sits inside that same bar. `contains`
-    // is recursive, so the assertion above is satisfied by tray membership too
-    // (verified by mutation: moving the control into the tray left this file
-    // green). The tray's entire vocabulary is `aria-pressed` call-adjusting
-    // toggles; reopen carries no pressed state and, like Connect, hands the
-    // agent to another window. Grouping it with Mute and Captions would say it
-    // adjusts the call.
-    expect(screen.getByTestId("call-control-tray").contains(reopen)).toBe(false);
-    // Sized to its neighbours (spec §6): the shared `sm` control scale.
-    expect(reopen.className).toContain("h-8");
+    expect(bar.contains(reopen)).toBe(false); // off the bar
+    expect(reopen.className).toContain("rounded-full"); // round mint icon, not the old labelled h-8 button
+    expect(reopen.className).toContain("border-live");
+  });
+
+  it("orders the control bar Connect, Mute, Captions, End call (left to right, spec §3.1)", () => {
+    render(<AudioCallOverlay {...baseProps} onConnect={vi.fn().mockResolvedValue({ launched: true })} />);
+    const names = screen.getAllByRole("button").map((b) => b.textContent ?? "");
+    const connect = names.findIndex((n) => /connect/i.test(n));
+    const mute = names.findIndex((n) => /^mute$/i.test(n));
+    const captions = names.findIndex((n) => /captions/i.test(n));
+    const end = names.findIndex((n) => /end call/i.test(n));
+    expect(connect).toBeGreaterThanOrEqual(0);
+    expect(connect).toBeLessThan(mute);
+    expect(mute).toBeLessThan(captions);
+    expect(captions).toBeLessThan(end);
   });
 
   it("renders no reopen control while the tile is up", () => {

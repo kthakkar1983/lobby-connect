@@ -7,10 +7,12 @@
  *   - NO CONTROL CHANGES SIZE WHEN ITS STATE CHANGES. The bar used to shift
  *     under the agent's cursor mid-call every time she muted. A label swap is
  *     the only way that can come back, and it is a one-character regression.
- *   - `End call` IS ONE DEFINITION WITH ONE DELIBERATE DIFFERENCE. Audio's fill
- *     is blaze because red=911 was reading as the "end call" cue (punch-list
- *     B1); video's is navy. Unifying them would erase the visual separation
- *     that decision bought, on the surface where a mistap reaches 911.
+ *   - `End call` IS ONE DEFINITION, BLAZE ON BOTH SURFACES (D2, 2026-07-20).
+ *     The two used to differ — audio's fill was blaze because red=911 was
+ *     reading as the "end call" cue (punch-list B1), video stayed navy — but
+ *     video has no 911 control to separate from, so the split bought nothing
+ *     there and was dropped. `tone` stays a prop so a surface could
+ *     re-diverge deliberately later.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -158,19 +160,22 @@ describe("CallToggleButton", () => {
     expect(btn.hasAttribute("disabled")).toBe(false);
   });
 
-  // ⚠ THE LABEL TOKEN IS PART OF THE FILL DECISION — pinned so that changing one
-  // without re-measuring the other fails loudly. The pressed label composites
-  // against `bg-accent/10` over the TRAY (#E0EFEF), never against white:
+  // ⚠ THE LABEL TOKEN IS PART OF THE FILL DECISION — pinned so a future swap
+  // can't silently re-diverge the two toggles. Since the 2026-07-20 bar reorder
+  // dropped the tray, the pressed label composites against `bg-accent/10` over
+  // `bg-card` (#FFFFFF -> ~#EAF6F6), not the old tray's #E0EFEF:
   //
-  //   text-accent-text -> 3.81:1  FAIL (it is the AA-on-WHITE teal; this
-  //                                     control has never rendered on white)
-  //   text-foreground  -> 11.86:1 PASS
+  //   text-foreground  -> 12.71:1 PASS  (the shared <CaptionToggle> recipe)
+  //   text-accent-text -> ~5.40:1 PASS  (the darkened token clears AA on white
+  //                                      now too; text-foreground kept for the
+  //                                      shared recipe + more margin, not because
+  //                                      accent fails)
   //
   // This control is ENABLED in both states, so the inactive-component exemption
-  // never applies and the label owes a full 4.5:1. Failure this pins: the most-
-  // pressed in-call control reads at 3.81:1 for an agent working a night shift,
-  // in the state that means her mic is muted.
-  it("holds the pressed label at full contrast against the tray fill", () => {
+  // never applies and the label owes a full 4.5:1. What this pins: the pressed
+  // in-call control — the state that means her mic is muted — stays on the shared
+  // full-strength recipe rather than drifting to a different label token.
+  it("holds the pressed label at full contrast on the control bar", () => {
     const { rerender } = render(
       <CallToggleButton label="Mute" icon={null} pressed title="on" onToggle={vi.fn()} />,
     );
@@ -180,7 +185,7 @@ describe("CallToggleButton", () => {
     rerender(
       <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />,
     );
-    // Unpressed sits on the bare tray (#F4F7F7): text-text-muted is 5.08:1.
+    // Unpressed sits on the bare control bar (bg-card #FFFFFF): text-text-muted is 5.48:1.
     expect(screen.getByRole("button").className).toContain("text-text-muted");
   });
 
@@ -276,17 +281,19 @@ describe("EndCallButton", () => {
     expect(screen.getByRole("button").textContent).toBe("End call");
   });
 
-  it("is navy on video", () => {
+  // `tone` is a generic prop on the component (see the EndCallButton docblock
+  // in call-controls.tsx) — these two tests pin its class mapping, independent
+  // of which surface calls it with which value. Today every real caller passes
+  // tone="blaze" (D2, 2026-07-20); `tone` stays a prop so a surface could
+  // re-diverge deliberately later.
+  it("renders navy when tone=navy", () => {
     render(<EndCallButton tone="navy" onEnd={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("bg-primary");
     expect(btn.className).not.toContain("bg-attention");
   });
 
-  // ⚠ DO NOT "unify" this to navy. Audio is the one surface where a red 911 and
-  // the end-call button coexist, and blaze is the separation punch-list B1
-  // bought after red was misread as the end-call cue.
-  it("is blaze on audio, deliberately overriding the navy default", () => {
+  it("renders blaze when tone=blaze", () => {
     render(<EndCallButton tone="blaze" onEnd={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("bg-attention");

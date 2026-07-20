@@ -25,8 +25,10 @@
  *      it. (The Task-12 commit message overstated this as "every control has a
  *      fixed width"; only the toggles do.)
  *   2. THE TERMINATING CONTROL READS IDENTICALLY ON BOTH SURFACES. `End call`,
- *      sentence case, one definition (D11). Its per-surface FILL is the single
- *      deliberate difference and it is an explicit prop — see <EndCallButton>.
+ *      sentence case, one definition (D11), blaze fill on BOTH surfaces (D2,
+ *      2026-07-20 — it once split navy/blaze; see <EndCallButton> for why that
+ *      stopped buying anything). `tone` stays an explicit prop only so a
+ *      surface COULD re-diverge deliberately later — today none do.
  *
  * Widths are in rem, never px. The portal scales its root font to 112.5% at
  * `lg` (globals.css), so a px width silently stops matching its own label at
@@ -39,23 +41,35 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * The call-adjusting controls — mute, camera, captions — grouped in one tray,
- * separate from the controls that LEAVE or END the call (spec §5.4). Connect in
- * particular hands off to RustDesk and is a categorically different action from
- * a mic toggle.
+ * NO LONGER USED BY EITHER OVERLAY (Tasks 3+4, spec §3.1, 2026-07-20) — kept as
+ * a component only, not deleted. Audio and video used to group Mute/Camera/
+ * Captions in this tray, pushed right by its own `ml-auto`, with Connect and
+ * End call trailing after a divider. Both now sequence Mute · [Camera] ·
+ * Captions as FLAT siblings instead, with Connect LEADING the cluster and
+ * <EndCallButton> the far-right bookend — the bookend model spec §9 calls for.
+ * Neither `audio-call-overlay.tsx` nor `video-call.tsx` imports this component
+ * anymore. Deleting it outright (and its `data-testid="call-control-tray"`
+ * coverage in call-controls.test.tsx) is a deliberately DEFERRED cleanup call
+ * (Task 11), not made in this pass — it still renders correctly, it is just
+ * unused.
  *
- * ⚠ UNVERIFIED ON HARDWARE. The tray fill is `bg-background` (#F4F7F7) sitting
- * on the control bar's `bg-card` (#FFFFFF) — a 1.08:1 difference. The grouping
- * is definitely in the DOM (pinned below and in call-controls.test.tsx) but
- * whether it READS as a tray on a real monitor has not been looked at. Confirm
- * at smoke; the house lesson is that a visual outcome is verified by LOOKING,
- * never by reasoning ([[kiosk-css-animation-reverted]]).
+ * What follows describes what it was FOR, kept for whoever does that cleanup:
+ * the call-adjusting controls — mute, camera, captions — grouped in one tray,
+ * separate from the controls that LEAVE or END the call. Connect in
+ * particular hands off to RustDesk and is a categorically different action
+ * from a mic toggle.
  *
- * If it does not read, do NOT reach for `bg-muted` without re-running the
- * numbers: it darkens the tray enough to drop the UNPRESSED label
- * (`text-text-muted`) from 5.08:1 to 4.57:1, i.e. inside a rounding error of
- * failing 1.4.3. A hairline `border-border` adds separation and costs the label
- * contrast nothing — that is the cheaper direction.
+ * ⚠ UNVERIFIED ON HARDWARE, and now moot unless resurrected. The tray fill is
+ * `bg-background` (#F4F7F7) sitting on the control bar's `bg-card` (#FFFFFF)
+ * — a 1.08:1 difference. The grouping was definitely in the DOM (pinned in
+ * call-controls.test.tsx) but whether it READ as a tray on a real monitor was
+ * never confirmed before both callers dropped it.
+ *
+ * If it is ever resurrected and does not read, do NOT reach for `bg-muted`
+ * without re-running the numbers: it darkens the tray enough to drop the
+ * UNPRESSED label (`text-text-muted`) from 5.08:1 to 4.57:1, i.e. inside a
+ * rounding error of failing 1.4.3. A hairline `border-border` adds separation
+ * and costs the label contrast nothing — that is the cheaper direction.
  */
 export function CallControlTray({ children }: { readonly children: ReactNode }) {
   return (
@@ -68,7 +82,8 @@ export function CallControlTray({ children }: { readonly children: ReactNode }) 
   );
 }
 
-/** Separates the tray from Connect / End call. Spec §5.4. */
+/** Sits before End call so the terminating control reads isolated (mistap
+ *  safety). Spec §3.1 (bookend model). */
 export function CallControlDivider() {
   return (
     <div
@@ -123,21 +138,23 @@ export function CallControlDivider() {
  * never rendered, so it cannot reflow the bar.
  *
  * CONTRAST — the label owes 4.5:1 (WCAG 1.4.3) in BOTH states: this control is
- * ENABLED, so the inactive-component exemption never applies to it. Measured on
- * the surface it actually renders on, which is the tray, NOT white:
+ * ENABLED, so the inactive-component exemption never applies to it. It renders
+ * directly on the control bar's `bg-card` (#FFFFFF) — the toggles were lifted out
+ * of the old `bg-background` tray in the 2026-07-20 bar reorder (spec §3.1), so
+ * the numbers below are measured on white, a strictly higher-contrast surface
+ * than the tray composite was:
  *
- *   - unpressed `text-text-muted` on the tray's `bg-background`  = 5.08:1  PASS
- *   - pressed   `text-foreground` on `bg-accent/10` over the tray
- *     (the composite is #E0EFEF, not #FFFFFF)                    = 11.86:1 PASS
+ *   - unpressed `text-text-muted` on `bg-card` #FFFFFF               = 5.48:1  PASS
+ *   - pressed   `text-foreground` on `bg-accent/10` over `bg-card`
+ *     (the composite is ~#EAF6F6)                                    = 12.71:1 PASS
  *
- * `text-accent-text` shipped here first and failed on that composite (~3.81:1
- * against the then-current token) — under a comment that asserted it passed
- * because it is the AA-on-white deep teal. The token was later darkened (merge
- * 1ef6ee8, 2026-07-19) so it clears AA on white with more margin, but this
- * control does not render on white; on the tray composite the deep-teal text
- * token is still the wrong choice. State is carried by the border, the fill and
- * the icon, so nothing is lost by holding the label at full strength. Neither
- * state dims the ELEMENT — only the fill — per the standing lesson.
+ * `text-accent-text` shipped here first and failed on the OLD tray composite
+ * (~3.81:1 against the then-current token). It would clear AA on the current
+ * white surface (~5.40:1, and the token was darkened in merge 1ef6ee8), but
+ * `text-foreground` is kept — it shares the pressed fill's recipe and carries far
+ * more margin. State is carried by the border, the fill and the icon, so nothing
+ * is lost by holding the label at full strength. Neither state dims the ELEMENT
+ * — only the fill — per the standing lesson.
  */
 export function CallToggleButton({
   label,
@@ -197,18 +214,15 @@ export function CallToggleButton({
  * with an 18px icon while every sibling was `text-sm`/16px, and audio's said
  * `Hang up` while video's said `End`.
  *
- * `tone` is the ONE difference, and it is deliberate:
+ * `tone` is BLAZE (`bg-attention`) on BOTH surfaces (spec D2, 2026-07-20). It was
+ * once split — navy on video, blaze on audio — because audio's surface also
+ * carries a red 911 button and blaze separated `End call` from it. Video has no
+ * 911 machinery anywhere, so that per-surface reason bought nothing; the two now
+ * match. `End call` is the far-right bookend, blaze, on every surface.
  *
- *   - VIDEO is navy (`bg-primary`) — spec §5.2 / D11.
- *   - AUDIO is blaze (`bg-attention`), because red=911 was reading as the "end
- *     call" cue. That is an intentional override of "blaze = needs-attention,
- *     never a CTA" for this one control (punch-list B1, Kumar 2026-06-18;
- *     relabelled 2026-07-19). 911 stays red, top-right. Audio is the ONE
- *     surface where a red 911 button and the end-call button coexist, and this
- *     fill is the visual separation that decision bought — on the surface where
- *     a mistap has life-safety consequences. Do NOT "unify" it to navy.
- *
- * Making it a prop is what keeps that a decision instead of drift (spec §4).
+ * `tone` stays a PROP rather than hardcoded, so the fill remains a recorded
+ * decision a future surface could re-diverge deliberately, not silent drift
+ * (spec §4). Today every caller passes `tone="blaze"`.
  */
 export function EndCallButton({
   tone,

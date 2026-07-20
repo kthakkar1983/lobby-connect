@@ -285,6 +285,27 @@ describe("ShiftCard — off duty", () => {
   });
 });
 
+describe("ShiftCard — layout stability (§5)", () => {
+  it("holds a stable min-height in every duty state so the card doesn't collapse off duty (§5)", () => {
+    useDuty.mockReturnValue(dutyStub({ onDuty: false, shiftStartedAt: null }));
+    const { container, unmount } = render(<ShiftCard />);
+    const offDutyClass = container.firstElementChild?.className;
+    expect(offDutyClass).toMatch(/min-h-\[/);
+    unmount();
+
+    useDuty.mockReturnValue(dutyStub()); // on duty
+    const { container: c2 } = render(<ShiftCard />);
+    const onDutyClass = c2.firstElementChild?.className;
+    expect(onDutyClass).toMatch(/min-h-\[/);
+
+    // The whole point of CARD_CLASS is that both branches share ONE string.
+    // Pin that invariant directly: an edit that inlined min-h-[8rem] on one
+    // branch and min-h-[14rem] on the other would satisfy both checks above
+    // yet still collapse the card off duty -- only an equality check catches it.
+    expect(offDutyClass).toBe(onDutyClass);
+  });
+});
+
 describe("ShiftCard — mid-call rules", () => {
   it("removes Break from the tree during a call rather than disabling it", () => {
     useDuty.mockReturnValue(dutyStub());

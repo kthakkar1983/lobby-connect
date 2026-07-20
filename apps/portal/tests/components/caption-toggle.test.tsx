@@ -26,14 +26,16 @@ describe("CaptionToggle", () => {
   // WCAG one rather than a stylistic one: a label owes 4.5:1 (1.4.3), a lone
   // icon owes 3:1 (1.4.11). Unifying them breaks one surface or the other.
   //
-  //   labelled -> light control-bar tray. accent-text on bg-accent/10 there is
-  //               3.81:1 (FAIL); foreground is 11.86:1.
+  //   labelled -> flat on the light control bar's bg-card #FFFFFF (no tray since
+  //               the 2026-07-20 reorder). foreground on bg-accent/10 over
+  //               bg-card is 12.71:1; the darkened accent-text now clears AA here
+  //               too (~5.40:1), so foreground is the shared-recipe choice.
   //   compact  -> icon-only on the NAVY call tile (bg-primary #0F2D4B). The teal
   //               `text-accent` icon clears the 3:1 icon bar (~4.1:1 over the
   //               bg-accent/10 composite); foreground would be navy-on-navy,
   //               ~1.0:1, i.e. the captions control would vanish from the tile.
   //               The deep `text-accent-text` measured only ~2.68:1 here (FAIL).
-  it("uses the tray-safe label colour when it renders text", () => {
+  it("uses the shared control-bar label colour when it renders text", () => {
     render(<CaptionToggle enabled onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
     expect(btn.className).toContain("text-foreground");
@@ -72,5 +74,42 @@ describe("CaptionToggle", () => {
     // primary-foreground/70 clears it (~7.6:1) and matches the sibling toggle.
     expect(btn.className).toContain("text-primary-foreground/70");
     expect(btn.className).not.toContain("text-text-muted");
+  });
+
+  // Spec §3.2 / D4: on the call tile the compact toggle was px-2 py-2 with a
+  // 16px icon while its neighbours (Mute/End call in call-tile.tsx) are
+  // px-2 py-1 text-xs with 13px icons, so it stood visibly taller. Bring
+  // compact onto that same scale; the labelled tray button is untouched.
+  it("compact renders at the tile's compact scale (py-1 text-xs, not py-2 text-sm)", () => {
+    render(<CaptionToggle enabled={false} compact onToggle={vi.fn()} />);
+    const btn = screen.getByRole("button", { name: "Captions" });
+    expect(btn.className).toContain("px-2 py-1 text-xs");
+    expect(btn.className).not.toContain("py-2");
+    // tailwind-merge must resolve the font-size conflict in compact's favour
+    // — the base string always carries text-sm, so a leftover text-sm here
+    // would mean the merge order is wrong, not just a missing class.
+    expect(btn.className).not.toContain("text-sm");
+  });
+
+  it("keeps the labelled tray button at its original px-3 py-2 text-sm scale", () => {
+    render(<CaptionToggle enabled={false} onToggle={vi.fn()} />);
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("px-3 py-2");
+    expect(btn.className).toContain("text-sm");
+    expect(btn.className).not.toContain("text-xs");
+  });
+
+  it("shrinks the compact icon to 13px, matching the tile's other bar buttons", () => {
+    render(<CaptionToggle enabled compact onToggle={vi.fn()} />);
+    const icon = screen.getByRole("button").querySelector("svg");
+    expect(icon?.getAttribute("width")).toBe("13");
+    expect(icon?.getAttribute("height")).toBe("13");
+  });
+
+  it("keeps the labelled icon at 16px", () => {
+    render(<CaptionToggle enabled onToggle={vi.fn()} />);
+    const icon = screen.getByRole("button").querySelector("svg");
+    expect(icon?.getAttribute("width")).toBe("16");
+    expect(icon?.getAttribute("height")).toBe("16");
   });
 });

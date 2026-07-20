@@ -1201,6 +1201,28 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
       }
     });
   });
+
+  // -------------------------------------------------------------------
+  // Spec §6 / D8 — the LinePill is duty-aware. Off duty the Twilio device
+  // can still be registered (phase "ready"), which used to render a green
+  // "Line ready" pill directly beside this same card's "Your line is
+  // offline." copy — a contradiction. The pill must defer to duty first.
+  // -------------------------------------------------------------------
+
+  it('the line pill reads "Off duty" (muted) while off duty (spec §6)', async () => {
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+    expect(screen.getByText("Off duty")).toBeTruthy();
+    expect(screen.queryByText("Line ready")).toBeNull();
+  });
+
+  it('the line pill is phase-driven (never "Off duty") while on duty (spec §6)', async () => {
+    hydration = { onDuty: true, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
+    expect(screen.queryByText("Off duty")).toBeNull();
+  });
 });
 
 /**
