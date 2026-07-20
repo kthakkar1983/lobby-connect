@@ -306,8 +306,10 @@ export function AudioCallOverlay({
       /* Control bar — Room#/Notes (left, Enter-to-save) · Connect · Mute ·
          Captions · divider · End call (spec §3.1). Connect now LEADS the
          cluster rather than trailing before End call, and Mute/Captions sit
-         as flat siblings — the <CallControlTray> wrapper is gone. (Video's
-         bar keeps the tray and Connect's old order; this pass is audio-only.)
+         as flat siblings — the <CallControlTray> wrapper is gone. Video's bar
+         reads the same way now too (Task 4, spec §3.1: Connect leads, Mute ·
+         Camera · Captions sit flat, End call bookends) — both surfaces share
+         one order.
          The input group's cap is in REM, not the 560px it used to be inline:
          the root font scales to 112.5% at `lg`, so a px cap stops tracking the
          type scale exactly where it matters (same reasoning as §3.6b). */

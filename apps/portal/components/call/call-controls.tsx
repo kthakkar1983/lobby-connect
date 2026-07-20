@@ -41,23 +41,35 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * The call-adjusting controls — mute, camera, captions — grouped in one tray,
- * separate from the controls that LEAVE or END the call (spec §5.4). Connect in
- * particular hands off to RustDesk and is a categorically different action from
- * a mic toggle.
+ * NO LONGER USED BY EITHER OVERLAY (Tasks 3+4, spec §3.1, 2026-07-20) — kept as
+ * a component only, not deleted. Audio and video used to group Mute/Camera/
+ * Captions in this tray, pushed right by its own `ml-auto`, with Connect and
+ * End call trailing after a divider. Both now sequence Mute · [Camera] ·
+ * Captions as FLAT siblings instead, with Connect LEADING the cluster and
+ * <EndCallButton> the far-right bookend — the bookend model spec §9 calls for.
+ * Neither `audio-call-overlay.tsx` nor `video-call.tsx` imports this component
+ * anymore. Deleting it outright (and its `data-testid="call-control-tray"`
+ * coverage in call-controls.test.tsx) is a deliberately DEFERRED cleanup call
+ * (Task 11), not made in this pass — it still renders correctly, it is just
+ * unused.
  *
- * ⚠ UNVERIFIED ON HARDWARE. The tray fill is `bg-background` (#F4F7F7) sitting
- * on the control bar's `bg-card` (#FFFFFF) — a 1.08:1 difference. The grouping
- * is definitely in the DOM (pinned below and in call-controls.test.tsx) but
- * whether it READS as a tray on a real monitor has not been looked at. Confirm
- * at smoke; the house lesson is that a visual outcome is verified by LOOKING,
- * never by reasoning ([[kiosk-css-animation-reverted]]).
+ * What follows describes what it was FOR, kept for whoever does that cleanup:
+ * the call-adjusting controls — mute, camera, captions — grouped in one tray,
+ * separate from the controls that LEAVE or END the call. Connect in
+ * particular hands off to RustDesk and is a categorically different action
+ * from a mic toggle.
  *
- * If it does not read, do NOT reach for `bg-muted` without re-running the
- * numbers: it darkens the tray enough to drop the UNPRESSED label
- * (`text-text-muted`) from 5.08:1 to 4.57:1, i.e. inside a rounding error of
- * failing 1.4.3. A hairline `border-border` adds separation and costs the label
- * contrast nothing — that is the cheaper direction.
+ * ⚠ UNVERIFIED ON HARDWARE, and now moot unless resurrected. The tray fill is
+ * `bg-background` (#F4F7F7) sitting on the control bar's `bg-card` (#FFFFFF)
+ * — a 1.08:1 difference. The grouping was definitely in the DOM (pinned in
+ * call-controls.test.tsx) but whether it READ as a tray on a real monitor was
+ * never confirmed before both callers dropped it.
+ *
+ * If it is ever resurrected and does not read, do NOT reach for `bg-muted`
+ * without re-running the numbers: it darkens the tray enough to drop the
+ * UNPRESSED label (`text-text-muted`) from 5.08:1 to 4.57:1, i.e. inside a
+ * rounding error of failing 1.4.3. A hairline `border-border` adds separation
+ * and costs the label contrast nothing — that is the cheaper direction.
  */
 export function CallControlTray({ children }: { readonly children: ReactNode }) {
   return (
@@ -70,7 +82,8 @@ export function CallControlTray({ children }: { readonly children: ReactNode }) 
   );
 }
 
-/** Separates the tray from Connect / End call. Spec §5.4. */
+/** Sits before End call so the terminating control reads isolated (mistap
+ *  safety). Spec §3.1 (bookend model). */
 export function CallControlDivider() {
   return (
     <div
