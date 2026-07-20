@@ -78,9 +78,12 @@ export function KioskCallButton({
   }
 
   return (
+    // Kumar 2026-07-20: an offline kiosk keeps the "Kiosk" label + icon and just
+    // greys out (matching the Connect button beside it) -- NO `unavailableLabel`
+    // swap to "Kiosk offline". The reason still rides `unavailableReason` -> the
+    // hover `title`; the button is disabled either way.
     <PropertyActionButton
       label="Kiosk"
-      unavailableLabel={!kioskOnline ? "Kiosk offline" : undefined}
       unavailableReason={unavailableReason}
       icon={<MonitorPlay aria-hidden="true" />}
       onAction={handleClick}

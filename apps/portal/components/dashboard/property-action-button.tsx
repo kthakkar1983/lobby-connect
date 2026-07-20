@@ -224,11 +224,12 @@ export function PropertyActionButton({
         onClick={() => guard(() => void runOnce())}
         className={cn(
           // A label swap must not make the control taller (spec §3.6a, §5.3).
-          // Width is NOT covered — `unavailableLabel` deliberately swaps
-          // `Kiosk` for `Kiosk offline`, which widens the button; fixed widths
-          // are the call site's job. The Button base sets this too; restated so
-          // the guarantee is this component's, not a base-class detail a
-          // refactor could drop.
+          // Width is NOT covered — `unavailableLabel` (an optional prop; no
+          // caller uses it as of 2026-07-20, after the Kiosk button dropped its
+          // "Kiosk offline" swap) would widen the button when a longer label is
+          // shown, and fixed widths are the call site's job. The Button base
+          // sets this too; restated so the guarantee is this component's, not a
+          // base-class detail a refactor could drop.
           "whitespace-nowrap",
           gatedFill,
           darkDisabled,

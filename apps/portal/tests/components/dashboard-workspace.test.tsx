@@ -166,29 +166,22 @@ describe("DashboardWorkspace — the right column", () => {
     expect(main.queryByText("Clocks")).toBeNull();
   });
 
-  it("stretches the aside so the column can align (items-stretch on the home grid, §5)", () => {
+  it("stacks the aside naturally -- no items-stretch/h-full/mt-auto overshoot (§5 follow-up)", () => {
+    // The original Task 7 mt-auto pin shoved the clocks to the PAGE BOTTOM in
+    // production (the aside stretched to the full main-column height), instead
+    // of leaving them right under the shift card ~= the properties row. Guard
+    // the revert so nobody re-introduces the overshoot: the grid must not
+    // stretch the aside, and the clocks must not be mt-auto-pinned.
     const { container } = renderWorkspace();
     const grid = asideOf(container).parentElement as HTMLElement;
-    expect(grid.className).toContain("items-stretch");
-  });
-
-  it("gives the aside h-full so it can stretch to fill the grid row (§5)", () => {
-    // The third ingredient of the same mechanism: items-stretch on the grid
-    // only gives the aside somewhere to grow -- h-full is what actually makes
-    // it fill that height, which is what mt-auto below has to push against.
-    const { container } = renderWorkspace();
-    expect(asideOf(container).className).toContain("h-full");
-  });
-
-  it("pins the clocks card to the bottom of the aside (mt-auto, §5)", () => {
-    const { container } = renderWorkspace();
+    expect(grid.className).not.toContain("items-stretch");
     const aside = asideOf(container);
+    expect(aside.className).not.toContain("h-full");
     const clocksHeading = within(aside).getByText("Clocks");
-    // the aside's direct child that contains the clocks carries mt-auto (whether a wrapper div or the card root)
     const clocksChild = Array.from(aside.children).find((c) =>
       c.contains(clocksHeading),
     ) as HTMLElement;
-    expect(clocksChild.className).toContain("mt-auto");
+    expect(clocksChild.className).not.toContain("mt-auto");
   });
 });
 
