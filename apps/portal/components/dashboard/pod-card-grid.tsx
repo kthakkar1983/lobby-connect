@@ -131,12 +131,16 @@ export function PodCardGrid({
               connectFor ? (
                 connectFor(property.id)
               ) : (
-                <div className="flex items-center gap-2">
-                  <ConnectButton propertyId={property.id} />
+                // Batch 1 Task 2: a shared 2-col grid track instead of a plain
+                // flex row, so Connect (~106px of text) and Kiosk (~85px) fill
+                // equal-width columns rather than sizing to their own labels.
+                <div className="grid grid-cols-2 gap-2">
+                  <ConnectButton propertyId={property.id} className="w-full justify-center" />
                   <KioskCallButton
                     propertyId={property.id}
                     propertyName={property.name}
                     kioskOnline={property.kioskOnline}
+                    className="w-full justify-center"
                   />
                 </div>
               )

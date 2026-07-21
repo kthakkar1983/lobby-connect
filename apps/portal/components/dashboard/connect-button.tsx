@@ -22,7 +22,15 @@ import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-prov
 import { PropertyActionButton } from "@/components/dashboard/property-action-button";
 import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 
-export function ConnectButton({ propertyId }: { propertyId: string }) {
+export function ConnectButton({
+  propertyId,
+  className,
+}: {
+  propertyId: string;
+  /** Batch 1 Task 2: forwarded to PropertyActionButton so pod-card-grid can
+   *  stretch this into an equal-width pair with the sibling KioskCallButton. */
+  className?: string;
+}) {
   const surface = useCallSurfaceOptional();
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +51,7 @@ export function ConnectButton({ propertyId }: { propertyId: string }) {
       icon={<Monitor aria-hidden="true" />}
       onAction={handleClick}
       error={error}
+      className={className}
     />
   );
 }

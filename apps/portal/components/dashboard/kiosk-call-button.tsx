@@ -42,10 +42,14 @@ export function KioskCallButton({
   propertyId,
   propertyName,
   kioskOnline,
+  className,
 }: {
   propertyId: string;
   propertyName: string;
   kioskOnline: boolean;
+  /** Batch 1 Task 2: forwarded to PropertyActionButton so pod-card-grid can
+   *  stretch this into an equal-width pair with the sibling ConnectButton. */
+  className?: string;
 }) {
   const surface = useCallSurfaceOptional();
   const [busy, setBusy] = useState(false);
@@ -88,6 +92,7 @@ export function KioskCallButton({
       icon={<MonitorPlay aria-hidden="true" />}
       onAction={handleClick}
       error={error}
+      className={className}
     />
   );
 }

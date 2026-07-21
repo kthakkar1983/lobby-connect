@@ -153,4 +153,18 @@ describe("ConnectButton", () => {
     });
     expect(connectToProperty).toHaveBeenCalledWith("prop-1");
   });
+
+  it("Batch 1 Task 2 (equal-width Connect/Kiosk): forwards a caller className onto the underlying button", () => {
+    // pod-card-grid.tsx passes `className="w-full justify-center"` so Connect
+    // fills its half of the shared 2-col grid track instead of sizing to its
+    // own text (previously ~106px vs Kiosk's ~85px). PropertyActionButton
+    // merges `className` last via cn()/twMerge, so a width utility like
+    // `w-full` survives untouched (see property-action-button.test.tsx's
+    // "lets a caller's className win" tests) — this pins that ConnectButton
+    // actually forwards the prop through to it.
+    render(<ConnectButton propertyId="prop-1" className="w-full justify-center" />);
+    const btn = screen.getByText("Connect").closest("button")!;
+    expect(btn.className).toContain("w-full");
+    expect(btn.className).toContain("justify-center");
+  });
 });

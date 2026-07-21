@@ -365,3 +365,35 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
     expect(screen.getByText("Quiet")).not.toBeNull();
   });
 });
+
+describe("PodCardGrid — default connectSlot layout (Batch 1 Task 2: equal-width Connect/Kiosk)", () => {
+  it("shares a 2-column grid track between Connect and Kiosk, each filling its column", () => {
+    // The bug: a plain `flex items-center gap-2` sizes each button to its own
+    // text, so Connect (~106px) and Kiosk (~85px) render unequal. The fix puts
+    // both under a shared `grid grid-cols-2` track and stretches each with
+    // `w-full`. jsdom has no layout engine, so this asserts the structural/class
+    // wiring, not measured pixel widths (verified visually on the deployed build).
+    render(
+      <CallSurfaceProvider>
+        <PodCardGrid properties={[p1]} />
+      </CallSurfaceProvider>,
+    );
+
+    const connectBtn = screen.getByRole("button", { name: "Connect" });
+    const kioskBtn = screen.getByRole("button", { name: "Kiosk" });
+
+    // Each button fills its grid cell rather than sizing to its own text.
+    expect(connectBtn.className).toContain("w-full");
+    expect(kioskBtn.className).toContain("w-full");
+
+    // Both buttons are wrapped one level by PropertyActionButton's own
+    // `relative flex flex-col gap-1` div (for its error-message slot), so the
+    // shared track is their grandparent — and it must be the SAME element for
+    // both siblings, not two independently-sized containers.
+    const connectTrack = connectBtn.parentElement?.parentElement;
+    const kioskTrack = kioskBtn.parentElement?.parentElement;
+    expect(connectTrack).not.toBeNull();
+    expect(connectTrack).toBe(kioskTrack);
+    expect(connectTrack?.className).toContain("grid-cols-2");
+  });
+});
