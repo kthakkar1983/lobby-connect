@@ -106,10 +106,15 @@ describe("CaptionToggle", () => {
     expect(icon?.getAttribute("height")).toBe("13");
   });
 
-  it("keeps the labelled icon at 16px", () => {
+  // 16px -> 14px (Task 3, 2026-07-21): after the button-icon sizing pass
+  // (Task 1) the labelled tray icons next to this one (Mute/Camera in
+  // <CallToggleButton>) render at 14px, so this control's labelled icon was
+  // now the odd one out, LARGER than its neighbours. Compact stays 13px —
+  // untouched, and pinned separately below.
+  it("shrinks the labelled icon to 14px, matching the neighbouring CallToggleButton icons", () => {
     render(<CaptionToggle enabled onToggle={vi.fn()} />);
     const icon = screen.getByRole("button").querySelector("svg");
-    expect(icon?.getAttribute("width")).toBe("16");
-    expect(icon?.getAttribute("height")).toBe("16");
+    expect(icon?.getAttribute("width")).toBe("14");
+    expect(icon?.getAttribute("height")).toBe("14");
   });
 });

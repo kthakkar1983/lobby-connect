@@ -17,7 +17,8 @@
  *      state. The bar used to move under the agent's cursor mid-call every time
  *      she muted (`Mute` -> `Unmute`) or cut her camera (`Cam off` -> `Cam on`).
  *      Spec §5.3 — the same convention as §3.6a/§3.6b on the property cards.
- *      Precisely: the TOGGLES are additionally fixed-width (`w-28`), because
+ *      Precisely: the TOGGLES are additionally fixed-width (`w-36`, matching
+ *      the labelled <CaptionToggle> beside them — Task 3, 2026-07-21), because
  *      their icon swaps between glyphs of different advance widths.
  *      <EndCallButton> is NOT width-constrained — it does not need to be, since
  *      its label is a constant. If a state-varying label is ever added to it,
@@ -195,7 +196,7 @@ export function CallToggleButton({
       title={title}
       onClick={onToggle}
       className={cn(
-        "w-28 justify-center border",
+        "w-36 justify-center border",
         pressed
           ? "border-accent bg-accent/10 text-foreground hover:bg-accent/10 hover:text-foreground"
           : "border-border text-text-muted",
