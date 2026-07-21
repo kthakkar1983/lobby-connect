@@ -27,7 +27,16 @@ function Ctrl({
       className="flex flex-col items-center gap-1.5 disabled:cursor-not-allowed"
     >
       <span className={`${base} ${skin} ${state}`}>{children}</span>
-      <span className="text-[11px] font-medium text-white/80">{label}</span>
+      {/* Fixed-width + non-wrapping so a label swap (Mute<->Unmute, Camera
+          off<->on) changes only the TEXT, never the box — which would
+          otherwise change this control's width, and with it the whole bar's
+          width, shoving every control after it sideways mid-call. w-16 (64px)
+          was checked against the real "Outfit" 500-weight font at this size:
+          the widest label, "Camera off", measures ~55.6px — comfortable
+          headroom under 64px. */}
+      <span className="w-16 text-center whitespace-nowrap text-[11px] font-medium text-white/80">
+        {label}
+      </span>
     </button>
   );
 }
@@ -52,7 +61,7 @@ export function CallControls({
   onType?: () => void;
 }) {
   return (
-    <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-end gap-3 rounded-pill border border-white/10 bg-call/70 px-4 py-2.5 backdrop-blur-sm">
+    <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-pill border border-white/10 bg-call/70 px-4 py-2.5 backdrop-blur-sm">
       <Ctrl label={muted ? "Unmute" : "Mute"} onClick={onMute} disabled={disabled}>
         {muted ? <MicOff /> : <Mic />}
       </Ctrl>
