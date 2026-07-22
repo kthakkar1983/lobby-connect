@@ -1288,3 +1288,66 @@ describe("Softphone — duty gate on accept (finding #3 / spec §7.1)", () => {
     await waitFor(() => expect(answeredCalls().length).toBe(1));
   });
 });
+
+/**
+ * Batch 2 / Task 4 (a11y): both duty controls on this card are hand-rolled
+ * <button>s, so neither ever inherited the shared shadcn Button's
+ * focus-visible ring — tabbing to either gives a keyboard user no visible
+ * indicator. This appends the LIGHT ring recipe (className only; no
+ * handler/prop changes) to the Accepting toggle and the off-duty Go-on-duty
+ * control.
+ */
+describe("Softphone — a11y focus rings on duty controls (Batch 2 Task 4)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("carries the LIGHT focus ring on the Accepting toggle", async () => {
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    const toggle = screen.getByRole("button", { name: /accepting calls|not accepting calls/i });
+    expect(toggle.className).toContain("focus-visible:ring-ring");
+    expect(toggle.className).toContain("focus-visible:ring-offset-background");
+  });
+
+  it("carries the LIGHT focus ring on the Go on duty button", async () => {
+    // Off-duty hydration so the ring's off-duty branch (the actual <button>,
+    // not the on-duty decorative div) renders — mirrors the D13 block's
+    // hydration-override pattern above.
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      if (url === "/api/presence" && (!init || init.method !== "POST")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ onDuty: false, accepting: true }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+
+    const ring = screen.getByRole("button", { name: /go on duty/i });
+    expect(ring.className).toContain("focus-visible:ring-ring");
+    expect(ring.className).toContain("focus-visible:ring-offset-background");
+  });
+});
