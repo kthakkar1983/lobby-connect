@@ -86,7 +86,7 @@ let acceptAudioSpy: () => void;
 let acceptVideoSpy: (callId: string) => void;
 
 describe("PodCardGrid — unmatched-ring fallback", () => {
-  it("renders a fallback card + Answer for an AUDIO ring with a null propertyId; p1's card stays Quiet", async () => {
+  it("renders a fallback card + Answer for an AUDIO ring with a null propertyId; p1's card stays Standing by", async () => {
     let audioCalls = 0;
     acceptAudioSpy = () => {
       audioCalls += 1;
@@ -110,8 +110,8 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
     expect(screen.getByText("Unknown property")).not.toBeNull();
     expect(screen.getByText("Incoming phone call")).not.toBeNull();
 
-    // p1 is unaffected — no ring matches its id, so it stays Quiet.
-    expect(screen.getByText("Quiet")).not.toBeNull();
+    // p1 is unaffected — no ring matches its id, so it stays Standing by.
+    expect(screen.getByText("Standing by")).not.toBeNull();
 
     await act(async () => {
       screen.getByRole("button", { name: "Answer" }).click();
@@ -140,7 +140,7 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
 
     expect(screen.getByText("Outside Pod Hotel")).not.toBeNull();
     expect(screen.getByText("Incoming video call")).not.toBeNull();
-    expect(screen.getByText("Quiet")).not.toBeNull(); // p1 unaffected
+    expect(screen.getByText("Standing by")).not.toBeNull(); // p1 unaffected
 
     await act(async () => {
       screen.getByRole("button", { name: "Answer" }).click();
@@ -362,7 +362,7 @@ describe("PodCardGrid — unmatched-ring fallback", () => {
     expect(screen.queryByText("Unknown property")).toBeNull();
     expect(screen.queryByText("Incoming phone call")).toBeNull();
     // p1's own card is unaffected either way.
-    expect(screen.getByText("Quiet")).not.toBeNull();
+    expect(screen.getByText("Standing by")).not.toBeNull();
   });
 });
 

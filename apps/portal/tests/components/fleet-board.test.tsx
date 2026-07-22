@@ -236,9 +236,9 @@ describe("FleetBoard", () => {
     expect(fallbackHeadings).toHaveLength(1);
     expect(screen.getByText("Incoming phone call")).not.toBeNull();
 
-    // Both real cards stay Quiet — the orphan ring matches neither.
-    const quietLabels = screen.getAllByText("Quiet");
-    expect(quietLabels).toHaveLength(2);
+    // Both real cards stay "Standing by" — the orphan ring matches neither.
+    const standingByLabels = screen.getAllByText("Standing by");
+    expect(standingByLabels).toHaveLength(2);
   });
 
   it("dispatches acceptVideo from the hoisted fallback for a VIDEO ring outside every rendered pod", async () => {

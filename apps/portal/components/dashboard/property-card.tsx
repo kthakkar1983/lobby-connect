@@ -3,7 +3,7 @@
 // Ringing expands in place; Answer claims through the EXISTING accept flows
 // via CallSurfaceProvider (D1/D2). Connect is injected via connectSlot (Phase E).
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BellOff, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ const STATE_LINE: Record<CardLiveState, string> = {
   ringing: "Ringing",
   "on-hold": "On hold",
   "on-call": "On a call",
-  quiet: "Quiet",
+  quiet: "Standing by",
 };
 
 export function PropertyCard({
@@ -79,6 +79,21 @@ export function PropertyCard({
   }, [ring]);
   const elapsed = ring ? Math.max(0, Math.floor((nowMs - ring.since) / 1_000)) : 0;
 
+  // The property's own local-time clock, ticking every minute regardless of
+  // ringing (unlike nowMs above, which only ticks during a live ring).
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const localTime = useMemo(() => {
+    try {
+      return formatTimeOnly(new Date(clockNow).toISOString(), property.timezone);
+    } catch {
+      return null; // graceful: a bad tz hides the time rather than crashing the card
+    }
+  }, [clockNow, property.timezone]);
+
   const answer = () => {
     if (!ring) return;
     openTileForCall(); // must run synchronously inside the click gesture (Document-PiP)
@@ -116,11 +131,17 @@ export function PropertyCard({
               aria-hidden="true"
             />
           </h3>
-          <p className={`text-sm ${ringing ? "font-medium text-live-foreground" : "text-muted-foreground"}`}>
-            {STATE_LINE[state]}
-            {ringing && ring
-              ? ` · ${ring.channel === "AUDIO" ? "phone" : "video"} · ${elapsed}s`
-              : ""}
+          <p className="text-sm">
+            {localTime && (
+              <>
+                <span className="text-muted-foreground tabular-nums">{localTime}</span>
+                <span className="text-muted-foreground"> · </span>
+              </>
+            )}
+            <span className={ringing ? "font-medium text-live-foreground" : "text-muted-foreground"}>
+              {STATE_LINE[state]}
+              {ringing && ring ? ` · ${ring.channel === "AUDIO" ? "phone" : "video"} · ${elapsed}s` : ""}
+            </span>
           </p>
         </div>
         {property.openIncidents > 0 && (
@@ -137,7 +158,6 @@ export function PropertyCard({
           come from an element that contributes it unconditionally. */}
       <p className="mt-3 mb-3 text-xs text-muted-foreground">
         {property.callsTonight} call{property.callsTonight === 1 ? "" : "s"} tonight
-        {property.lastCallAt ? ` · last ${formatTimeOnly(property.lastCallAt, property.timezone)}` : ""}
       </p>
 
       {/* Reserve the ringing action row so a ring changes colour and content but
