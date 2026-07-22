@@ -369,4 +369,14 @@ describe("AudioCallOverlay", () => {
     expect(screen.queryByRole("button", { name: /^hold$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^swap$/i })).toBeNull();
   });
+
+  // Batch 2 / Task 2 (a11y): the 911 trigger sits in the CallShell header, which
+  // is `bg-card` (LIGHT) — it needs the light-surface focus ring, not the tile's
+  // navy-safe one.
+  it("gives the 911 button a visible light-surface focus ring", () => {
+    render(<AudioCallOverlay {...baseProps} />);
+    const emergency = screen.getByRole("button", { name: /call 911/i });
+    expect(emergency.className).toContain("focus-visible:ring-ring");
+    expect(emergency.className).toContain("focus-visible:ring-offset-background");
+  });
 });
