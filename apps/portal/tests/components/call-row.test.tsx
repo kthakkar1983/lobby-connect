@@ -57,4 +57,11 @@ describe("CallRow", () => {
     await user.click(screen.getByRole("button"));
     expect(screen.getByText("Property")).toBeTruthy();
   });
+
+  it("the expand button carries an inset focus ring", () => {
+    renderRow(baseDetail);
+    const button = screen.getByRole("button");
+    expect(button.className).toContain("focus-visible:ring-inset");
+    expect(button.className).toContain("focus-visible:ring-ring");
+  });
 });

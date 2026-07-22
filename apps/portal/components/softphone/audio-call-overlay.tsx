@@ -186,7 +186,7 @@ export function AudioCallOverlay({
             <button
               type="button"
               disabled={emergencyActive}
-              className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-button bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-sm disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <AlertTriangle size={15} /> {emergencyActive ? "911 active" : "Call 911"}
             </button>

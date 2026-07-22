@@ -62,6 +62,10 @@ export function CaptionToggle({
         enabled
           ? cn("border-accent bg-accent/10", compact ? "text-accent" : "text-foreground")
           : cn("border-border", compact ? "text-primary-foreground/70" : "text-text-muted"),
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        compact
+          ? "focus-visible:ring-primary-foreground focus-visible:ring-offset-primary"
+          : "focus-visible:ring-ring focus-visible:ring-offset-background",
         className,
       )}
     >

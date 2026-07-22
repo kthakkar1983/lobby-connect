@@ -42,7 +42,7 @@ export function OwnerBottomNav() {
   const active = activeOwnerTab(usePathname());
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card md:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Primary"
     >
       {TABS.map(({ tab, href, label, icon: Icon }) => (
@@ -51,8 +51,10 @@ export function OwnerBottomNav() {
           href={href}
           aria-current={active === tab ? "page" : undefined}
           className={cn(
-            "flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors",
-            active === tab ? "text-accent-text" : "text-text-muted hover:text-foreground",
+            "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors",
+            active === tab
+              ? "bg-accent/10 text-accent-text"
+              : "text-text-muted hover:text-foreground",
           )}
         >
           <Icon className="h-5 w-5" aria-hidden="true" />

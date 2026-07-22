@@ -896,7 +896,7 @@ export function Softphone({ role }: SoftphoneProps) {
             <button
               type="button"
               onClick={() => void goOnDuty?.()}
-              className="mt-1 flex flex-col items-center"
+              className="mt-1 flex flex-col items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {/* `relative` is load-bearing: BOTH children are absolutely
                   positioned and resolve against this element. Without it the
@@ -964,6 +964,7 @@ export function Softphone({ role }: SoftphoneProps) {
                     // visibly recessed, still passing. The border is left alone so
                     // the control's boundary is unchanged.
                     gated && "bg-muted",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   )}
                 >
                   {acceptingNow ? "Accepting calls" : "Not accepting calls"}

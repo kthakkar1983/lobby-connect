@@ -27,7 +27,7 @@ export function CallRow({ call }: { readonly call: CallRowData }) {
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 p-3 text-left"
+        className="flex w-full items-center gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-input bg-muted text-foreground">
           <Icon className="size-4" aria-hidden="true" />

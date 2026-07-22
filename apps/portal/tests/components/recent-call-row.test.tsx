@@ -89,4 +89,11 @@ describe("RecentCallRow", () => {
     expect(dot?.className).not.toContain("bg-attention");
     expect(dot?.className).toContain("bg-muted-foreground/40");
   });
+
+  it("the expand button carries an inset focus ring", () => {
+    renderRow(base);
+    const button = screen.getByRole("button");
+    expect(button.className).toContain("focus-visible:ring-inset");
+    expect(button.className).toContain("focus-visible:ring-ring");
+  });
 });

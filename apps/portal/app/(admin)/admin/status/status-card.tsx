@@ -7,6 +7,8 @@ const DOT: Record<SignalStatus, string> = {
   unknown: "bg-muted-foreground/40",
 };
 
+const WORD: Record<SignalStatus, string> = { ok: "OK", warn: "Degraded", down: "Down", unknown: "Unknown" };
+
 export function StatusCard({
   label,
   status,
@@ -26,6 +28,9 @@ export function StatusCard({
           aria-hidden="true"
         />
         <span className="text-sm font-medium text-foreground">{label}</span>
+        <span className="ml-auto font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted">
+          {WORD[status]}
+        </span>
       </div>
       <span className="text-sm text-text-muted">{value}</span>
       {href && (

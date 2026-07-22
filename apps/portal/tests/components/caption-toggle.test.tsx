@@ -117,4 +117,21 @@ describe("CaptionToggle", () => {
     expect(icon?.getAttribute("width")).toBe("14");
     expect(icon?.getAttribute("height")).toBe("14");
   });
+
+  // Batch 2 / Task 2 (a11y): the ring is per-branch, mirroring the colour split
+  // above — labelled renders on the light control bar (`bg-card`), compact
+  // renders on the navy call tile.
+  it("carries the light-surface focus ring when labelled", () => {
+    render(<CaptionToggle enabled={false} onToggle={() => {}} />);
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("focus-visible:ring-ring");
+    expect(btn.className).toContain("focus-visible:ring-offset-background");
+  });
+
+  it("carries the navy-tile-safe focus ring when compact", () => {
+    render(<CaptionToggle enabled={false} onToggle={() => {}} compact />);
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("focus-visible:ring-primary-foreground");
+    expect(btn.className).toContain("focus-visible:ring-offset-primary");
+  });
 });

@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { pathMotion } from "@/lib/brand/path-motion";
 
 /**
  * Animated "connection lines" for the sign-in brand panel — a drifting field of
@@ -42,34 +43,21 @@ export function FloatingPaths({
         fill="none"
         viewBox="0 0 696 316"
       >
-        {paths.map((path) => (
-          <motion.path
-            key={path.id}
-            d={path.d}
-            stroke="currentColor"
-            strokeWidth={path.width}
-            strokeOpacity={0.1 + path.id * 0.03}
-            initial={{ pathLength: 0.3, opacity: 0.6 }}
-            animate={
-              reduceMotion
-                ? undefined
-                : {
-                    pathLength: 1,
-                    opacity: [0.3, 0.6, 0.3],
-                    pathOffset: [0, 1, 0],
-                  }
-            }
-            transition={
-              reduceMotion
-                ? undefined
-                : {
-                    duration: 20 + (path.id % 10),
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "linear",
-                  }
-            }
-          />
-        ))}
+        {paths.map((path) => {
+          const anim = pathMotion(!!reduceMotion, 20 + (path.id % 10));
+          return (
+            <motion.path
+              key={path.id}
+              d={path.d}
+              stroke="currentColor"
+              strokeWidth={path.width}
+              strokeOpacity={0.1 + path.id * 0.03}
+              initial={anim.initial}
+              animate={anim.animate}
+              transition={anim.transition}
+            />
+          );
+        })}
       </svg>
     </div>
   );

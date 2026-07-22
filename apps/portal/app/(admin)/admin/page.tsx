@@ -24,7 +24,7 @@ import {
 import { countOnlineAgents } from "@/lib/dashboard/presence";
 import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
 import { isKioskOnline } from "@/lib/kiosk/liveness";
-import { presenceDotClass, formatDuration } from "@/lib/owner/format";
+import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/format";
 import { effectivePresence } from "@/lib/voice/presence";
 import { groupPodsByAgent } from "@/lib/dashboard/pods";
 import { cn } from "@/lib/utils";
@@ -357,6 +357,7 @@ export default async function AdminOverviewPage() {
                         aria-hidden="true"
                       />
                       {agent.full_name}
+                      <span className="text-xs font-normal text-text-muted">· {presenceLabel(effective)}</span>
                     </span>
                     <span className="font-mono text-xs text-text-muted">
                       {propCount} {propCount === 1 ? "property" : "properties"}
