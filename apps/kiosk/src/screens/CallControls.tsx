@@ -14,7 +14,11 @@ function Ctrl({
     "grid size-14 place-items-center rounded-pill transition-transform [&_svg]:size-6";
   const skin =
     variant === "end"
-      ? "bg-card text-call" // neutral solid reads on the dark video stage (red stays 911-only)
+      ? // Blaze fill, matching the agent side (agent End call is blaze on both the
+        // overlay and the tile). Blaze is NOT red — 911 has no kiosk path — so the
+        // terminating control reads consistently across the guest and agent
+        // surfaces without becoming an alarm colour (2026-07-21 smoke).
+        "bg-attention text-attention-foreground"
       : "border border-white/25 bg-white/10 text-white";
   // Greyed + inert until the control can actually work (see CallControls `disabled`).
   const state = disabled ? "opacity-40" : "active:scale-95";

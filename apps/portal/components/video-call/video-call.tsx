@@ -461,6 +461,12 @@ export function VideoCall({
     registerCallControls({
       toggleMute,
       muted,
+      // Item 4 (2026-07-21): the tile drives the agent's camera too. Registered
+      // here (VIDEO only — audio never mounts VideoCall) so the tile can show a
+      // Camera control that mirrors this overlay's. `cameraOff` is in the dep
+      // array below, so a toggle re-registers and the tile's mirror stays live.
+      toggleCamera,
+      cameraOff,
       hangUp: () => registeredHangUpRef.current(),
       sendChat: (text: string) => {
         const clean = redactCardNumbers(text);
@@ -475,11 +481,11 @@ export function VideoCall({
         ),
     });
     return () => registerCallControls(null);
-    // Only re-register on a real mute-state change (the tile must reflect it);
-    // hangUp reads through the ref above so it always calls the CURRENT handleEnd
-    // without needing to be a dep-array member itself.
+    // Re-register on a real mute- OR camera-state change (the tile mirror must
+    // reflect both); hangUp reads through the ref above so it always calls the
+    // CURRENT handleEnd without needing to be a dep-array member itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registerCallControls, muted]);
+  }, [registerCallControls, muted, cameraOff]);
 
   useEffect(() => {
     const id = setInterval(() => {
