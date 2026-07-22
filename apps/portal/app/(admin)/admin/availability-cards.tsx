@@ -29,10 +29,13 @@ export function AvailabilityToggle({
   }
 
   return (
-    <Switch
-      checked={on}
-      onCheckedChange={toggle}
-      aria-label={`Accept calls for ${propertyName}`}
-    />
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-sm font-medium text-foreground">Covering</span>
+      <Switch
+        checked={on}
+        onCheckedChange={toggle}
+        aria-label={`Covering — ${propertyName}`}
+      />
+    </div>
   );
 }

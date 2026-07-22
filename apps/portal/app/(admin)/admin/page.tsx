@@ -22,7 +22,6 @@ import {
   countToday,
 } from "@/lib/dashboard/calls";
 import { countOnlineAgents } from "@/lib/dashboard/presence";
-import { phoneHealthRollup } from "@/lib/dashboard/phone-health";
 import { isKioskOnline } from "@/lib/kiosk/liveness";
 import { presenceDotClass, presenceLabel, formatDuration } from "@/lib/owner/format";
 import { effectivePresence } from "@/lib/voice/presence";
@@ -32,8 +31,6 @@ import { RecentCallRow, type RecentCall } from "@/components/dashboard/recent-ca
 import { AutoRefresh } from "@/components/auto-refresh";
 
 const LABEL = "font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
-
-type Tone = "default" | "live" | "attention" | "destructive";
 
 export default async function AdminOverviewPage() {
   const actor = await requireRole("ADMIN");
@@ -172,27 +169,6 @@ export default async function AdminOverviewPage() {
     handlerName: c.handled_by_user_id ? (handlerById.get(c.handled_by_user_id) ?? "—") : "—",
   }));
 
-  // Phone health: a property "needs attention" only on a concrete failure — >= 1
-  // FAILED call today. Presence-based coverage-gap and a global "path down" are v2
-  // seams (see lib/dashboard/phone-health.ts): the old coverage-gap rule
-  // false-alarmed on a covered property whose primary agent simply happened to be
-  // offline, which is the normal after-hours setup.
-  const health = phoneHealthRollup(
-    props.map((p) => ({ id: p.id, name: p.name, timeZone: tzById.get(p.id) ?? "UTC" })),
-    calls,
-    now
-  );
-  const healthTile: { value: string; sub: string; tone: Tone } =
-    health.total === 0
-      ? { value: "—", sub: "no properties", tone: "default" }
-      : health.needAttention.length > 0
-        ? {
-            value: `${health.ok}/${health.total}`,
-            sub: `${health.needAttention.length} need attention`,
-            tone: "attention",
-          }
-        : { value: `${health.ok}/${health.total}`, sub: "lines OK", tone: "live" };
-
   // Task 9: fleet cards, one per property, grouped by pod (assigned primary
   // agent) via groupPodsByAgent — replaces the old properties ops <Table>.
   // Tonight stats mirror the agent dashboard's per-property derivation
@@ -246,7 +222,7 @@ export default async function AdminOverviewPage() {
       <AutoRefresh />
       <h1 className="sr-only">Admin command center</h1>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <DashTile
           value={live.total}
           label="Live calls"
@@ -259,13 +235,6 @@ export default async function AdminOverviewPage() {
           value={openIncidents ?? 0}
           label="Open incidents"
           tone={(openIncidents ?? 0) > 0 ? "attention" : "default"}
-        />
-        <DashTile
-          value={healthTile.value}
-          label="Phone health"
-          sub={healthTile.sub}
-          tone={healthTile.tone}
-          href="/admin/phone-health"
         />
       </div>
 
