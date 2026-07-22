@@ -489,6 +489,33 @@ describe("CallTile", () => {
     expect(end.className).toContain("ml-auto"); // far-right bookend
   });
 
+  // Batch 2 a11y (Task 1): the tile face is bg-primary (navy), and the three
+  // hand-rolled controls here (Mute via TileIconButton, 911, End call) had no
+  // focus ring at all — a keyboard user tabbing through the tile couldn't see
+  // where focus was. Pin the DARK ring recipe (ring-primary-foreground /
+  // ring-offset-primary, tuned for the navy face) on all three. NOTE: getByRole
+  // is unusable against this fake PiP document (see the harness NOTE above —
+  // createHTMLDocument() has no defaultView and dom-accessibility-api throws),
+  // so this reuses the file's own aria-label/getByText query style rather than
+  // accessible-name matching.
+  it("gives the tile's Mute, 911, and End call controls a focus ring visible on the navy face", async () => {
+    const { pipDoc } = renderTile({ active: videoActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const tile = within(pipDoc.body);
+    const muteBtn = pipDoc.body.querySelector('[aria-label="Mute"]') as HTMLButtonElement;
+    const btn911 = tile.getByText("911").closest("button") as HTMLButtonElement;
+    const endCallBtn = pipDoc.body.querySelector('[aria-label="End call"]') as HTMLButtonElement;
+
+    for (const btn of [muteBtn, btn911, endCallBtn]) {
+      expect(btn).toBeTruthy();
+      expect(btn.className).toContain("focus-visible:ring-primary-foreground");
+      expect(btn.className).toContain("focus-visible:ring-offset-primary");
+    }
+  });
+
   // Batch-1 polish (2026-07-10): the tile Connect was a near-invisible navy
   // outline. It gains the Monitor icon (like the overlays) + the teal accent
   // fill so it reads as "remote in".

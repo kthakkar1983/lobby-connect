@@ -140,6 +140,7 @@ function TileIconButton({
         pressed
           ? "border-accent bg-accent/10 text-accent"
           : "border-primary-foreground/25 text-primary-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary",
       )}
     >
       {children}
@@ -287,7 +288,7 @@ export function CallTile(): React.JSX.Element | null {
           <button
             type="button"
             onClick={handle911Tap}
-            className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-button bg-destructive px-2 py-1 text-xs font-semibold text-destructive-foreground shadow-md"
+            className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-button bg-destructive px-2 py-1 text-xs font-semibold text-destructive-foreground shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
           >
             <AlertTriangle size={13} /> {armed ? "Confirm 911" : "911"}
           </button>
@@ -484,7 +485,7 @@ export function CallTile(): React.JSX.Element | null {
             onClick={controls.hangUp}
             aria-label="End call"
             title="End call"
-            className="ml-auto grid size-7 shrink-0 place-items-center rounded-full bg-attention text-attention-foreground transition-transform active:scale-95"
+            className="ml-auto grid size-7 shrink-0 place-items-center rounded-full bg-attention text-attention-foreground transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
           >
             <PhoneOff size={15} />
           </button>
