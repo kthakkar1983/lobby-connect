@@ -130,7 +130,7 @@ export type HourBucket = { hour: number; audio: number; video: number; missed: n
  *   - video  = answered video calls (COMPLETED + VIDEO)
  *   - missed = unanswered INBOUND calls (NO_ANSWER, either channel); an OUTBOUND NO_ANSWER
  *     (agent-placed call-back the guest didn't pick up) is excluded — not a "missed" guest call
- * FAILED (a system error, surfaced on phone-health) and still-live calls are excluded, so a
+ * FAILED (a system error, surfaced under Calls › Failed) and still-live calls are excluded, so a
  * missed call is counted once in `missed` — never double-counted in its channel. Each call is
  * bucketed in its own property timezone ("volume by hotel-local hour"). Always 24 buckets.
  * `direction` defaults to INBOUND (omitted == INBOUND) so every existing caller is unaffected.
