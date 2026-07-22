@@ -1,5 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 
+import { pathMotion } from "@/lib/path-motion";
+
 /**
  * Animated "connection lines" — the kiosk copy of the portal's sign-in
  * `components/brand/floating-paths.tsx` (same geometry, widths, opacities, and
@@ -35,34 +37,22 @@ export function FloatingPaths({
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       <svg className={`h-full w-full ${className}`} fill="none" viewBox="0 0 696 316">
-        {paths.map((path) => (
-          <motion.path
-            key={path.id}
-            d={path.d}
-            stroke="currentColor"
-            strokeWidth={path.width}
-            strokeOpacity={0.1 + path.id * 0.03}
-            initial={{ pathLength: 0.3, opacity: 0.6 }}
-            animate={
-              reduceMotion
-                ? undefined
-                : {
-                    pathLength: 1,
-                    opacity: [0.3, 0.6, 0.3],
-                    pathOffset: [0, 1, 0],
-                  }
-            }
-            transition={
-              reduceMotion
-                ? undefined
-                : {
-                    duration: 40 + (path.id % 16), // kiosk: ~2x slower than the login for a calmer feel
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "linear",
-                  }
-            }
-          />
-        ))}
+        {paths.map((path) => {
+          // kiosk: ~2x slower than the login for a calmer feel
+          const anim = pathMotion(!!reduceMotion, 40 + (path.id % 16));
+          return (
+            <motion.path
+              key={path.id}
+              d={path.d}
+              stroke="currentColor"
+              strokeWidth={path.width}
+              strokeOpacity={0.1 + path.id * 0.03}
+              initial={anim.initial}
+              animate={anim.animate}
+              transition={anim.transition}
+            />
+          );
+        })}
       </svg>
     </div>
   );
