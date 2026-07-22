@@ -33,6 +33,34 @@ function renderBar(props: Partial<Parameters<typeof CallControls>[0]> = {}) {
 
 afterEach(cleanup);
 
+describe("CallControls — terminating control colour", () => {
+  // Smoke follow-up (2026-07-21): Kumar asked for the kiosk End/Cancel button to
+  // be blaze/orange, matching the agent side (agent End call is blaze on both the
+  // overlay and the tile). Blaze is NOT red — 911 has no kiosk path — so this
+  // does not reintroduce an alarm colour; it unifies the terminating control's
+  // fill across the guest and agent surfaces. The `variant="end"` icon tile
+  // carries the fill.
+  it("fills the terminating (primary) control with blaze, not the neutral card fill", () => {
+    render(
+      <CallControls
+        muted={false}
+        cameraOff={false}
+        onMute={noop}
+        onCamera={noop}
+        primary={{ label: "End", onClick: noop }}
+      />,
+    );
+    const endBtn = screen.getByText("End").closest("button") as HTMLElement;
+    // The first span in the button is the round icon tile that carries the skin.
+    const iconTile = endBtn.querySelector("span") as HTMLElement;
+    expect(iconTile.className).toContain("bg-attention");
+    expect(iconTile.className).toContain("text-attention-foreground");
+    // The old neutral treatment must be gone.
+    expect(iconTile.className).not.toContain("bg-card");
+    expect(iconTile.className).not.toContain("text-call");
+  });
+});
+
 describe("CallControls — bar alignment", () => {
   it("centers the controls (items-center) instead of bottom-aligning them (items-end)", () => {
     const { container } = renderBar();

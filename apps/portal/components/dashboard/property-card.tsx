@@ -179,7 +179,14 @@ export function PropertyCard({
           contract is not merely under-tested, it is untestable. */}
       <div
         data-testid="card-action-row"
-        className="mt-auto flex h-8 shrink-0 items-center gap-2"
+        // `grid grid-cols-2` (not a plain flex): the Connect/Kiosk row below is a
+        // full-width grid-cols-2, and this row must match it so Answer↔Connect and
+        // Silence↔Kiosk line up as a true 2×2 (2026-07-21 smoke). A flex row sized
+        // each button to its own label, so the two pairs sat at different widths.
+        // The buttons carry `w-full` to fill their columns. h-8/shrink-0/mt-auto
+        // are unchanged — the reservation + bottom-anchor still hold (an empty
+        // grid-cols-2 at explicit h-8 stays h-8).
+        className="mt-auto grid h-8 shrink-0 grid-cols-2 items-center gap-2"
       >
         {ringing && canAnswer && (
           // Never `disabled` off duty: a disabled button fires no click event,
@@ -194,7 +201,7 @@ export function PropertyCard({
           // equivalent figure has been computed for a muted mint, spec §3.6
           // asks only that the label swap go, and a ringing Answer is the one
           // control on this card that must stay maximally findable.
-          <Button onClick={() => guard(answer)} size="sm" className="animate-pulse">
+          <Button onClick={() => guard(answer)} size="sm" className="w-full animate-pulse">
             <Phone aria-hidden="true" />
             Answer
           </Button>
@@ -205,6 +212,13 @@ export function PropertyCard({
           <Button
             variant="neutral"
             size="sm"
+            // `col-start-2` pins Silence to the SECOND column (under Kiosk) even
+            // when it is the ONLY action rendered — an admin viewing a fleet
+            // property they are not covering (canAnswer=false) shows Silence
+            // alone, and grid auto-placement would otherwise drop it into column
+            // 1 under Connect, breaking the Silence↔Kiosk pairing. Harmless when
+            // Answer is present (column 2 is already Silence's natural slot).
+            className="col-start-2 w-full"
             onClick={() => silenceRing(ring.key)}
             disabled={silenced}
             aria-pressed={silenced}

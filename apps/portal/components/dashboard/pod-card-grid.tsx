@@ -134,7 +134,10 @@ export function PodCardGrid({
                 // Batch 1 Task 2: a shared 2-col grid track instead of a plain
                 // flex row, so Connect (~106px of text) and Kiosk (~85px) fill
                 // equal-width columns rather than sizing to their own labels.
-                <div className="grid grid-cols-2 gap-2">
+                // `w-full` (2026-07-21 smoke): the grid must span the whole card,
+                // not shrink to its content, so this row lines up with the
+                // Answer/Silence grid above it (property-card.tsx card-action-row).
+                <div className="grid w-full grid-cols-2 gap-2">
                   <ConnectButton propertyId={property.id} className="w-full justify-center" />
                   <KioskCallButton
                     propertyId={property.id}

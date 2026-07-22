@@ -528,6 +528,60 @@ describe("PropertyCard", () => {
     expect(dot.className).toContain("bg-muted-foreground/40");
   });
 
+  // Smoke follow-up (2026-07-21): Kumar found Answer/Silence not aligning with
+  // the Connect/Kiosk row below. Root cause — the action row was a plain flex
+  // (buttons content-width) while the connect row is a grid-cols-2 (equal
+  // columns), so the two pairs sat at different widths. Fix: BOTH rows are the
+  // same full-width grid-cols-2, so Answer↔Connect and Silence↔Kiosk line up as
+  // a true 2×2. jsdom cannot measure the resulting pixels (the live smoke does),
+  // but it CAN pin the structural cause: grid-cols-2 + w-full buttons.
+  it("lays the action row out as a full-width grid-cols-2 so Answer/Silence align with the row below", async () => {
+    acceptVideoSpy = () => {};
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    const row = screen.getByTestId("card-action-row");
+    expect(row.className).toContain("grid-cols-2");
+
+    const answer = screen.getByRole("button", { name: "Answer" });
+    const silence = screen.getByRole("button", { name: "Silence" });
+    // w-full makes each button fill its grid column, so the pair spans the card
+    // edge-to-edge and matches the Connect/Kiosk grid beneath it.
+    expect(answer.className).toContain("w-full");
+    expect(silence.className).toContain("w-full");
+  });
+
+  it("keeps Silence in column 2 (under Kiosk) even when it is the only action — admin not covering", async () => {
+    // Review-caught edge (2026-07-21): when canAnswer is false, ONLY Silence
+    // renders. In a grid-cols-2 with no explicit placement, CSS Grid auto-places
+    // the lone child in column 1 — i.e. under Connect, breaking the Silence↔Kiosk
+    // pairing the 2×2 exists to create. `col-start-2` pins Silence to the right
+    // column in every case (it's already its natural column when Answer is
+    // present, so this is harmless there).
+    render(
+      <CallSurfaceProvider>
+        <Publisher />
+        <PropertyCard property={p1} canAnswer={false} />
+      </CallSurfaceProvider>,
+    );
+
+    await act(async () => {
+      screen.getByText("publish video ring for p1").click();
+    });
+
+    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+    const silence = screen.getByRole("button", { name: "Silence" });
+    expect(silence.className).toContain("col-start-2");
+  });
+
   it("Answer renders with a leading icon so it aligns with Silence/Connect/Kiosk (D6)", async () => {
     acceptVideoSpy = () => {};
     render(

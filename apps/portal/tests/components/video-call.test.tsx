@@ -687,6 +687,42 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     expect(screen.queryByRole("button", { name: /camera is on/i })).toBeNull();
   });
 
+  // Item 4 (2026-07-21): the tile drives the agent's camera through the surface's
+  // registered controls. VideoCall must REGISTER toggleCamera + the live cameraOff
+  // state (audio omits them — no camera), and re-register when cameraOff changes
+  // so the tile mirror stays truthful. This pins the video-call side of the wiring;
+  // the tile side is pinned in call-tile.test.tsx.
+  it("registers a working camera toggle with the surface so the tile can drive it", async () => {
+    const user = userEvent.setup();
+    function CamProbe() {
+      const { callControls } = useCallSurface();
+      return (
+        <div
+          data-testid="cam-probe"
+          data-has-toggle={String(typeof callControls?.toggleCamera === "function")}
+          data-camera-off={String(callControls?.cameraOff ?? "none")}
+        />
+      );
+    }
+    render(
+      <CallSurfaceProvider>
+        <VideoCall callId="call-camreg" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />
+        <CamProbe />
+      </CallSurfaceProvider>,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const probe = () => screen.getByTestId("cam-probe");
+    // Registered on mount: the surface exposes the toggle + the initial state.
+    await waitFor(() => expect(probe().getAttribute("data-has-toggle")).toBe("true"));
+    expect(probe().getAttribute("data-camera-off")).toBe("false");
+
+    // Toggling the overlay Camera flips the REGISTERED state (re-registration on
+    // the cameraOff dependency), so the tile mirror is never stale.
+    await user.click(screen.getByRole("button", { name: /^camera\b/i }));
+    await waitFor(() => expect(probe().getAttribute("data-camera-off")).toBe("true"));
+  });
+
   // D2 (2026-07-20): `End call` is blaze on BOTH surfaces now. This test used
   // to pin D11 (navy on video; audio's blaze kept separate as a deliberate
   // punch-list-B1 override) — that per-surface split existed only because

@@ -6,13 +6,25 @@
 // component owns the live call (Softphone for AUDIO, VideoCall for VIDEO).
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Mic, MicOff, PhoneOff, AlertTriangle, Monitor, Clock } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  MessageSquare,
+  Captions,
+  CaptionsOff,
+  PhoneOff,
+  AlertTriangle,
+  Monitor,
+  Clock,
+} from "lucide-react";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { CaptionBand } from "@/components/call/caption-band";
-import { CaptionToggle } from "@/components/call/caption-toggle";
 import { ChatDock } from "@/components/call/chat-dock";
 import { PropertyActionButton } from "@/components/dashboard/property-action-button";
 import { connectErrorMessage } from "@/lib/remote-access/connect-error";
+import { cn } from "@/lib/utils";
 
 // How long the armed "Confirm 911" state stays live before auto-reverting.
 const EMERGENCY_ARM_WINDOW_MS = 5_000;
@@ -84,6 +96,55 @@ function useElapsed(answeredAt: number): number {
     return () => clearInterval(id);
   }, []);
   return Math.max(0, Math.floor((now - answeredAt) / 1_000));
+}
+
+/**
+ * Round icon-only control for the tile bar (2026-07-21 smoke). The tile is a
+ * postcard-sized DocPiP window, so every control except Connect drops its text
+ * label and reads as an icon in a round button — the "ghost outline round"
+ * language the kiosk uses, scaled down. The icon carries the state (Mic/MicOff,
+ * Video/VideoOff) and the accessible name is on `aria-label` (icon-only, so
+ * there is no visible text to name it).
+ *
+ *   - `pressed` undefined  -> a plain suppression toggle (Mute/Camera): ghost
+ *     always; the ICON conveys on/off, exactly like the kiosk's Mute/Camera. No
+ *     aria-pressed, because the action-label ("Mute"/"Unmute") already carries
+ *     the state and a filled highlight is not the kiosk's convention.
+ *   - `pressed` boolean    -> a view toggle (Chat): aria-pressed + a teal-tint
+ *     fill when engaged, matching <CaptionToggle>'s own "enabled" recipe so the
+ *     two active-toggle states read identically. text-accent on the tint clears
+ *     the 3:1 icon bar on the navy tile (see the CaptionToggle contrast note).
+ */
+function TileIconButton({
+  onClick,
+  ariaLabel,
+  title,
+  pressed,
+  children,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+  title: string;
+  pressed?: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={pressed}
+      title={title}
+      className={cn(
+        "relative grid size-7 shrink-0 place-items-center rounded-full border transition-transform active:scale-95",
+        pressed
+          ? "border-accent bg-accent/10 text-accent"
+          : "border-primary-foreground/25 text-primary-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function CallTile(): React.JSX.Element | null {
@@ -294,10 +355,14 @@ export function CallTile(): React.JSX.Element | null {
         </div>
       )}
 
-      {/* Compact bar — mirror-only when no controls are registered. Task 5
-          (call-controls-column-polish, spec §3.1/§3.2/§3.3/§3.5) reordered this
-          to `Connect · Mute · [Video/Chat] · Captions · End call` — Connect
-          leads, End call bookends the row — and relabelled Hang up → End call. */}
+      {/* Compact bar — mirror-only when no controls are registered.
+          `Connect · Mute · [Camera] · [Chat] · Captions · End call` — Connect
+          leads (labelled teal), End call bookends the row (round blaze). The
+          2026-07-21 smoke pass made every control EXCEPT Connect an icon-only
+          round button (the kiosk "ghost outline round" language, scaled to the
+          postcard-sized PiP), and added the Camera toggle (item 4) — dropping the
+          text labels is exactly what makes room for it. Camera + Chat are
+          VIDEO-only (gated on their registered controls). */}
       {controls && (
         <div className="flex items-center gap-1.5 border-t border-primary-foreground/15 p-2">
           {/* Connect = the remote-in action: teal accent + monitor icon,
@@ -351,67 +416,77 @@ export function CallTile(): React.JSX.Element | null {
             errorPlacement="float"
             className="font-semibold"
           />
-          <button
-            type="button"
+          {/* Mute — round ghost icon. The icon carries on/off (Mic/MicOff), the
+              accessible name carries the action; no visible label (2026-07-21). */}
+          <TileIconButton
             onClick={controls.toggleMute}
-            aria-pressed={controls.muted}
-            className="flex items-center gap-1 whitespace-nowrap shrink-0 rounded-button border border-primary-foreground/25 px-2 py-1 text-xs text-primary-foreground"
+            ariaLabel={controls.muted ? "Unmute" : "Mute"}
+            title={controls.muted ? "Turn your microphone on" : "Turn your microphone off"}
           >
-            {controls.muted ? <MicOff size={13} /> : <Mic size={13} />}
-            {controls.muted ? "Unmute" : "Mute"}
-          </button>
-          {/* Video/Chat toggle (Task 9) — video-only, only when the call owner
-              registered sendChat. Segmented control mirrors CaptionToggle's
-              compact footprint; the unread dot clears the moment chat opens.
-              Task 5/D5: the container drops its gap/padding and clips
-              (`overflow-hidden`) so the active segment's fill reaches the
-              container's rounded corners flush instead of leaving a visible
-              gap; each segment is an equal-width `flex-1` half instead of its
-              own separately-rounded chip. */}
-          {active.channel === "VIDEO" && controls.sendChat && (
-            <div className="flex items-center overflow-hidden rounded-button border border-primary-foreground/25 text-[11px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setChatMode("video")}
-                className={
-                  chatMode === "video"
-                    ? "flex-1 bg-accent px-1.5 py-0.5 text-center text-accent-foreground"
-                    : "flex-1 px-1.5 py-0.5 text-center text-primary-foreground/70"
-                }
-              >
-                Video
-              </button>
-              <button
-                type="button"
-                onClick={() => setChatMode("chat")}
-                className={
-                  chatMode === "chat"
-                    ? "relative flex-1 bg-accent px-1.5 py-0.5 text-center text-accent-foreground"
-                    : "relative flex-1 px-1.5 py-0.5 text-center text-primary-foreground/70"
-                }
-              >
-                Chat
-                {chatUnread && (
-                  <span
-                    data-testid="chat-unread"
-                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-attention"
-                  />
-                )}
-              </button>
-            </div>
+            {controls.muted ? <MicOff size={15} /> : <Mic size={15} />}
+          </TileIconButton>
+          {/* Camera — round ghost icon, VIDEO-only. Rides the same registered-
+              controls seam as chat: only the VIDEO owner registers toggleCamera/
+              cameraOff, so an AUDIO call omits it (no camera) and this is absent.
+              The accessible name offers the NEXT action ("Camera on" when off),
+              matching the kiosk's own label convention. */}
+          {active.channel === "VIDEO" && controls.toggleCamera && (
+            <TileIconButton
+              onClick={controls.toggleCamera}
+              ariaLabel={controls.cameraOff ? "Camera on" : "Camera off"}
+              title={controls.cameraOff ? "Turn your camera on" : "Turn your camera off"}
+            >
+              {controls.cameraOff ? <VideoOff size={15} /> : <Video size={15} />}
+            </TileIconButton>
           )}
-          <CaptionToggle enabled={captionsEnabled} onToggle={toggleCaptions} compact />
-          {/* End call bookends the bar — `ml-auto` pushes it to the right edge,
-              separating it from the Mute/Video-Chat/Captions cluster. Task 5
-              relabelled it from "Hang up" (spec §3.3) and added
-              `whitespace-nowrap shrink-0` so the longer label cannot wrap in
-              the 380px PiP window (the reported "expanding" bug). */}
+          {/* Chat — a SINGLE round toggle now (2026-07-21), not a Video|Chat
+              segmented switch: one icon-only round button consistent with the
+              siblings, teal-tinted while chat is the active face, with the unread
+              dot on the icon. Video-only (controls.sendChat is registered only by
+              the video owner). */}
+          {active.channel === "VIDEO" && controls.sendChat && (
+            <TileIconButton
+              onClick={() => setChatMode((m) => (m === "chat" ? "video" : "chat"))}
+              ariaLabel="Chat"
+              title={chatMode === "chat" ? "Back to video" : "Open chat"}
+              pressed={chatMode === "chat"}
+            >
+              <MessageSquare size={15} />
+              {chatUnread && (
+                <span
+                  data-testid="chat-unread"
+                  className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-attention"
+                />
+              )}
+            </TileIconButton>
+          )}
+          {/* Captions — hand-rolled as a TileIconButton so it reads identically to
+              the sibling round controls (the shared <CaptionToggle> is a labelled
+              pill built for the light overlay bar). `pressed` gives it the same
+              teal-tint engaged state as <CaptionToggle>'s "enabled" recipe, so the
+              navy contrast (text-accent on bg-accent/10, ~4.1:1 — clears the 3:1
+              icon bar) is preserved. Title strings are unchanged. */}
+          <TileIconButton
+            onClick={toggleCaptions}
+            ariaLabel="Captions"
+            title={captionsEnabled ? "Turn captions off" : "Turn captions on"}
+            pressed={captionsEnabled}
+          >
+            {captionsEnabled ? <Captions size={15} /> : <CaptionsOff size={15} />}
+          </TileIconButton>
+          {/* End call — round blaze icon, bookended right (`ml-auto`) so a tap can
+              never land on it by accident, and separated from the ghost cluster.
+              Blaze matches the agent overlay's End call; icon-only, so it cannot
+              wrap (the old whitespace-nowrap guard is moot). Accessible name
+              "End call", never "Hang up". */}
           <button
             type="button"
             onClick={controls.hangUp}
-            className="ml-auto flex items-center gap-1 whitespace-nowrap shrink-0 rounded-button bg-attention px-2 py-1 text-xs font-semibold text-attention-foreground"
+            aria-label="End call"
+            title="End call"
+            className="ml-auto grid size-7 shrink-0 place-items-center rounded-full bg-attention text-attention-foreground transition-transform active:scale-95"
           >
-            <PhoneOff size={13} /> End call
+            <PhoneOff size={15} />
           </button>
         </div>
       )}

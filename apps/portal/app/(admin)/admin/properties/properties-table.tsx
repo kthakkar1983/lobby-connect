@@ -49,7 +49,7 @@ export function PropertiesTable({ properties }: Props) {
         />
         <Button asChild>
           <Link href="/admin/properties/new">
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="size-4" />
             New property
           </Link>
         </Button>

@@ -249,22 +249,25 @@ describe("CallTile", () => {
     await act(async () => screen.getByText("register controls").click());
     await openTile();
 
-    const tile = within(pipDoc.body);
-    const muteBtn = tile.getByText("Mute").closest("button");
+    // Icon-only in the tile now (labels dropped, 2026-07-21) — query by the
+    // accessible name, not visible text. The button carries only its icon.
+    const muteBtn = pipDoc.body.querySelector('[aria-label="Mute"]') as HTMLButtonElement;
     expect(muteBtn).toBeTruthy();
+    expect(muteBtn.textContent?.trim()).toBe("");
     await act(async () => {
-      muteBtn!.click();
+      muteBtn.click();
     });
     expect(toggleMute).toHaveBeenCalledOnce();
   });
 
-  it("shows the muted label when controls.muted is true", async () => {
+  it("reflects muted state on the mute control's accessible label (icon-only)", async () => {
     const { pipDoc } = renderTile({ active: audioActive, controls: makeControls({ muted: true }) });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
     await openTile();
 
-    expect(within(pipDoc.body).getByText("Unmute")).toBeTruthy();
+    expect(pipDoc.body.querySelector('[aria-label="Unmute"]')).toBeTruthy();
+    expect(pipDoc.body.querySelector('[aria-label="Mute"]')).toBeNull();
   });
 
   it("911 requires two taps: first arms (shows Confirm 911), second fires the trigger", async () => {
@@ -428,54 +431,62 @@ describe("CallTile", () => {
     await openTile();
 
     const tile = within(pipDoc.body);
-    const btn911 = tile.getByText("911").closest("button");
-    const endCall = tile.getByText("End call").closest("button");
+    const btn911 = tile.getByText("911").closest("button"); // 911 keeps its visible label
+    const endCall = pipDoc.body.querySelector('[aria-label="End call"]'); // End call is icon-only
     expect(btn911).toBeTruthy();
     expect(endCall).toBeTruthy();
     // Different parent element => not adjacent in the same control row.
     expect(btn911!.parentElement).not.toBe(endCall!.parentElement);
   });
 
-  // Task 5 (call-controls-column-polish, spec §3.3): the bar's terminating
-  // control is relabelled "End call" — "Hang up" must not exist anywhere in
-  // the tile anymore.
-  it('the tile terminating control reads "End call", not "Hang up" (spec §3.3)', async () => {
+  // The tile's terminating control carries "End call" as its accessible name and
+  // never "Hang up". It is icon-only now (2026-07-21), so the name is on
+  // aria-label, not visible text.
+  it('the tile terminating control is "End call", not "Hang up" (icon-only)', async () => {
     const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
     await openTile();
-    const tile = within(pipDoc.body);
-    expect(tile.queryByText("Hang up")).toBeNull();
-    expect(tile.getByText("End call")).toBeTruthy();
+    expect(pipDoc.body.querySelector('[aria-label="End call"]')).toBeTruthy();
+    // "Hang up" must not exist as visible text OR as an accessible name.
+    expect(within(pipDoc.body).queryByText("Hang up")).toBeNull();
+    expect(pipDoc.body.querySelector('[aria-label="Hang up"]')).toBeNull();
   });
 
-  // Task 5 (spec §3.1): the bar reorders to Connect · Mute · [Video/Chat] ·
-  // Captions · End call — Connect leads, End call bookends the row.
+  // Spec §3.1: the bar leads with Connect and bookends with End call. Mute and
+  // End call are icon-only (aria-label); Connect keeps its visible "Connect"
+  // label — so rank each by whichever carries its name.
   it("orders the tile bar Connect … Mute … End call (Connect leads, End call bookends, spec §3.1)", async () => {
     const controls = makeControls({ triggerEmergency: undefined, sendChat: vi.fn(), sendTyping: vi.fn() });
     const { pipDoc } = renderTile({ active: videoActive, controls });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
     await openTile();
-    // The control bar's buttons in DOM order (window-less pip → querySelectorAll, not getAllByRole).
-    const texts = Array.from(pipDoc.body.querySelectorAll("button")).map((b) => b.textContent ?? "");
-    const connect = texts.findIndex((t) => /connect/i.test(t));
-    const mute = texts.findIndex((t) => /mute/i.test(t));
-    const end = texts.findIndex((t) => /end call/i.test(t));
+    // Window-less pip → querySelectorAll, not getAllByRole.
+    const buttons = Array.from(pipDoc.body.querySelectorAll("button"));
+    const nameOf = (b: Element) => `${b.getAttribute("aria-label") ?? ""} ${b.textContent ?? ""}`;
+    const connect = buttons.findIndex((b) => /connect/i.test(nameOf(b)));
+    const mute = buttons.findIndex((b) => b.getAttribute("aria-label") === "Mute");
+    const end = buttons.findIndex((b) => b.getAttribute("aria-label") === "End call");
     expect(connect).toBeGreaterThanOrEqual(0);
+    expect(mute).toBeGreaterThanOrEqual(0);
     expect(connect).toBeLessThan(mute);
     expect(mute).toBeLessThan(end);
   });
 
-  // Task 5 (spec §3.3): "End call" is longer than "Hang up" and must not wrap
-  // in the 380px PiP window.
-  it("keeps End call from wrapping in the narrow PiP window (whitespace-nowrap)", async () => {
+  // The tile controls are icon-only round buttons now (2026-07-21). "End call"
+  // once needed whitespace-nowrap so its longer label couldn't wrap; icon-only,
+  // it is a fixed-size round button that cannot wrap — pin that shape + the
+  // blaze fill (matching the agent overlay's End call) instead.
+  it("renders End call as a fixed-size round blaze icon button, bookended right", async () => {
     const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
     await act(async () => screen.getByText("publish active").click());
     await act(async () => screen.getByText("register controls").click());
     await openTile();
-    const end = within(pipDoc.body).getByText("End call").closest("button") as HTMLElement;
-    expect(end.className).toContain("whitespace-nowrap");
+    const end = pipDoc.body.querySelector('[aria-label="End call"]') as HTMLElement;
+    expect(end.className).toContain("rounded-full");
+    expect(end.className).toContain("bg-attention");
+    expect(end.className).toContain("ml-auto"); // far-right bookend
   });
 
   // Batch-1 polish (2026-07-10): the tile Connect was a near-invisible navy
@@ -641,7 +652,9 @@ describe("CallTile", () => {
     // Still on the video face: no chat input yet.
     expect(tile.queryByPlaceholderText(/type/i)).toBeNull();
 
-    const chatToggle = tile.getByText("Chat").closest("button") as HTMLButtonElement;
+    // Single icon-only round toggle now (aria-label "Chat"), not a "Chat" text
+    // segment of a Video|Chat switch.
+    const chatToggle = pipDoc.body.querySelector('[aria-label="Chat"]') as HTMLButtonElement;
     expect(chatToggle).toBeTruthy();
     await act(async () => {
       chatToggle.click();
@@ -664,7 +677,6 @@ describe("CallTile", () => {
     await act(async () => screen.getByText("register controls").click());
     await openTile();
 
-    const tile = within(pipDoc.body);
     expect(pipDoc.body.querySelector('[data-testid="chat-unread"]')).toBeNull();
 
     // Inbound guest line while still on the video face → badge appears.
@@ -674,7 +686,7 @@ describe("CallTile", () => {
     );
 
     // Opening chat clears it (badge-clear effect).
-    const chatToggle = tile.getByText("Chat").closest("button") as HTMLButtonElement;
+    const chatToggle = pipDoc.body.querySelector('[aria-label="Chat"]') as HTMLButtonElement;
     await act(async () => {
       chatToggle.click();
     });
@@ -697,5 +709,57 @@ describe("CallTile", () => {
     await act(async () => screen.getByText("register controls").click());
     await openTile();
     expect(pipDoc.querySelector('audio[src*="chat-message"]')).toBeNull();
+  });
+
+  // Item 4 (2026-07-21): the tile gained a Camera toggle on VIDEO calls, mirroring
+  // the overlay. It rides the same registered-controls seam as chat — the VIDEO
+  // owner registers toggleCamera/cameraOff; AUDIO omits them (no camera).
+  it("renders a Camera toggle on VIDEO calls and calls the registered toggleCamera", async () => {
+    const toggleCamera = vi.fn();
+    const controls = makeControls({
+      triggerEmergency: undefined,
+      sendChat: vi.fn(),
+      sendTyping: vi.fn(),
+      toggleCamera,
+      cameraOff: false,
+    });
+    const { pipDoc } = renderTile({ active: videoActive, controls });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+
+    const camBtn = pipDoc.body.querySelector('[aria-label="Camera off"]') as HTMLButtonElement;
+    expect(camBtn).toBeTruthy();
+    expect(camBtn.textContent?.trim()).toBe(""); // icon-only
+    await act(async () => camBtn.click());
+    expect(toggleCamera).toHaveBeenCalledOnce();
+  });
+
+  it("reflects camera-off state on the Camera toggle's accessible label", async () => {
+    const controls = makeControls({
+      triggerEmergency: undefined,
+      sendChat: vi.fn(),
+      sendTyping: vi.fn(),
+      toggleCamera: vi.fn(),
+      cameraOff: true,
+    });
+    const { pipDoc } = renderTile({ active: videoActive, controls });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    // cameraOff → the accessible name offers the "on" action (mirrors the kiosk).
+    expect(pipDoc.body.querySelector('[aria-label="Camera on"]')).toBeTruthy();
+    expect(pipDoc.body.querySelector('[aria-label="Camera off"]')).toBeNull();
+  });
+
+  it("shows no Camera toggle on AUDIO calls (audio registers no camera control)", async () => {
+    // Default makeControls() is the audio shape (triggerEmergency present, no
+    // toggleCamera) — the softphone never registers a camera.
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("register controls").click());
+    await openTile();
+    expect(pipDoc.body.querySelector('[aria-label="Camera off"]')).toBeNull();
+    expect(pipDoc.body.querySelector('[aria-label="Camera on"]')).toBeNull();
   });
 });

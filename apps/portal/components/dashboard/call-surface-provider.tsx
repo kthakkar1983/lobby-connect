@@ -86,6 +86,15 @@ export interface RegisteredCallControls {
   hangUp: () => void;
   triggerEmergency?: () => void;
   /**
+   * Toggle the agent's OWN camera + its current suppressed state. Registered
+   * ONLY by the VIDEO call owner (video-call.tsx) — an AUDIO call has no camera,
+   * so the softphone omits these (exactly as it omits triggerEmergency/sendChat).
+   * The tile shows its Camera control only when they're present (2026-07-21).
+   * `cameraOff` is TRUE when the camera is suppressed (matches video-call state).
+   */
+  toggleCamera?: () => void;
+  cameraOff?: boolean;
+  /**
    * Send a chat message / typing signal. Registered ONLY by the VIDEO call
    * owner (video-call.tsx) — AUDIO calls have no chat, so the softphone omits
    * these (exactly as it omits triggerEmergency). The tile/overlay dispatch
