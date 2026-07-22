@@ -23,6 +23,7 @@ export function IncidentRow({ incident }: { readonly incident: IncidentRowData }
       className={cn(
         "flex items-center gap-3 rounded-card border border-border bg-card p-3 shadow-sm transition-colors hover:border-accent/40",
         open && "border-l-2 border-l-attention",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       )}
     >
       <span

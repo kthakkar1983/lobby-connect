@@ -56,7 +56,7 @@ export function RecentCallRow({ call }: { readonly call: RecentCall }) {
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 py-2 text-left text-sm transition-colors hover:text-accent-text"
+        className="flex w-full items-center gap-3 py-2 text-left text-sm transition-colors hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <Icon
           size={14}
