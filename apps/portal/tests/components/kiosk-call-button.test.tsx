@@ -217,4 +217,21 @@ describe("KioskCallButton", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     expect(startOutboundVideo).toHaveBeenCalledTimes(2);
   });
+
+  it("Batch 1 Task 2 (equal-width Connect/Kiosk): forwards a caller className onto the underlying button", () => {
+    // Mirrors connect-button.test.tsx's equivalent pin: pod-card-grid.tsx passes
+    // `className="w-full justify-center"` to both siblings so they fill equal
+    // halves of a shared 2-col grid track instead of sizing to their own text.
+    render(
+      <KioskCallButton
+        propertyId="p1"
+        propertyName="Marlin"
+        kioskOnline={true}
+        className="w-full justify-center"
+      />,
+    );
+    const btn = screen.getByRole("button", { name: "Kiosk" });
+    expect(btn.className).toContain("w-full");
+    expect(btn.className).toContain("justify-center");
+  });
 });

@@ -65,7 +65,7 @@ export function CaptionToggle({
         className,
       )}
     >
-      {enabled ? <Captions size={compact ? 13 : 16} /> : <CaptionsOff size={compact ? 13 : 16} />}
+      {enabled ? <Captions size={compact ? 13 : 14} /> : <CaptionsOff size={compact ? 13 : 14} />}
       {!compact && (enabled ? "Captions" : "Captions off")}
     </button>
   );

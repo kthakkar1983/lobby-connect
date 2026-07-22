@@ -191,14 +191,21 @@ describe("CallToggleButton", () => {
 
   // The icon swaps between glyphs of different advance widths, so a constant
   // label alone does not hold the box still — the width does.
-  it("is fixed-width in both states", () => {
+  //
+  // `w-36` (Task 3, 2026-07-21), not `w-28`: the labelled <CaptionToggle> that
+  // sits beside this control on both overlays is passed `w-36` directly at
+  // its call sites (fits its longest label, "Captions off"), so the three
+  // in-call toggles must share that value or the row reads uneven.
+  it("is fixed-width in both states, matching the neighbouring Captions toggle (w-36)", () => {
     const { rerender } = render(
       <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />,
     );
-    expect(screen.getByRole("button").className).toContain("w-28");
+    expect(screen.getByRole("button").className).toContain("w-36");
+    expect(screen.getByRole("button").className).not.toContain("w-28");
 
     rerender(<CallToggleButton label="Mute" icon={null} pressed title="on" onToggle={vi.fn()} />);
-    expect(screen.getByRole("button").className).toContain("w-28");
+    expect(screen.getByRole("button").className).toContain("w-36");
+    expect(screen.getByRole("button").className).not.toContain("w-28");
   });
 });
 
