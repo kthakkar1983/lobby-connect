@@ -104,8 +104,33 @@ describe("PropertyCard", () => {
       </CallSurfaceProvider>,
     );
 
-    expect(screen.getByText("Quiet")).not.toBeNull();
+    expect(screen.getByText("Standing by")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+  });
+
+  it("shows the property's local time next to the idle state, on the same row", () => {
+    // p1.timezone is a real IANA zone ("America/Chicago"), so localTime never
+    // goes null — the regex is time-shaped only (not a fixed clock value) so
+    // the assertion can't flake against the real current time.
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={p1} />
+      </CallSurfaceProvider>,
+    );
+
+    expect(screen.getByText(/^\d{1,2}:\d{2}\s?(AM|PM)$/i)).toBeTruthy();
+    expect(screen.getByText("Standing by")).not.toBeNull();
+  });
+
+  it("drops the last-call time from the calls-tonight line even when lastCallAt is set", () => {
+    render(
+      <CallSurfaceProvider>
+        <PropertyCard property={{ ...p1, lastCallAt: "2026-07-22T13:02:00.000Z" }} />
+      </CallSurfaceProvider>,
+    );
+
+    expect(screen.getByText("2 calls tonight")).not.toBeNull();
+    expect(screen.queryByText(/last /i)).toBeNull();
   });
 
   it("expands only the ringing property's card with elapsed seconds and an Answer button", async () => {
@@ -126,7 +151,7 @@ describe("PropertyCard", () => {
     expect(screen.getByText(/Ringing/)).not.toBeNull();
     expect(screen.getByText(/· video · \d+s/)).not.toBeNull();
     expect(screen.getByRole("button", { name: "Answer" })).not.toBeNull();
-    expect(screen.getByText("Quiet")).not.toBeNull(); // p2 unaffected
+    expect(screen.getByText("Standing by")).not.toBeNull(); // p2 unaffected
   });
 
   it("clicking Answer on a ringing video call invokes the registered acceptVideo with the callId", async () => {
