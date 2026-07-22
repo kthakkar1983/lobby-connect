@@ -183,6 +183,14 @@ describe("DashboardWorkspace — the right column", () => {
     ) as HTMLElement;
     expect(clocksChild.className).not.toContain("mt-auto");
   });
+
+  it("makes the aside a sticky operator rail on lg (follows the scroll, cannot overshoot)", () => {
+    const { container } = renderWorkspace();
+    const aside = asideOf(container);
+    expect(aside.className).toContain("lg:sticky");
+    expect(aside.className).toContain("lg:top-6");
+    expect(aside.className).toContain("lg:self-start");
+  });
 });
 
 describe("DashboardWorkspace — the agent-only call-back shortcut", () => {

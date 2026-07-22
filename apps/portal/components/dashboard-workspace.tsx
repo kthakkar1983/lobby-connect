@@ -87,7 +87,7 @@ export function DashboardWorkspace({
 
       <div className={onHome ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
         <main id="main">{children}</main>
-        <aside className={onHome ? "flex flex-col gap-3" : "hidden"}>
+        <aside className={onHome ? "flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start" : "hidden"}>
           <Softphone role={role} />
           {/* Spec D1: the softphone card keeps its position and is deliberately
               NOT merged into the shift card -- the shift card slots below it.
@@ -98,14 +98,21 @@ export function DashboardWorkspace({
               never hits it, and MAX_SHIFT_MS force-closes a forgotten shift
               regardless). */}
           <ShiftCard />
-          {/* Clocks trail directly under the shift card (natural stack). An
-              earlier mt-auto pin (Task 7, spec §5/D7) over-shot in production:
-              the aside stretched to the FULL main-column height, so mt-auto
-              pushed the clocks to the very bottom of the page -- far below the
-              properties board they were meant to sit level with. A plain stack
-              lands them right under the shift card, ~= the properties row on the
-              left, and is robust (no magic height tuned to the left content).
-              Do NOT re-add items-stretch / h-full / mt-auto to "pin" them lower. */}
+          {/* The aside is a sticky operator rail: the internal stack is still
+              natural (clocks trail directly under the shift card, ~= the
+              properties row on the left) -- only the WHOLE rail's position
+              changed. `lg:sticky lg:top-6 lg:self-start` on the aside (not
+              this card) make the softphone + live shift clock follow the
+              scroll and stay on screen as the fleet board scrolls past on lg,
+              same idea as a GitHub/Gmail right rail; the top whitespace before
+              it catches up to the scroll is intentional. An earlier mt-auto
+              pin (Task 7, spec §5/D7) over-shot in production: the aside
+              stretched to the FULL main-column height, so mt-auto pushed the
+              clocks to the very bottom of the page -- far below the properties
+              board they were meant to sit level with. Sticky positioning
+              depends on nothing in the left column's height, so it cannot
+              repeat that overshoot. Do NOT re-add items-stretch / h-full /
+              mt-auto to "pin" them lower -- those remain wrong. */}
           <ZoneClocksCard />
           {/* Headless: VideoCallHost renders no chrome of its own (see its
               docblock) — either the fixed full-screen <VideoCall>, which escapes
