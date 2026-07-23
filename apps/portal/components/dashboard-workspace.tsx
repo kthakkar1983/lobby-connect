@@ -104,7 +104,11 @@ export function DashboardWorkspace({
         </div>
       </DashboardHeader>
 
-      <div className={onHome ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-2" : ""}>
+      {/* Rows are auto-sized (content), NOT grid-rows-2 (repeat(2,1fr)): 1fr rows
+          equalize to the TALLER row's height, stretching the shorter row into a
+          huge empty gap. `auto` sizes each row to its content -- the max of its
+          two column cells -- which is what the subgrid needs to align. */}
+      <div className={onHome ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[auto_auto]" : ""}>
         <main
           id="main"
           className={

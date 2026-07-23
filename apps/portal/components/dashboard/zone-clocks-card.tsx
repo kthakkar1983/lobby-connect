@@ -178,7 +178,7 @@ export function ZoneClocksCard() {
   }, []);
 
   return (
-    <Card className="gap-3 p-4">
+    <Card className="gap-3 p-4 shadow-md">
       <p className="font-label text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
         Clocks
       </p>
