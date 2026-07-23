@@ -219,7 +219,7 @@ export default async function AdminOverviewPage() {
 
   return (
     <>
-      <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <AutoRefresh />
         <h1 className="sr-only">Admin command center</h1>
 
@@ -276,8 +276,8 @@ export default async function AdminOverviewPage() {
             <StatTile value={formatDuration(avgCallLen)} label="Avg call" />
           </div>
         </Card>
-      </section>
-      <section className="flex flex-col gap-4">
+      </div>
+      <div className="flex flex-col gap-4">
         <Card className="gap-3 p-5 shadow-md">
           <h2 className={LABEL}>Properties</h2>
           {groups.length === 0 ? (
@@ -363,7 +363,7 @@ export default async function AdminOverviewPage() {
             )}
           </Card>
         </div>
-      </section>
+      </div>
     </>
   );
 }

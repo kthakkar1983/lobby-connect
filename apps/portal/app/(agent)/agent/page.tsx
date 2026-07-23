@@ -93,7 +93,7 @@ export default async function AgentDashboardPage() {
 
   return (
     <>
-      <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <AutoRefresh />
         <h1 className="sr-only">Agent dashboard</h1>
 
@@ -117,8 +117,8 @@ export default async function AgentDashboardPage() {
           <DashTile value={formatDuration(avgPickup)} label="Avg pickup" />
           <DashTile value={formatDuration(avgCallLen)} label="Avg call length" />
         </div>
-      </section>
-      <section className="flex flex-col gap-4">
+      </div>
+      <div className="flex flex-col gap-4">
         <Card className="gap-3 p-5 shadow-md">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className={LABEL}>Hourly call volume</h2>
@@ -156,7 +156,7 @@ export default async function AgentDashboardPage() {
             </ul>
           )}
         </Card>
-      </section>
+      </div>
     </>
   );
 }

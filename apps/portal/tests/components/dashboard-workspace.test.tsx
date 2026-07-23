@@ -128,9 +128,10 @@ describe("DashboardWorkspace — the right column", () => {
   });
 
   it("puts both new cards BELOW the softphone, which keeps its position (spec D1)", () => {
-    // D1 is explicit that the softphone card is not merged into the shift card
-    // and does not move: the shift card "slots right below it". Asserted by DOM
-    // order rather than by reading the JSX, so a reorder is caught.
+    // The softphone and shift now share one DutyCard (Task 5), but the softphone
+    // keeps its position ABOVE the shift within it, and the clocks sit below the
+    // whole DutyCard. Asserted by DOM order rather than by reading the JSX, so a
+    // reorder is caught.
     const { container } = renderWorkspace();
     const aside = asideOf(container);
 
@@ -184,12 +185,19 @@ describe("DashboardWorkspace — the right column", () => {
     expect(clocksChild.className).not.toContain("mt-auto");
   });
 
-  it("makes the aside a sticky operator rail on lg (follows the scroll, cannot overshoot)", () => {
+  it("aligns the rail to the page rows via a shared subgrid, not a sticky rail", () => {
+    // Task 5: the grid wrapper is a 2-row grid on lg; <main> and <aside> each
+    // span both rows (lg:row-span-2) and adopt them as a subgrid, so the rail's
+    // two tiles land on the SAME row lines as <main>'s two page sections -- edges
+    // align by construction. The sticky rail is gone: a full-height aligned rail
+    // cannot also be sticky, so it now scrolls with the page. jsdom has no layout
+    // engine, so this proves the CLASSES are applied; the pixel alignment is a
+    // live-smoke check (next task).
     const { container } = renderWorkspace();
+    expect(mainOf(container).className).toContain("lg:grid-rows-subgrid");
     const aside = asideOf(container);
-    expect(aside.className).toContain("lg:sticky");
-    expect(aside.className).toContain("lg:top-6");
-    expect(aside.className).toContain("lg:self-start");
+    expect(aside.className).toContain("lg:grid-rows-subgrid");
+    expect(aside.className).not.toContain("lg:sticky");
   });
 });
 
