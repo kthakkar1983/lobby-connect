@@ -306,19 +306,19 @@ describe("ShiftCard — layout stability (§5)", () => {
   });
 });
 
-describe("ShiftCard — headless mode (Task 1)", () => {
+describe("ShiftCard — chromeless mode (Task 1)", () => {
   // Presentation-chrome toggle only, for a future DutyCard that hosts this
   // content and the softphone's under ONE shared <Card>. Nothing about duty
   // state, the mid-call rules, or the interval effect is expected to change
-  // between these cases and their non-headless counterparts above.
+  // between these cases and their non-chromeless counterparts above.
 
-  it("keeps the Card chrome by default (no headless prop)", () => {
+  it("keeps the Card chrome by default (no chromeless prop)", () => {
     useDuty.mockReturnValue(dutyStub());
     const { container } = render(<ShiftCard />);
     const root = container.firstElementChild;
 
     // The shared Card primitive stamps data-slot="card" and carries its own
-    // border/shadow -- this is the chrome a future headless render must be
+    // border/shadow -- this is the chrome a future chromeless render must be
     // able to opt out of.
     expect(root?.getAttribute("data-slot")).toBe("card");
     expect(root?.className).toMatch(/border-border/);
@@ -326,9 +326,9 @@ describe("ShiftCard — headless mode (Task 1)", () => {
     expect(screen.getByText("Your shift")).toBeTruthy();
   });
 
-  it("drops the Card chrome when headless, but keeps the same content", () => {
+  it("drops the Card chrome when chromeless, but keeps the same content", () => {
     useDuty.mockReturnValue(dutyStub());
-    const { container } = render(<ShiftCard headless />);
+    const { container } = render(<ShiftCard chromeless />);
     const root = container.firstElementChild;
 
     // Not the <Card> primitive at all -- a bare div, so none of its
@@ -339,16 +339,16 @@ describe("ShiftCard — headless mode (Task 1)", () => {
     expect(root?.className).not.toMatch(/shadow-sm/);
     expect(root?.className).not.toMatch(/min-h-\[/);
 
-    // Same content as the non-headless render: label, clock, both actions.
+    // Same content as the non-chromeless render: label, clock, both actions.
     expect(screen.getByText("Your shift")).toBeTruthy();
     expect(screen.getByText("4:12:05")).toBeTruthy();
     expect(screen.getByRole("button", { name: /^break$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^end shift$/i })).toBeTruthy();
   });
 
-  it("renders the off-duty body headless too, chrome-free", () => {
+  it("renders the off-duty body chromeless too, chrome-free", () => {
     useDuty.mockReturnValue(dutyStub({ onDuty: false, shiftStartedAt: null }));
-    const { container } = render(<ShiftCard headless />);
+    const { container } = render(<ShiftCard chromeless />);
     const root = container.firstElementChild;
 
     expect(root?.getAttribute("data-slot")).toBeNull();
@@ -356,24 +356,24 @@ describe("ShiftCard — headless mode (Task 1)", () => {
     expect(screen.getByText("Not on duty")).toBeTruthy();
   });
 
-  it("keeps the mid-call rules headless: Break removed, End shift disabled+titled", () => {
+  it("keeps the mid-call rules chromeless: Break removed, End shift disabled+titled", () => {
     useDuty.mockReturnValue(dutyStub());
     onCall({ callId: "c1" });
-    render(<ShiftCard headless />);
+    render(<ShiftCard chromeless />);
 
-    // Same two inherited safety rules as the non-headless mid-call describe
-    // block below -- headless must not be a second code path that could drift.
+    // Same two inherited safety rules as the non-chromeless mid-call describe
+    // block below -- chromeless must not be a second code path that could drift.
     expect(screen.queryByRole("button", { name: /^break$/i })).toBeNull();
     const endShift = screen.getByRole("button", { name: /^end shift$/i });
     expect((endShift as HTMLButtonElement).disabled).toBe(true);
     expect(endShift.getAttribute("title")).toBe("Finish the call first");
   });
 
-  it("calls the same handlers headless", async () => {
+  it("calls the same handlers chromeless", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const stub = dutyStub();
     useDuty.mockReturnValue(stub);
-    render(<ShiftCard headless />);
+    render(<ShiftCard chromeless />);
 
     await user.click(screen.getByRole("button", { name: /^break$/i }));
     expect(stub.takeBreak).toHaveBeenCalledOnce();

@@ -23,6 +23,13 @@ type Phase = "connecting" | "ready" | "incoming" | "in-call" | "error";
 
 interface SoftphoneProps {
   readonly role: "AGENT" | "ADMIN";
+  /** Skip this component's own outer card chrome (border/bg/shadow/padding/
+   *  rounding) so a parent DutyCard can wrap softphone + shift under ONE shared
+   *  card instead of two stacked ones. Presentation only -- every duty/call/
+   *  notes/911 read and handler below behaves identically either way. Mirrors
+   *  ShiftCard's identically-named toggle. Defaults to `false`, which
+   *  reproduces today's standalone card. */
+  readonly chromeless?: boolean;
 }
 
 const HEARTBEAT_MS = 20_000;
@@ -61,7 +68,7 @@ async function fetchVoiceToken(): Promise<string> {
   return token;
 }
 
-export function Softphone({ role }: SoftphoneProps) {
+export function Softphone({ role, chromeless = false }: SoftphoneProps) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [muted, setMuted] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
@@ -801,7 +808,11 @@ export function Softphone({ role }: SoftphoneProps) {
   const lineChrome = phase !== "error";
 
   return (
-    <div className="rounded-card border border-border bg-card p-4 text-sm shadow-md">
+    <div
+      className={
+        chromeless ? "text-sm" : "rounded-card border border-border bg-card p-4 text-sm shadow-md"
+      }
+    >
       <div className="flex items-center justify-between">
         <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
           Softphone

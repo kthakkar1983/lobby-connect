@@ -151,14 +151,15 @@ const CARD_LABEL = (
 const CARD_CLASS = "min-h-[10rem] gap-3 p-4";
 
 /**
- * `headless` skips this card's own `<Card>` chrome (border/shadow/CARD_CLASS's
+ * `chromeless` skips this card's own `<Card>` chrome (border/shadow/CARD_CLASS's
  * min-height) and renders the identical content in a bare flex column instead
  * -- for a future DutyCard that hosts this content and the softphone's under
  * ONE shared card rather than two stacked ones. Presentation-only: every duty
  * read, the mid-call rules, and the interval effect below behave identically
- * either way. Defaults to `false`, which reproduces today's standalone card.
+ * either way. Mirrors the softphone's identically-named toggle. Defaults to
+ * `false`, which reproduces today's standalone card.
  */
-export function ShiftCard({ headless = false }: { readonly headless?: boolean }) {
+export function ShiftCard({ chromeless = false }: { readonly chromeless?: boolean }) {
   const { onDuty, onBreak, shiftStartedAt, pushBlocked, endShift, takeBreak, resume } = useDuty();
   // The live call, for the two mid-call rules above. The OPTIONAL hook, so this
   // card still renders outside a CallSurfaceProvider.
@@ -181,7 +182,7 @@ export function ShiftCard({ headless = false }: { readonly headless?: boolean })
 
   // The CARD_LABEL + per-branch body + actions row -- i.e. everything that used
   // to sit directly inside <Card>. Captured once here so the chrome decision
-  // below (Card vs. headless div) has one shared thing to wrap.
+  // below (Card vs. chromeless div) has one shared thing to wrap.
   let children: ReactNode;
 
   if (!onDuty) {
@@ -253,10 +254,10 @@ export function ShiftCard({ headless = false }: { readonly headless?: boolean })
     );
   }
 
-  // Non-headless is VERBATIM today's behaviour: same CARD_CLASS, same <Card>.
-  // Headless owns none of border/shadow/min-height -- the parent DutyCard
+  // Non-chromeless is VERBATIM today's behaviour: same CARD_CLASS, same <Card>.
+  // Chromeless owns none of border/shadow/min-height -- the parent DutyCard
   // supplies those, sized for both halves' combined content.
-  return headless ? (
+  return chromeless ? (
     <div className="flex flex-col gap-3">{children}</div>
   ) : (
     <Card className={CARD_CLASS}>{children}</Card>
