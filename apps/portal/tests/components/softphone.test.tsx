@@ -235,11 +235,11 @@ function DutyProbe() {
   );
 }
 
-function renderSoftphone(role: "AGENT" | "ADMIN" = "AGENT") {
+function renderSoftphone(role: "AGENT" | "ADMIN" = "AGENT", chromeless = false) {
   return render(
     <CallSurfaceProvider>
       <DutyProvider>
-        <Softphone role={role} />
+        <Softphone role={role} chromeless={chromeless} />
         <CardProbe />
         <DutyProbe />
       </DutyProvider>
@@ -1349,5 +1349,69 @@ describe("Softphone — a11y focus rings on duty controls (Batch 2 Task 4)", () 
     const ring = screen.getByRole("button", { name: /go on duty/i });
     expect(ring.className).toContain("focus-visible:ring-ring");
     expect(ring.className).toContain("focus-visible:ring-offset-background");
+  });
+});
+
+/**
+ * Task 2 (merged-duty-rail): `chromeless` lets a future DutyCard host the
+ * softphone's content under ITS OWN shared <Card> instead of this component's
+ * standalone one — mirrors ShiftCard's identically-named toggle (Task 1).
+ * Presentation-chrome only: the wrapper's className is the single thing under
+ * test here, never any duty/call/notes/911 read or handler.
+ */
+describe("Softphone — chromeless mode (Task 2)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/twilio/token") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: "t" }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("keeps today's card chrome by default (no chromeless prop)", async () => {
+    const { container } = renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    // The outermost element IS the softphone's own root (CallSurfaceProvider /
+    // DutyProvider are context-only, no wrapping DOM node) -- exact string, so a
+    // future edit that adds/drops a class is caught either way.
+    const root = container.firstElementChild;
+    expect(root?.className).toBe(
+      "rounded-card border border-border bg-card p-4 text-sm shadow-md",
+    );
+    expect(screen.getByText("Softphone")).toBeTruthy();
+    expect(screen.getByText("Line ready")).toBeTruthy();
+    // The seam-ring idle brand moment (decorative while on duty) still renders.
+    expect(document.querySelector(".lc-seam-drift")).toBeTruthy();
+  });
+
+  it("drops the card chrome when chromeless, keeping only text-sm", async () => {
+    const { container } = renderSoftphone("AGENT", true);
+    await waitFor(() => screen.getByText(/Accepting calls/i));
+
+    const root = container.firstElementChild;
+    expect(root?.className).toBe("text-sm");
+    // No trace of the dropped chrome classes.
+    expect(root?.className).not.toMatch(/rounded-card/);
+    expect(root?.className).not.toMatch(/(^|\s)border(?!-)/);
+    expect(root?.className).not.toMatch(/bg-card/);
+    expect(root?.className).not.toMatch(/shadow-md/);
+    expect(root?.className).not.toMatch(/(^|\s)p-4/);
+
+    // Interior content is unaffected by the chrome toggle: label, line pill,
+    // and the go-on-duty ring all still render.
+    expect(screen.getByText("Softphone")).toBeTruthy();
+    expect(screen.getByText("Line ready")).toBeTruthy();
+    expect(document.querySelector(".lc-seam-drift")).toBeTruthy();
   });
 });

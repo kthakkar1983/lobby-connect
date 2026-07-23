@@ -6,9 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { CallBackShortcut } from "@/components/dashboard/call-back-shortcut";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { ShiftCard } from "@/components/dashboard/shift-card";
+import { DutyCard } from "@/components/dashboard/duty-card";
 import { ZoneClocksCard } from "@/components/dashboard/zone-clocks-card";
-import { Softphone } from "@/components/softphone/softphone";
 import { VideoCallHost } from "@/components/video-call/video-call-host";
 import { syncPushSubscription } from "@/lib/push/client";
 
@@ -18,13 +17,33 @@ const HOME: Record<Role, Route> = { AGENT: "/agent", ADMIN: "/admin" };
 
 /**
  * The workspace beneath the navy rail: the shared gradient header, the page
- * content, and the persistent softphone.
+ * content, and the persistent duty rail.
  *
- * The softphone stays MOUNTED on every route — its Twilio Device must never
- * deregister, so we only toggle the card's visibility, never its presence. On the
- * dashboard home the card shows in the right column; on other routes it is hidden
- * (display:none, still mounted). `VideoCallHost` is always mounted so an active
- * video call can overlay from any route.
+ * The right rail's top tile is `<DutyCard>`, which renders the softphone and the
+ * shift card under one shared card. DutyCard — and therefore the softphone it
+ * mounts — stays MOUNTED on every route: the softphone's Twilio Device must never
+ * deregister, so we only toggle the aside's visibility, never its presence. On the
+ * dashboard home the aside shows in the right column; on other routes it is hidden
+ * (display:none, still mounted). Do NOT conditionally render DutyCard or give it a
+ * key — either would remount the softphone and re-register a fresh Device.
+ * `VideoCallHost` is always mounted so an active video call can overlay from any
+ * route.
+ *
+ * Home layout (Task 5): on lg the grid wrapper is a 2-row grid; `<main>` and the
+ * `<aside>` each span both rows (`lg:row-span-2`) and adopt them as a subgrid, so
+ * `<main>`'s two page sections and the rail's two tiles (DutyCard on row 1,
+ * ZoneClocksCard on row 2) land on the SAME row lines — the tile edges align with
+ * the section edges by construction. `lg:gap-6` on both subgrids matches the
+ * parent row gap so the row boundaries coincide; below lg both are a plain flex
+ * stack. The wrapper deliberately carries NO items-* utility -- its subgrid items
+ * (<main>/<aside>) must keep the default align-items:stretch to fill their full
+ * 2-row span, so a stray items-start/items-center/items-end here would silently
+ * break the edge alignment this layout delivers. The rail is NO LONGER sticky: a full-height rail that aligns to the left
+ * column's rows cannot also be sticky, so it now scrolls with the page. Do NOT
+ * re-add items-stretch / h-full / mt-auto — the subgrid needs none of them (an
+ * earlier mt-auto pin over-shot the clocks to the page bottom; the subgrid places
+ * them on row 2 directly). VideoCallHost is the aside's 3rd child but renders
+ * either nothing or a position:fixed overlay, so it never occupies a subgrid row.
  *
  * Task 9 (Phase 3): the off-home `IncomingCallToast` nudge is retired — the OS
  * push/ring layer + the ringing property cards (dashboard-first answering,
@@ -85,40 +104,44 @@ export function DashboardWorkspace({
         </div>
       </DashboardHeader>
 
-      <div className={onHome ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
-        <main id="main">{children}</main>
-        <aside className={onHome ? "flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start" : "hidden"}>
-          <Softphone role={role} />
-          {/* Spec D1: the softphone card keeps its position and is deliberately
-              NOT merged into the shift card -- the shift card slots below it.
-              Both new cards live here rather than in <main> so they inherit the
-              off-home hiding, which is spec §3.5's accepted consequence: an
-              ADMIN on a non-home route has no duty affordance and navigates
-              home to end a shift (AGENT_NAV has exactly one entry, so an agent
-              never hits it, and MAX_SHIFT_MS force-closes a forgotten shift
-              regardless). */}
-          <ShiftCard />
-          {/* The aside is a sticky operator rail: the internal stack is still
-              natural (clocks trail directly under the shift card, ~= the
-              properties row on the left) -- only the WHOLE rail's position
-              changed. `lg:sticky lg:top-6 lg:self-start` on the aside (not
-              this card) make the softphone + live shift clock follow the
-              scroll and stay on screen as the fleet board scrolls past on lg,
-              same idea as a GitHub/Gmail right rail; the top whitespace before
-              it catches up to the scroll is intentional. An earlier mt-auto
-              pin (Task 7, spec §5/D7) over-shot in production: the aside
-              stretched to the FULL main-column height, so mt-auto pushed the
-              clocks to the very bottom of the page -- far below the properties
-              board they were meant to sit level with. Sticky positioning
-              depends on nothing in the left column's height, so it cannot
-              repeat that overshoot. Do NOT re-add items-stretch / h-full /
-              mt-auto to "pin" them lower -- those remain wrong. */}
+      <div className={onHome ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-2" : ""}>
+        <main
+          id="main"
+          className={
+            onHome ? "flex flex-col gap-4 lg:grid lg:grid-rows-subgrid lg:row-span-2 lg:gap-6" : undefined
+          }
+        >
+          {children}
+        </main>
+        <aside
+          className={
+            onHome ? "flex flex-col gap-3 lg:grid lg:grid-rows-subgrid lg:row-span-2 lg:gap-6" : "hidden"
+          }
+        >
+          {/* Row-1 tile. DutyCard merges the softphone + shift under one shared
+              card (Task 5). It -- and the softphone's Twilio Device -- must stay
+              mounted on every route, so it lives in the always-rendered aside and
+              only the aside's visibility toggles off-home. No conditional render,
+              no key: either would remount the softphone and re-register a fresh
+              Device. Kept here rather than in <main> so it inherits the off-home
+              hiding, spec §3.5's accepted consequence: an ADMIN on a non-home
+              route has no duty affordance and navigates home to end a shift
+              (AGENT_NAV has one entry, so an agent never hits it, and MAX_SHIFT_MS
+              force-closes a forgotten shift regardless). */}
+          <DutyCard role={role} />
+          {/* Row-2 tile. On lg the aside is a 2-row subgrid (mirroring the left
+              column), so the clocks land level with <main>'s second section by
+              construction. Do NOT re-add items-stretch / h-full / mt-auto to "pin"
+              them lower -- the subgrid positions this on row 2 directly (an
+              earlier mt-auto pin over-shot to the page bottom; see the docblock). */}
           <ZoneClocksCard />
           {/* Headless: VideoCallHost renders no chrome of its own (see its
               docblock) — either the fixed full-screen <VideoCall>, which escapes
-              this container and blocks nav so the aside never hides mid-call, or
-              nothing. So its position below the cards is visually irrelevant;
-              only staying MOUNTED matters. */}
+              this container (position:fixed, out of flow) and blocks nav so the
+              aside never hides mid-call, or nothing. It is the aside's 3rd child
+              but adds NO grid item in either state, so the 2-row subgrid stays
+              exact; its position below the cards is visually irrelevant, only
+              staying MOUNTED matters. */}
           <VideoCallHost operatorId={operatorId} />
         </aside>
       </div>

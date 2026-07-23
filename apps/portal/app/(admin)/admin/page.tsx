@@ -218,149 +218,152 @@ export default async function AdminOverviewPage() {
   const team = [...teamMap.values()];
 
   return (
-    <div className="flex flex-col gap-4">
-      <AutoRefresh />
-      <h1 className="sr-only">Admin command center</h1>
+    <>
+      <div className="flex flex-col gap-4">
+        <AutoRefresh />
+        <h1 className="sr-only">Admin command center</h1>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <DashTile
-          value={live.total}
-          label="Live calls"
-          sub={`${live.audio} phone · ${live.video} video`}
-          tone={live.total > 0 ? "live" : "default"}
-          href="/admin/calls"
-        />
-        <DashTile value={onlineAgents} label="Agents online" sub={`of ${(agents ?? []).length}`} />
-        <DashTile
-          value={openIncidents ?? 0}
-          label="Open incidents"
-          tone={(openIncidents ?? 0) > 0 ? "attention" : "default"}
-        />
-      </div>
-
-      <Card className="gap-3 p-5 shadow-md">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className={LABEL}>Tonight · all agents</h2>
-          <HourlyLegend />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <DashTile
+            value={live.total}
+            label="Live calls"
+            sub={`${live.audio} phone · ${live.video} video`}
+            tone={live.total > 0 ? "live" : "default"}
+            href="/admin/calls"
+          />
+          <DashTile value={onlineAgents} label="Agents online" sub={`of ${(agents ?? []).length}`} />
+          <DashTile
+            value={openIncidents ?? 0}
+            label="Open incidents"
+            tone={(openIncidents ?? 0) > 0 ? "attention" : "default"}
+          />
         </div>
-        <p className="text-xs text-text-muted">Total call duration: {formatDuration(talkTime)}</p>
-        {todayTotal > 0 ? (
-          <HourlyVolumeChart data={hourly} className="mt-1" />
-        ) : (
-          <EmptyState
-            icon={Phone}
-            title="No calls yet tonight"
-            description="Operator-wide call volume will chart here as the shift runs."
-            className="py-8"
-          />
-        )}
-        <div className="mt-1 flex gap-3">
-          <StatTile
-            value={outcomes.answered}
-            label="Answered"
-            href={"/admin/calls?outcome=answered" as Route}
-          />
-          <StatTile
-            value={outcomes.missed}
-            label="Missed"
-            alert={outcomes.missed > 0}
-            href={"/admin/calls?outcome=missed" as Route}
-          />
-          <StatTile
-            value={outcomes.failed}
-            label="Failed"
-            href={"/admin/calls?outcome=failed" as Route}
-          />
-          <StatTile value={formatDuration(avgPickup)} label="Avg pickup" />
-          <StatTile value={formatDuration(avgCallLen)} label="Avg call" />
-        </div>
-      </Card>
 
-      <Card className="gap-3 p-5 shadow-md">
-        <h2 className={LABEL}>Properties</h2>
-        {groups.length === 0 ? (
-          <EmptyState
-            icon={Building2}
-            title="No properties yet"
-            description="Add a property to start staffing the line."
-            className="py-6"
-          />
-        ) : (
-          <FleetBoard
-            groups={groups}
-            canAnswerByProperty={coveringByProperty}
-            coveringByProperty={coveringByProperty}
-          />
-        )}
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="gap-2 p-5 shadow-md">
-          <h2 className={LABEL}>Team on now</h2>
-          {team.length === 0 ? (
-            <EmptyState
-              icon={Building2}
-              title="No agents assigned"
-              description="Assign primary agents to properties to staff the line."
-              className="py-6"
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {team.map(({ agent, propCount }) => {
-                const effective: ProfileStatus = effectivePresence(
-                  agent.status,
-                  agent.last_seen_at,
-                  now.getTime()
-                );
-                return (
-                  <li
-                    key={agent.id}
-                    className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
-                  >
-                    <span className="inline-flex items-center gap-2 text-foreground">
-                      <span
-                        className={cn(
-                          "inline-block h-2 w-2 rounded-full",
-                          presenceDotClass(effective)
-                        )}
-                        aria-hidden="true"
-                      />
-                      {agent.full_name}
-                      <span className="text-xs font-normal text-text-muted">· {presenceLabel(effective)}</span>
-                    </span>
-                    <span className="font-mono text-xs text-text-muted">
-                      {propCount} {propCount === 1 ? "property" : "properties"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="gap-2 p-5 shadow-md">
-          <div className="flex items-center justify-between">
-            <h2 className={LABEL}>Recent calls</h2>
-            <Link href="/admin/calls" className="text-sm text-accent-text hover:underline">
-              View all
-            </Link>
+        <Card className="gap-3 p-5 shadow-md">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className={LABEL}>Tonight · all agents</h2>
+            <HourlyLegend />
           </div>
-          {recentRows.length === 0 ? (
+          <p className="text-xs text-text-muted">Total call duration: {formatDuration(talkTime)}</p>
+          {todayTotal > 0 ? (
+            <HourlyVolumeChart data={hourly} className="mt-1" />
+          ) : (
             <EmptyState
               icon={Phone}
-              title="No calls yet"
-              description="Operator-wide call activity will show here."
+              title="No calls yet tonight"
+              description="Operator-wide call volume will chart here as the shift runs."
+              className="py-8"
+            />
+          )}
+          <div className="mt-1 flex gap-3">
+            <StatTile
+              value={outcomes.answered}
+              label="Answered"
+              href={"/admin/calls?outcome=answered" as Route}
+            />
+            <StatTile
+              value={outcomes.missed}
+              label="Missed"
+              alert={outcomes.missed > 0}
+              href={"/admin/calls?outcome=missed" as Route}
+            />
+            <StatTile
+              value={outcomes.failed}
+              label="Failed"
+              href={"/admin/calls?outcome=failed" as Route}
+            />
+            <StatTile value={formatDuration(avgPickup)} label="Avg pickup" />
+            <StatTile value={formatDuration(avgCallLen)} label="Avg call" />
+          </div>
+        </Card>
+      </div>
+      <div className="flex flex-col gap-4">
+        <Card className="gap-3 p-5 shadow-md">
+          <h2 className={LABEL}>Properties</h2>
+          {groups.length === 0 ? (
+            <EmptyState
+              icon={Building2}
+              title="No properties yet"
+              description="Add a property to start staffing the line."
               className="py-6"
             />
           ) : (
-            <ul className="flex flex-col">
-              {recentRows.map((c) => (
-                <RecentCallRow key={c.id} call={c} />
-              ))}
-            </ul>
+            <FleetBoard
+              groups={groups}
+              canAnswerByProperty={coveringByProperty}
+              coveringByProperty={coveringByProperty}
+            />
           )}
         </Card>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="gap-2 p-5 shadow-md">
+            <h2 className={LABEL}>Team on now</h2>
+            {team.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="No agents assigned"
+                description="Assign primary agents to properties to staff the line."
+                className="py-6"
+              />
+            ) : (
+              <ul className="flex flex-col">
+                {team.map(({ agent, propCount }) => {
+                  const effective: ProfileStatus = effectivePresence(
+                    agent.status,
+                    agent.last_seen_at,
+                    now.getTime()
+                  );
+                  return (
+                    <li
+                      key={agent.id}
+                      className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
+                    >
+                      <span className="inline-flex items-center gap-2 text-foreground">
+                        <span
+                          className={cn(
+                            "inline-block h-2 w-2 rounded-full",
+                            presenceDotClass(effective)
+                          )}
+                          aria-hidden="true"
+                        />
+                        {agent.full_name}
+                        <span className="text-xs font-normal text-text-muted">· {presenceLabel(effective)}</span>
+                      </span>
+                      <span className="font-mono text-xs text-text-muted">
+                        {propCount} {propCount === 1 ? "property" : "properties"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          <Card className="gap-2 p-5 shadow-md">
+            <div className="flex items-center justify-between">
+              <h2 className={LABEL}>Recent calls</h2>
+              <Link href="/admin/calls" className="text-sm text-accent-text hover:underline">
+                View all
+              </Link>
+            </div>
+            {recentRows.length === 0 ? (
+              <EmptyState
+                icon={Phone}
+                title="No calls yet"
+                description="Operator-wide call activity will show here."
+                className="py-6"
+              />
+            ) : (
+              <ul className="flex flex-col">
+                {recentRows.map((c) => (
+                  <RecentCallRow key={c.id} call={c} />
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

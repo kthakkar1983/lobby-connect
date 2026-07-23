@@ -33,6 +33,7 @@
  */
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { BellOff, Coffee, LogOut, Play } from "lucide-react";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { useDuty } from "@/components/dashboard/duty-provider";
@@ -149,7 +150,16 @@ const CARD_LABEL = (
 // the on-duty content -- expected to be retuned at live smoke, not exact math.
 const CARD_CLASS = "min-h-[10rem] gap-3 p-4";
 
-export function ShiftCard() {
+/**
+ * `chromeless` skips this card's own `<Card>` chrome (border/shadow/CARD_CLASS's
+ * min-height) and renders the identical content in a bare flex column instead
+ * -- for a future DutyCard that hosts this content and the softphone's under
+ * ONE shared card rather than two stacked ones. Presentation-only: every duty
+ * read, the mid-call rules, and the interval effect below behave identically
+ * either way. Mirrors the softphone's identically-named toggle. Defaults to
+ * `false`, which reproduces today's standalone card.
+ */
+export function ShiftCard({ chromeless = false }: { readonly chromeless?: boolean }) {
   const { onDuty, onBreak, shiftStartedAt, pushBlocked, endShift, takeBreak, resume } = useDuty();
   // The live call, for the two mid-call rules above. The OPTIONAL hook, so this
   // card still renders outside a CallSurfaceProvider.
@@ -170,72 +180,86 @@ export function ShiftCard() {
 
   const blockedHint = pushBlocked ? <NotificationsBlockedHint /> : null;
 
+  // The CARD_LABEL + per-branch body + actions row -- i.e. everything that used
+  // to sit directly inside <Card>. Captured once here so the chrome decision
+  // below (Card vs. chromeless div) has one shared thing to wrap.
+  let children: ReactNode;
+
   if (!onDuty) {
-    return (
-      <Card className={CARD_CLASS}>
+    children = (
+      <>
         {CARD_LABEL}
         <p className="text-sm text-text-muted">Not on duty</p>
         {blockedHint}
-      </Card>
+      </>
+    );
+  } else {
+    // NOTE this branch is reached on `onDuty` ALONE, not on `onDuty && shiftStartedAt`.
+    // DutyProvider mounts onDuty=true (fail-open) with shiftStartedAt=null until
+    // GET /api/presence lands, so a missing start time is an ordinary transient,
+    // not proof she is off duty. Reading it as off duty would flash a false
+    // "Not on duty" on every mount -- and if the start time never arrived it would
+    // strand her with no way to end the shift, now that the header has no duty
+    // control at all. So: withhold the figures we do not have, keep the actions.
+    children = (
+      <>
+        {CARD_LABEL}
+        <div>
+          {hasStart ? (
+            // tabular-nums matters here specifically: this re-renders every second,
+            // and proportional digits would jitter the whole line.
+            <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
+              {elapsed(startMs, nowMs)}
+            </p>
+          ) : null}
+          {onBreak ? (
+            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-attention px-2.5 py-1 text-xs font-semibold text-attention-foreground">
+              <Coffee size={13} aria-hidden="true" />
+              On break
+            </span>
+          ) : (
+            <p className="mt-0.5 text-xs text-text-muted tabular-nums">
+              {hasStart ? `On duty since ${startedAtLabel(startMs)}` : "On duty"}
+            </p>
+          )}
+        </div>
+        {blockedHint}
+        <div className="flex gap-2 border-t border-border pt-3">
+          {onBreak ? (
+            <Button
+              type="button"
+              variant="neutral"
+              size="sm"
+              className="flex-1 whitespace-nowrap"
+              onClick={() => void resume()}
+            >
+              <Play aria-hidden="true" />
+              Resume
+            </Button>
+          ) : onCall ? null : (
+            <Button
+              type="button"
+              variant="neutral"
+              size="sm"
+              className="flex-1 whitespace-nowrap"
+              onClick={() => void takeBreak()}
+            >
+              <Coffee aria-hidden="true" />
+              Break
+            </Button>
+          )}
+          <EndShiftButton onCall={onCall} onEndShift={() => void endShift()} />
+        </div>
+      </>
     );
   }
 
-  // NOTE the branch above is on `onDuty` ALONE, not on `onDuty && shiftStartedAt`.
-  // DutyProvider mounts onDuty=true (fail-open) with shiftStartedAt=null until
-  // GET /api/presence lands, so a missing start time is an ordinary transient,
-  // not proof she is off duty. Reading it as off duty would flash a false
-  // "Not on duty" on every mount -- and if the start time never arrived it would
-  // strand her with no way to end the shift, now that the header has no duty
-  // control at all. So: withhold the figures we do not have, keep the actions.
-  return (
-    <Card className={CARD_CLASS}>
-      {CARD_LABEL}
-      <div>
-        {hasStart ? (
-          // tabular-nums matters here specifically: this re-renders every second,
-          // and proportional digits would jitter the whole line.
-          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
-            {elapsed(startMs, nowMs)}
-          </p>
-        ) : null}
-        {onBreak ? (
-          <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-attention px-2.5 py-1 text-xs font-semibold text-attention-foreground">
-            <Coffee size={13} aria-hidden="true" />
-            On break
-          </span>
-        ) : (
-          <p className="mt-0.5 text-xs text-text-muted tabular-nums">
-            {hasStart ? `On duty since ${startedAtLabel(startMs)}` : "On duty"}
-          </p>
-        )}
-      </div>
-      {blockedHint}
-      <div className="flex gap-2 border-t border-border pt-3">
-        {onBreak ? (
-          <Button
-            type="button"
-            variant="neutral"
-            size="sm"
-            className="flex-1 whitespace-nowrap"
-            onClick={() => void resume()}
-          >
-            <Play aria-hidden="true" />
-            Resume
-          </Button>
-        ) : onCall ? null : (
-          <Button
-            type="button"
-            variant="neutral"
-            size="sm"
-            className="flex-1 whitespace-nowrap"
-            onClick={() => void takeBreak()}
-          >
-            <Coffee aria-hidden="true" />
-            Break
-          </Button>
-        )}
-        <EndShiftButton onCall={onCall} onEndShift={() => void endShift()} />
-      </div>
-    </Card>
+  // Non-chromeless is VERBATIM today's behaviour: same CARD_CLASS, same <Card>.
+  // Chromeless owns none of border/shadow/min-height -- the parent DutyCard
+  // supplies those, sized for both halves' combined content.
+  return chromeless ? (
+    <div className="flex flex-col gap-3">{children}</div>
+  ) : (
+    <Card className={CARD_CLASS}>{children}</Card>
   );
 }
