@@ -35,7 +35,10 @@ const HOME: Record<Role, Route> = { AGENT: "/agent", ADMIN: "/admin" };
  * ZoneClocksCard on row 2) land on the SAME row lines — the tile edges align with
  * the section edges by construction. `lg:gap-6` on both subgrids matches the
  * parent row gap so the row boundaries coincide; below lg both are a plain flex
- * stack. The rail is NO LONGER sticky: a full-height rail that aligns to the left
+ * stack. The wrapper deliberately carries NO items-* utility -- its subgrid items
+ * (<main>/<aside>) must keep the default align-items:stretch to fill their full
+ * 2-row span, so a stray items-start/items-center/items-end here would silently
+ * break the edge alignment this layout delivers. The rail is NO LONGER sticky: a full-height rail that aligns to the left
  * column's rows cannot also be sticky, so it now scrolls with the page. Do NOT
  * re-add items-stretch / h-full / mt-auto — the subgrid needs none of them (an
  * earlier mt-auto pin over-shot the clocks to the page bottom; the subgrid places

@@ -198,6 +198,13 @@ describe("DashboardWorkspace — the right column", () => {
     const aside = asideOf(container);
     expect(aside.className).toContain("lg:grid-rows-subgrid");
     expect(aside.className).not.toContain("lg:sticky");
+    // The subgrid items (<main>/<aside>) must keep the default align-items:stretch to
+    // fill their full 2-row span; an items-* override on the wrapper would top/center-
+    // align them and silently break the edge alignment. Guard the wrapper against it.
+    const grid = aside.parentElement as HTMLElement;
+    expect(grid.className).not.toContain("items-start");
+    expect(grid.className).not.toContain("items-center");
+    expect(grid.className).not.toContain("items-end");
   });
 });
 
