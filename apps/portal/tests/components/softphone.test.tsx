@@ -1408,10 +1408,12 @@ describe("Softphone — chromeless mode (Task 2)", () => {
     expect(root?.className).not.toMatch(/shadow-md/);
     expect(root?.className).not.toMatch(/(^|\s)p-4/);
 
-    // Interior content is unaffected by the chrome toggle: label, line pill,
-    // and the go-on-duty ring all still render.
-    expect(screen.getByText("Softphone")).toBeTruthy();
-    expect(screen.getByText("Line ready")).toBeTruthy();
+    // Chromeless ALSO drops the card header (the "Softphone" label + the line
+    // pill) -- redundant clutter inside the merged DutyCard, where duty/line
+    // state reads from the ring + the shift row. The interior duty content (the
+    // idle ring) still renders.
+    expect(screen.queryByText("Softphone")).toBeNull();
+    expect(screen.queryByText("Line ready")).toBeNull();
     expect(document.querySelector(".lc-seam-drift")).toBeTruthy();
   });
 });

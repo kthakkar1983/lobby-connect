@@ -813,12 +813,19 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
         chromeless ? "text-sm" : "rounded-card border border-border bg-card p-4 text-sm shadow-md"
       }
     >
-      <div className="flex items-center justify-between">
-        <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-          Softphone
-        </span>
-        <LinePill phase={phase} offDuty={!onDuty} />
-      </div>
+      {/* The "SOFTPHONE" label + line pill are the standalone card's header.
+          Chromeless (in the merged DutyCard) they're redundant clutter: the card
+          is obviously the duty control, and duty/line state reads from the ring
+          ("Go on duty"/"Line ready") + the shift row below. So drop the header
+          in chromeless mode. */}
+      {!chromeless && (
+        <div className="flex items-center justify-between">
+          <span className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+            Softphone
+          </span>
+          <LinePill phase={phase} offDuty={!onDuty} />
+        </div>
+      )}
 
       {pendingNotes && (
         <div className="mt-3 rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

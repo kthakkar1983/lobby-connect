@@ -39,7 +39,7 @@ import { ShiftCard } from "@/components/dashboard/shift-card";
 
 export function DutyCard({ role }: { readonly role: "ADMIN" | "AGENT" }) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="flex flex-col gap-3 p-4 shadow-md">
       <Softphone role={role} chromeless />
       <div className="border-t border-border" aria-hidden="true" />
       <ShiftCard chromeless />
