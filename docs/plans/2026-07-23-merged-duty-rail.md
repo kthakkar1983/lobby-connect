@@ -21,7 +21,7 @@ The rail lives in `dashboard-workspace.tsx`, inside `<aside>`, under the provide
    - `<Softphone>` must stay a child of the same `<aside>` subtree, wrapped by the new `DutyCard`, and **`DutyCard` must always be mounted** (hidden off-home via CSS, exactly like the aside is today — never conditionally rendered, never given a changing `key`).
    - The one structural swap (aside children `[Softphone, ShiftCard]` → `[DutyCard]`) happens once at deploy = a page load = a fresh mount. There is **no runtime remount** afterward because `DutyCard` is always present. Do not introduce `{onHome ? <DutyCard/> : null}`.
 2. **No `React.memo`/`Suspense` between `DutyProvider` and the softphone** (`app-shell.tsx:42-48`, echoed `softphone.tsx:141-155`). `DutyCard` is a **plain wrapper** — no memo, no suspense, no lazy.
-3. **Regression guards stay byte-identical.** Do not touch: accept-gate `softphone.tsx:612`; 911 machinery `softphone.tsx:73-80, 658-671, 704-760, 996-1000`; notes `softphone.tsx:175-211, 678-701, 812-837`; the ShiftCard mid-call rules (Break *removed* not disabled `shift-card.tsx:225`; End shift *disabled* + title-span `shift-card.tsx:97-134`; clock ticks through a call `:165-169`). The `chromeless`/`headless` work only toggles **outer wrapper chrome**, never inner logic/JSX.
+3. **Regression guards stay byte-identical.** Do not touch: accept-gate `softphone.tsx:612`; 911 machinery `softphone.tsx:73-80, 658-671, 704-760, 996-1000`; notes `softphone.tsx:175-211, 678-701, 812-837`; the ShiftCard mid-call rules (Break *removed* not disabled `shift-card.tsx:225`; End shift *disabled* + title-span `shift-card.tsx:97-134`; clock ticks through a call `:165-169`). The `chromeless`/`chromeless` work only toggles **outer wrapper chrome**, never inner logic/JSX.
 4. **`ShiftCard` uses `useDuty()` non-optional** (`shift-card.tsx:153`) — it throws without a `DutyProvider` ancestor. It stays inside the provider tree (it will, inside `DutyCard` inside the workspace). Tests that render `<ShiftCard>` standalone already wrap/allow it — keep that.
 
 ## Constraints (all tasks)
@@ -35,17 +35,17 @@ The rail lives in `dashboard-workspace.tsx`, inside `<aside>`, under the provide
 
 ---
 
-## Task 1 — `ShiftCard` gains a `headless` prop
+## Task 1 — `ShiftCard` gains a `chromeless` prop
 
 Render the shift's inner content without the outer `<Card>`, so `DutyCard` can supply one shared card around softphone + shift.
 
 **Files:** modify `apps/portal/components/dashboard/shift-card.tsx`; update `apps/portal/tests/components/shift-card.test.tsx`.
 
-- [ ] **Step 1 — failing test.** Add cases: `render(<ShiftCard headless />)` (inside a DutyProvider mock, as the file already sets up) — the root element does **not** carry the `<Card>` chrome (no `rounded-[…]`/`shadow` card classes; assert `container.firstElementChild` lacks the Card's `data-slot="card"`), the "Your shift" label and body still render, and Break/End-shift/timer behaviors are unchanged. Keep a `render(<ShiftCard />)` (default) case asserting the Card chrome is still present.
+- [ ] **Step 1 — failing test.** Add cases: `render(<ShiftCard chromeless />)` (inside a DutyProvider mock, as the file already sets up) — the root element does **not** carry the `<Card>` chrome (no `rounded-[…]`/`shadow` card classes; assert `container.firstElementChild` lacks the Card's `data-slot="card"`), the "Your shift" label and body still render, and Break/End-shift/timer behaviors are unchanged. Keep a `render(<ShiftCard />)` (default) case asserting the Card chrome is still present.
 - [ ] **Step 2 — run, verify red.**
-- [ ] **Step 3 — implement.** Extract the current inner children (label + body + actions, identical for both duty states) into an inner render. Add `headless?: boolean` (default `false`). When `false`: keep today's `<Card className={CARD_CLASS}>…</Card>` **verbatim** (`CARD_CLASS = "min-h-[10rem] gap-3 p-4"`, `shift-card.tsx:150`). When `true`: render the same children inside a bare `<div className="flex flex-col gap-3">` (no border/shadow/min-h — the parent DutyCard owns chrome + height). **Do not** alter the on-duty/off-duty branching, the `useDuty()` reads, the mid-call rules, `EndShiftButton`, or the interval. The existing `min-h-[10rem]` only applies in the non-headless path.
-- [ ] **Step 4 — update the layout-stability test** (`shift-card.test.tsx:288-306`): it asserts `container.firstElementChild.className` matches `/min-h-\[/` and off===on. That premise holds for the **default** (non-headless) render — keep it scoped to `<ShiftCard />` (no `headless`). Add the headless assertions as new cases; do not delete the default-path guard.
-- [ ] **Step 5 — run green; full gate; commit** `feat(shift-card): add headless mode for the merged duty card`.
+- [ ] **Step 3 — implement.** Extract the current inner children (label + body + actions, identical for both duty states) into an inner render. Add `chromeless?: boolean` (default `false`). When `false`: keep today's `<Card className={CARD_CLASS}>…</Card>` **verbatim** (`CARD_CLASS = "min-h-[10rem] gap-3 p-4"`, `shift-card.tsx:150`). When `true`: render the same children inside a bare `<div className="flex flex-col gap-3">` (no border/shadow/min-h — the parent DutyCard owns chrome + height). **Do not** alter the on-duty/off-duty branching, the `useDuty()` reads, the mid-call rules, `EndShiftButton`, or the interval. The existing `min-h-[10rem]` only applies in the non-chromeless path.
+- [ ] **Step 4 — update the layout-stability test** (`shift-card.test.tsx:288-306`): it asserts `container.firstElementChild.className` matches `/min-h-\[/` and off===on. That premise holds for the **default** (non-chromeless) render — keep it scoped to `<ShiftCard />` (no `chromeless`). Add the chromeless assertions as new cases; do not delete the default-path guard.
+- [ ] **Step 5 — run green; full gate; commit** `feat(shift-card): add chromeless mode for the merged duty card`.
 
 ## Task 2 — `<Softphone>` gains a `chromeless` prop
 
@@ -72,7 +72,7 @@ Let the softphone render its idle/in-call tree **without** its hand-rolled outer
       <Card className="flex flex-col gap-3 p-4">
         <Softphone role={role} chromeless />
         <div className="border-t border-border" aria-hidden="true" />
-        <ShiftCard headless />
+        <ShiftCard chromeless />
       </Card>
     );
   }
@@ -124,8 +124,8 @@ jsdom proved structure; only a browser proves alignment. Deploy the branch; the 
 
 ## Self-review
 
-- **Safety:** softphone stays in-slot inside an always-mounted DutyCard (no runtime remount → Device persists); no memo/suspense added; regression anchors untouched (chromeless/headless toggle only outer chrome). Matches the map's two separate safety properties (Device-local vs provider-held state).
+- **Safety:** softphone stays in-slot inside an always-mounted DutyCard (no runtime remount → Device persists); no memo/suspense added; regression anchors untouched (chromeless/chromeless toggle only outer chrome). Matches the map's two separate safety properties (Device-local vs provider-held state).
 - **Alignment mechanism:** subgrid gives edge alignment by construction with zero magic numbers and preserves `<main>`/`<aside>` semantics + the `#main` skip target — no `display:contents`, no measured heights (the failure modes of the two prior attempts).
 - **Sticky:** removing it is intrinsic to a full-height rail (B); flagged for the user at live-verify.
-- **Test debt:** the sticky guard is replaced (not silently dropped); the overshoot guard is retained; the shift root-class guard stays scoped to the non-headless default path.
+- **Test debt:** the sticky guard is replaced (not silently dropped); the overshoot guard is retained; the shift root-class guard stays scoped to the non-chromeless default path.
 - **Zero** migrations/routes/RLS. Kiosk untouched.
