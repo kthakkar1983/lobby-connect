@@ -92,68 +92,71 @@ export default async function AgentDashboardPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <AutoRefresh />
-      <h1 className="sr-only">Agent dashboard</h1>
+    <>
+      <section className="flex flex-col gap-4">
+        <AutoRefresh />
+        <h1 className="sr-only">Agent dashboard</h1>
 
-      <Card className="gap-3 p-5 shadow-md">
-        <h2 className={LABEL}>Your pod</h2>
-        {cards.length === 0 ? (
-          <EmptyState
-            icon={Building2}
-            title={copy.empty.agentProperties.title}
-            description={copy.empty.agentProperties.description}
-            className="py-6"
-          />
-        ) : (
-          <PodCardGrid properties={cards} />
-        )}
-      </Card>
+        <Card className="gap-3 p-5 shadow-md">
+          <h2 className={LABEL}>Your pod</h2>
+          {cards.length === 0 ? (
+            <EmptyState
+              icon={Building2}
+              title={copy.empty.agentProperties.title}
+              description={copy.empty.agentProperties.description}
+              className="py-6"
+            />
+          ) : (
+            <PodCardGrid properties={cards} />
+          )}
+        </Card>
 
-      <div className="flex gap-3">
-        <DashTile value={outcomes.answered} label="Answered" />
-        <DashTile value={outcomes.missed} label="Missed" tone={outcomes.missed > 0 ? "attention" : "default"} />
-        <DashTile value={formatDuration(avgPickup)} label="Avg pickup" />
-        <DashTile value={formatDuration(avgCallLen)} label="Avg call length" />
-      </div>
-
-      <Card className="gap-3 p-5 shadow-md">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className={LABEL}>Hourly call volume</h2>
-          <HourlyLegend />
+        <div className="flex gap-3">
+          <DashTile value={outcomes.answered} label="Answered" />
+          <DashTile value={outcomes.missed} label="Missed" tone={outcomes.missed > 0 ? "attention" : "default"} />
+          <DashTile value={formatDuration(avgPickup)} label="Avg pickup" />
+          <DashTile value={formatDuration(avgCallLen)} label="Avg call length" />
         </div>
-        <p className="text-xs text-text-muted">
-          Total call duration: {formatDuration(talkTime)}
-        </p>
-        {todayTotal > 0 ? (
-          <HourlyVolumeChart data={hourly} className="mt-1" />
-        ) : (
-          <EmptyState
-            icon={Phone}
-            title="No calls yet tonight"
-            description="Calls you handle will chart here through the shift."
-            className="py-8"
-          />
-        )}
-      </Card>
+      </section>
+      <section className="flex flex-col gap-4">
+        <Card className="gap-3 p-5 shadow-md">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className={LABEL}>Hourly call volume</h2>
+            <HourlyLegend />
+          </div>
+          <p className="text-xs text-text-muted">
+            Total call duration: {formatDuration(talkTime)}
+          </p>
+          {todayTotal > 0 ? (
+            <HourlyVolumeChart data={hourly} className="mt-1" />
+          ) : (
+            <EmptyState
+              icon={Phone}
+              title="No calls yet tonight"
+              description="Calls you handle will chart here through the shift."
+              className="py-8"
+            />
+          )}
+        </Card>
 
-      <Card className="gap-2 p-5 shadow-md">
-        <h2 className={LABEL}>Recent calls</h2>
-        {recentRows.length === 0 ? (
-          <EmptyState
-            icon={Phone}
-            title={copy.empty.agentCalls.title}
-            description={copy.empty.agentCalls.description}
-            className="py-8"
-          />
-        ) : (
-          <ul className="flex flex-col">
-            {recentRows.map((c) => (
-              <RecentCallRow key={c.id} call={c} />
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
+        <Card className="gap-2 p-5 shadow-md">
+          <h2 className={LABEL}>Recent calls</h2>
+          {recentRows.length === 0 ? (
+            <EmptyState
+              icon={Phone}
+              title={copy.empty.agentCalls.title}
+              description={copy.empty.agentCalls.description}
+              className="py-8"
+            />
+          ) : (
+            <ul className="flex flex-col">
+              {recentRows.map((c) => (
+                <RecentCallRow key={c.id} call={c} />
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
+    </>
   );
 }
