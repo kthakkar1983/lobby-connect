@@ -3,23 +3,23 @@ import { callPill, incidentPill } from "@/lib/owner/status-pill";
 
 describe("callPill", () => {
   it("mint family for completed/in-progress", () => {
-    expect(callPill("COMPLETED")).toEqual({ label: "Completed", className: "bg-live/15 text-live-foreground" });
-    expect(callPill("IN_PROGRESS").className).toBe("bg-live/15 text-live-foreground");
+    expect(callPill("COMPLETED")).toEqual({ label: "Completed", variant: "live" });
+    expect(callPill("IN_PROGRESS").variant).toBe("live");
   });
   it("neutral for ringing", () => {
-    expect(callPill("RINGING").className).toBe("bg-muted text-muted-foreground");
+    expect(callPill("RINGING").variant).toBe("muted");
   });
   it("blaze (attention) for missed", () => {
-    expect(callPill("NO_ANSWER")).toEqual({ label: "Missed", className: "bg-attention/15 text-attention-text" });
+    expect(callPill("NO_ANSWER")).toEqual({ label: "Missed", variant: "attention" });
   });
   it("muted neutral for failed", () => {
-    expect(callPill("FAILED")).toEqual({ label: "Failed", className: "bg-muted text-muted-foreground" });
+    expect(callPill("FAILED")).toEqual({ label: "Failed", variant: "muted" });
   });
 });
 
 describe("incidentPill", () => {
   it("blaze (attention) for open, neutral for resolved", () => {
-    expect(incidentPill("OPEN")).toEqual({ label: "Open", className: "bg-attention/15 text-attention-text" });
-    expect(incidentPill("RESOLVED")).toEqual({ label: "Resolved", className: "bg-muted text-muted-foreground" });
+    expect(incidentPill("OPEN")).toEqual({ label: "Open", variant: "attention" });
+    expect(incidentPill("RESOLVED")).toEqual({ label: "Resolved", variant: "muted" });
   });
 });
