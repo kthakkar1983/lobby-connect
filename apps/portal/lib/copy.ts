@@ -35,7 +35,7 @@ export const copy = {
     },
     agentCalls: {
       title: "No calls yet",
-      description: "Quiet so far tonight.",
+      description: "Nothing yet tonight.",
     },
     adminUsers: {
       title: "No users yet",

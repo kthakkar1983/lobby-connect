@@ -26,7 +26,7 @@ describe("empty-state copy is person-facing (Batch 4)", () => {
   });
 
   it("agentCalls reads as a calm status", () => {
-    expect(copy.empty.agentCalls.description).toBe("Quiet so far tonight.");
+    expect(copy.empty.agentCalls.description).toBe("Nothing yet tonight.");
   });
 
   it("adminAudit reads as a calm status", () => {
