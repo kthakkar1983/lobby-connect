@@ -5,6 +5,7 @@ import { Phone } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
@@ -1049,20 +1050,8 @@ function LinePill({ phase, offDuty }: { readonly phase: Phase; readonly offDuty:
             ? "Offline"
             : "Connecting";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-        ok ? "bg-live/15 text-live-foreground" : "bg-muted text-text-muted",
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
-          ok ? "bg-live" : "bg-muted-foreground/50",
-        )}
-      />
+    <StatusBadge variant={ok ? "live" : "muted"} dot>
       {label}
-    </span>
+    </StatusBadge>
   );
 }
