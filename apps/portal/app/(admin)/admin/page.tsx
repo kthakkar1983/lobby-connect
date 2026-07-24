@@ -251,7 +251,7 @@ export default async function AdminOverviewPage() {
             <EmptyState
               icon={Phone}
               title="No calls yet tonight"
-              description="Operator-wide call volume will chart here as the shift runs."
+              description="Quiet so far tonight."
               className="py-8"
             />
           )}
@@ -351,7 +351,7 @@ export default async function AdminOverviewPage() {
               <EmptyState
                 icon={Phone}
                 title="No calls yet"
-                description="Operator-wide call activity will show here."
+                description="Nothing yet tonight."
                 className="py-6"
               />
             ) : (
