@@ -133,7 +133,7 @@ const ENDED_BADGE: Record<
 > = {
   manual: { label: "Ended shift", variant: "secondary" },
   lapsed: { label: "Tab closed", variant: "attention" },
-  capped: { label: "Capped 12h", variant: "attention" },
+  capped: { label: "Capped 10h", variant: "attention" },
   open: { label: "On shift", variant: "live" },
 };
 
@@ -645,7 +645,7 @@ export function ShiftsTable({
           <EmptyState
             icon={Clock}
             title="No shifts in this period"
-            description="Shifts open when an agent goes on duty and close on end-shift, a lapsed heartbeat, or the 12h cap."
+            description="Shifts open when an agent goes on duty and close on end-shift, a lapsed heartbeat, or the 10h cap."
           />
         </div>
       ) : (
