@@ -816,7 +816,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
       {/* The "SOFTPHONE" label + line pill are the standalone card's header.
           Chromeless (in the merged DutyCard) they're redundant clutter: the card
           is obviously the duty control, and duty/line state reads from the ring
-          ("Go on duty"/"Line ready") + the shift row below. So drop the header
+          ("Go on duty"/"Ready") + the shift row below. So drop the header
           in chromeless mode. */}
       {!chromeless && (
         <div className="flex items-center justify-between">
