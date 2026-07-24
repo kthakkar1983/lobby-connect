@@ -58,3 +58,22 @@ describe("PropertiesTable — New property button icon", () => {
     }
   });
 });
+
+// Batch 5b / Task 4: the Active/Inactive inline span was replaced with the
+// shared StatusBadge primitive; both branches already matched its base
+// recipe exactly, so this is a pure structural swap (no className override).
+describe("PropertiesTable — Active/Inactive pill via StatusBadge (Batch 5b Task 4)", () => {
+  it("renders the live variant for an active property", () => {
+    render(<PropertiesTable properties={[row]} />);
+    const pill = screen.getByText("Active");
+    expect(pill.dataset.slot).toBe("status-badge");
+    expect(pill.dataset.variant).toBe("live");
+  });
+
+  it("renders the muted variant for an inactive property", () => {
+    render(<PropertiesTable properties={[{ ...row, active: false }]} />);
+    const pill = screen.getByText("Inactive");
+    expect(pill.dataset.slot).toBe("status-badge");
+    expect(pill.dataset.variant).toBe("muted");
+  });
+});

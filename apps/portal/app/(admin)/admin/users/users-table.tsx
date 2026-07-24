@@ -5,6 +5,7 @@ import { UserRound, UserPlus, MoreHorizontal, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { copy } from "@/lib/copy";
 import { roleHasPresence } from "@/lib/voice/presence";
 import { presenceLabel } from "@/lib/owner/format";
@@ -543,23 +544,17 @@ export function UsersTable({ users, actorId }: Props) {
                   </TableCell>
                   <TableCell className="text-text-muted">{u.email}</TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                    <StatusBadge variant="muted" className="text-foreground">
                       {ROLE_LABELS[u.role]}
-                    </span>
+                    </StatusBadge>
                   </TableCell>
                   <TableCell>
                     {!u.active ? (
-                      <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                        Deactivated
-                      </span>
+                      <StatusBadge variant="muted">Deactivated</StatusBadge>
                     ) : u.must_change_password ? (
-                      <span className="inline-flex items-center rounded-pill bg-attention/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-attention-text">
-                        Pending setup
-                      </span>
+                      <StatusBadge variant="attention">Pending setup</StatusBadge>
                     ) : (
-                      <span className="inline-flex items-center rounded-pill bg-live/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-live-foreground">
-                        Active
-                      </span>
+                      <StatusBadge variant="live">Active</StatusBadge>
                     )}
                   </TableCell>
                   <TableCell className="text-text-muted text-xs">
