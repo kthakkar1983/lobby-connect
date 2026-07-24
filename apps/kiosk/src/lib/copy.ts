@@ -9,7 +9,7 @@ export const copy = {
     // Shown on Home during the post-terminal-drop tap lockout (App.tsx):
     // the agent may be calling right back, so tap-to-call is briefly
     // disabled while the incoming poll keeps listening for that call-back.
-    reconnecting: "Reconnecting you to the front desk — one moment.",
+    reconnecting: "Reconnecting you to the front desk. One moment.",
   },
   incoming: {
     title: "The front desk is calling",
@@ -19,7 +19,6 @@ export const copy = {
   ringing: {
     title: "Ringing the front desk…",
     subtitle: "Someone's almost there",
-    recordingNote: "Calls may be recorded for quality",
   },
   apology: {
     heading: "Sorry to keep you waiting.",
@@ -28,7 +27,7 @@ export const copy = {
   },
   reconnecting: {
     title: "Reconnecting…",
-    subtitle: "Hold tight — we're getting you back.",
+    subtitle: "Hold tight. We're getting you back.",
   },
   error: {
     heading: "One moment…",
