@@ -178,6 +178,11 @@ export function VideoCall({
   const [rightTab, setRightTab] = useState<"playbook" | "chat">("playbook");
   const [chatUnread, setChatUnread] = useState(false);
   const lastSeenChatRef = useRef<string | null | undefined>(undefined); // undefined = not yet seeded
+  // Focus targets for the Playbook/Chat tablist's roving tabIndex (below) — an
+  // arrow key needs somewhere to MOVE focus to, since Tab alone only ever stops
+  // on the tabIndex=0 tab once the roving pattern is in place.
+  const playbookTabRef = useRef<HTMLButtonElement>(null);
+  const chatTabRef = useRef<HTMLButtonElement>(null);
 
   // Unread-badge detection only — NO chime here (the tile owns the inbound
   // chime; the overlay only badges the tab so it never double-plays a sound).
@@ -497,6 +502,19 @@ export function VideoCall({
     return () => clearInterval(id);
   }, [setPeerTyping]);
 
+  // Roving tabIndex (below) means Tab alone can no longer reach the inactive
+  // tab, so ArrowLeft/ArrowRight must move focus within the tablist — with only
+  // two tabs "the other one" is unambiguous regardless of direction. Automatic
+  // activation (the arrow switches the panel, not just focus) matches native
+  // OS/browser tab behavior.
+  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = rightTab === "playbook" ? "chat" : "playbook";
+    setRightTab(next);
+    (next === "playbook" ? playbookTabRef : chatTabRef).current?.focus();
+  }
+
   return (
     <CallShell
       title={phase === "calling" ? `Calling · ${propertyName}` : `On video · ${propertyName}`}
@@ -632,17 +650,31 @@ export function VideoCall({
             data-testid="video-right-panel"
             className={`flex ${basis} flex-col overflow-hidden border-l border-border`}
           >
-            <div className="flex shrink-0 border-b border-border bg-card text-sm">
+            <div className="flex shrink-0 border-b border-border bg-card text-sm" role="tablist">
               <button
+                ref={playbookTabRef}
                 type="button"
+                id="video-tab-playbook"
+                role="tab"
+                aria-selected={rightTab === "playbook"}
+                aria-controls="video-tabpanel"
+                tabIndex={rightTab === "playbook" ? 0 : -1}
                 onClick={() => setRightTab("playbook")}
+                onKeyDown={handleTabKeyDown}
                 className={`px-4 py-2 font-medium ${rightTab === "playbook" ? "border-b-2 border-accent text-foreground" : "text-text-muted"}`}
               >
                 Playbook
               </button>
               <button
+                ref={chatTabRef}
                 type="button"
+                id="video-tab-chat"
+                role="tab"
+                aria-selected={rightTab === "chat"}
+                aria-controls="video-tabpanel"
+                tabIndex={rightTab === "chat" ? 0 : -1}
                 onClick={() => setRightTab("chat")}
+                onKeyDown={handleTabKeyDown}
                 className={`relative px-4 py-2 font-medium ${rightTab === "chat" ? "border-b-2 border-accent text-foreground" : "text-text-muted"}`}
               >
                 Chat
@@ -651,7 +683,12 @@ export function VideoCall({
                 )}
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div
+              id="video-tabpanel"
+              role="tabpanel"
+              aria-labelledby={rightTab === "playbook" ? "video-tab-playbook" : "video-tab-chat"}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               {rightTab === "playbook" ? (
                 <PlaybookPanel callId={callId} basis="basis-full" />
               ) : (
