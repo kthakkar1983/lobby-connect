@@ -178,7 +178,18 @@ export function ZoneClocksCard() {
   }, []);
 
   return (
-    <Card className="gap-3 p-4 shadow-md">
+    // lg:self-start — on lg this card is a grid item in the aside's row-2
+    // subgrid (dashboard-workspace.tsx). That subgrid keeps the default
+    // align-items:stretch, which would balloon this card to the WHOLE row-2
+    // height: the left column's Properties + Team + Recent stack (~1131px in
+    // the pilot), leaving four faces pinned to the top over ~800px of dead
+    // space. self-start opts this one item out of the stretch, so it stays at
+    // content height and top-aligned on row 2 -- the way the clocks read
+    // before the merged-duty-rail subgrid. Only the TOP edge aligns with the
+    // Properties card, by design. lg-gated because below lg the aside is a flex
+    // column, where align-self is the cross (horizontal) axis and self-start
+    // would shrink the card off full width.
+    <Card className="gap-3 p-4 shadow-md lg:self-start">
       <p className="font-label text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
         Clocks
       </p>

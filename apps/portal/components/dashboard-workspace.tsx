@@ -134,10 +134,14 @@ export function DashboardWorkspace({
               force-closes a forgotten shift regardless). */}
           <DutyCard role={role} />
           {/* Row-2 tile. On lg the aside is a 2-row subgrid (mirroring the left
-              column), so the clocks land level with <main>'s second section by
-              construction. Do NOT re-add items-stretch / h-full / mt-auto to "pin"
-              them lower -- the subgrid positions this on row 2 directly (an
-              earlier mt-auto pin over-shot to the page bottom; see the docblock). */}
+              column), so the clocks TOP-align with <main>'s second section by
+              construction. The card carries lg:self-start (see zone-clocks-card.tsx):
+              it deliberately opts OUT of the subgrid's default stretch so it stays
+              content-height instead of ballooning to the full row-2 height (the tall
+              Properties + Team + Recent stack). Only the TOP edge aligns -- matching
+              how the clocks read before the merged-duty-rail subgrid. Do NOT re-add
+              items-stretch / h-full / mt-auto to "pin" it lower, and do NOT drop the
+              card's self-start -- either brings the ~800px of dead space back. */}
           <ZoneClocksCard />
           {/* Headless: VideoCallHost renders no chrome of its own (see its
               docblock) — either the fixed full-screen <VideoCall>, which escapes
