@@ -1237,6 +1237,27 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
     expect(screen.queryByText("Off duty")).toBeNull();
   });
+
+  // Batch 5b / Task 3 — LinePill is built on the shared StatusBadge primitive.
+  // Pin the phase/duty -> StatusBadge variant mapping (data-slot/data-variant
+  // only exist post-migration, so this is red against the old raw <span>).
+  it('the line pill renders via StatusBadge with the live variant when "Ready" (spec §6)', async () => {
+    hydration = { onDuty: true, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
+    const pill = await screen.findByText("Ready");
+    expect(pill.dataset.slot).toBe("status-badge");
+    expect(pill.dataset.variant).toBe("live");
+  });
+
+  it('the line pill renders via StatusBadge with the muted variant while off duty (spec §6)', async () => {
+    hydration = { onDuty: false, accepting: true };
+    renderSoftphone("AGENT");
+    await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
+    const pill = screen.getByText("Off duty");
+    expect(pill.dataset.slot).toBe("status-badge");
+    expect(pill.dataset.variant).toBe("muted");
+  });
 });
 
 /**

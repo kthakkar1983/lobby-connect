@@ -35,17 +35,21 @@ describe("CaptionToggle", () => {
   //               bg-accent/10 composite); foreground would be navy-on-navy,
   //               ~1.0:1, i.e. the captions control would vanish from the tile.
   //               The deep `text-accent-text` measured only ~2.68:1 here (FAIL).
+  // Qualified by data-state (Toggle primitive migration, Batch 5b Task 6):
+  // both the on/off branches' classes are always present in the static
+  // className now, gated only by Radix's `data-state` attribute at paint
+  // time — an unqualified check would pass even if the branches were swapped.
   it("uses the shared control-bar label colour when it renders text", () => {
     render(<CaptionToggle enabled onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
-    expect(btn.className).toContain("text-foreground");
+    expect(btn.className).toContain("data-[state=on]:text-foreground");
     expect(btn.className).not.toContain("text-accent-text");
   });
 
   it("uses a navy-tile-safe teal icon colour when compact (clears 3:1, not the failing accent-text)", () => {
     render(<CaptionToggle enabled compact onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
-    expect(btn.className).toContain("text-accent");
+    expect(btn.className).toContain("data-[state=on]:text-accent");
     // NOT the deep text-accent-text, which measured ~2.68:1 on the navy tile.
     expect(btn.className).not.toContain("text-accent-text");
     expect(btn.className).not.toContain("text-foreground");
@@ -72,7 +76,8 @@ describe("CaptionToggle", () => {
     const btn = screen.getByRole("button");
     // On the navy tile the old text-text-muted #5C6B79 was ~2.56:1 (FAIL 3:1);
     // primary-foreground/70 clears it (~7.6:1) and matches the sibling toggle.
-    expect(btn.className).toContain("text-primary-foreground/70");
+    // Qualified by data-state (see the labelled-branch test above for why).
+    expect(btn.className).toContain("data-[state=off]:text-primary-foreground/70");
     expect(btn.className).not.toContain("text-text-muted");
   });
 

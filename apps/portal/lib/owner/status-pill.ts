@@ -1,14 +1,16 @@
 import type { CallState, CallDirection, IncidentStatus } from "@lc/shared";
 import { callStateLabel, incidentStatusLabel } from "./format";
 
-export type Pill = { readonly label: string; readonly className: string };
+/** Mirrors StatusBadge's `variant` union (components/ui/status-badge.tsx). */
+export type PillVariant = "live" | "accent" | "attention" | "muted";
+export type Pill = { readonly label: string; readonly variant: PillVariant };
 
-const CALL_PILL_CLASS: Record<CallState, string> = {
-  COMPLETED: "bg-live/15 text-live-foreground",
-  IN_PROGRESS: "bg-live/15 text-live-foreground",
-  RINGING: "bg-muted text-muted-foreground",
-  NO_ANSWER: "bg-attention/15 text-attention-text",
-  FAILED: "bg-muted text-muted-foreground",
+const CALL_PILL_VARIANT: Record<CallState, PillVariant> = {
+  COMPLETED: "live",
+  IN_PROGRESS: "live",
+  RINGING: "muted",
+  NO_ANSWER: "attention",
+  FAILED: "muted",
 };
 
 /**
@@ -18,24 +20,19 @@ const CALL_PILL_CLASS: Record<CallState, string> = {
  * defaults to "INBOUND" so every existing caller stays byte-identical.
  *
  * The label is ALWAYS delegated to callStateLabel(state, direction) — the single
- * source of the "No answer" string — so this function only owns the className
+ * source of the "No answer" string — so this function only owns the variant
  * branch (the neutral vs. blaze decision). Do not re-inline the label here.
  */
 export function callPill(state: CallState, direction: CallDirection = "INBOUND"): Pill {
   const label = callStateLabel(state, direction);
-  const className =
-    state === "NO_ANSWER" && direction === "OUTBOUND"
-      ? "bg-muted text-muted-foreground"
-      : CALL_PILL_CLASS[state];
-  return { label, className };
+  const variant: PillVariant =
+    state === "NO_ANSWER" && direction === "OUTBOUND" ? "muted" : CALL_PILL_VARIANT[state];
+  return { label, variant };
 }
 
 export function incidentPill(status: IncidentStatus): Pill {
   return {
     label: incidentStatusLabel(status),
-    className:
-      status === "RESOLVED"
-        ? "bg-muted text-muted-foreground"
-        : "bg-attention/15 text-attention-text",
+    variant: status === "RESOLVED" ? "muted" : "attention",
   };
 }

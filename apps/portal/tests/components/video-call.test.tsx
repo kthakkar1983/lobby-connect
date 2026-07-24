@@ -504,8 +504,63 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     );
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /^chat$/i }));
+    await user.click(screen.getByRole("tab", { name: /^chat$/i }));
     expect(screen.getByPlaceholderText(/type/i)).toBeTruthy();
+  });
+
+  // Task 8 (Batch 5b, Cluster 3): the tab row exposes real ARIA tab semantics
+  // instead of two plain buttons — a screen-reader user gets "tab 1 of 2,
+  // selected" instead of an unlabelled button pair with no indication these
+  // switch a shared panel.
+  it("exposes tablist/tab roles with aria-selected reflecting the active rightTab", async () => {
+    const user = userEvent.setup();
+    render(
+      <VideoCall callId="call-tab-aria" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    expect(screen.getByRole("tablist")).toBeTruthy();
+    const playbookTab = screen.getByRole("tab", { name: /^playbook$/i });
+    const chatTab = screen.getByRole("tab", { name: /^chat$/i });
+
+    // Playbook is the default active tab.
+    expect(playbookTab.getAttribute("aria-selected")).toBe("true");
+    expect(chatTab.getAttribute("aria-selected")).toBe("false");
+
+    await user.click(chatTab);
+
+    // Exactly one tab is selected at a time, and it flips with rightTab.
+    expect(playbookTab.getAttribute("aria-selected")).toBe("false");
+    expect(chatTab.getAttribute("aria-selected")).toBe("true");
+  });
+
+  // Roving tabIndex: Tab alone must only ever stop on the SELECTED tab (the
+  // other is tabIndex=-1), so ArrowLeft/ArrowRight has to be the way to reach
+  // and activate the inactive one — without it the Chat tab would be
+  // unreachable by keyboard entirely once roving tabIndex is in place.
+  it("moves focus and switches tabs on ArrowRight/ArrowLeft (roving tabIndex)", async () => {
+    const user = userEvent.setup();
+    render(
+      <VideoCall callId="call-tab-arrow" onClose={vi.fn()} propertyName="The Sample Hotel" propertyId="prop-1" />,
+    );
+    await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
+
+    const playbookTab = screen.getByRole("tab", { name: /^playbook$/i });
+    const chatTab = screen.getByRole("tab", { name: /^chat$/i });
+    expect(playbookTab.getAttribute("tabIndex")).toBe("0");
+    expect(chatTab.getAttribute("tabIndex")).toBe("-1");
+
+    playbookTab.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(chatTab.getAttribute("aria-selected")).toBe("true");
+    expect(chatTab).toHaveProperty("tabIndex", 0);
+    expect(playbookTab).toHaveProperty("tabIndex", -1);
+    expect(document.activeElement).toBe(chatTab);
+
+    await user.keyboard("{ArrowLeft}");
+    expect(playbookTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(playbookTab);
   });
 
   // Characterization (Task 11 → 12). Video's body is 40/60 — the guest stage is
@@ -592,8 +647,8 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     );
     await waitFor(() => expect(lk.joinLiveKitCall).toHaveBeenCalled());
 
-    expect(screen.queryByRole("button", { name: /^chat$/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^playbook$/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /^chat$/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /^playbook$/i })).toBeNull();
   });
 
   // Spec §5.1 / D10. Both were hardcoded `disabled` with title="Coming soon",

@@ -1,5 +1,5 @@
 import { Captions, CaptionsOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Toggle } from "@/components/ui/toggle";
 
 /**
  * In-call captions on/off control. Shared by the audio + video overlays so the
@@ -44,10 +44,12 @@ export function CaptionToggle({
   readonly compact?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={enabled}
+    <Toggle
+      tone="accent"
+      surface={compact ? "tile" : "bar"}
+      size={compact ? "compact" : "bar"}
+      pressed={enabled}
+      onPressedChange={() => onToggle()}
       /* Compact drops the visible label (below), leaving `title` as the only
          accessible name — and title is an unreliable name source (the sibling
          <CallToggleButton> documents and measures this: name-from-content wins
@@ -56,21 +58,10 @@ export function CaptionToggle({
          labelled branch keeps its name from the visible text. */
       aria-label={compact ? "Captions" : undefined}
       title={enabled ? "Turn captions off" : "Turn captions on"}
-      className={cn(
-        "flex items-center gap-1 rounded-button border text-sm",
-        compact ? "px-2 py-1 text-xs" : "px-3 py-2",
-        enabled
-          ? cn("border-accent bg-accent/10", compact ? "text-accent" : "text-foreground")
-          : cn("border-border", compact ? "text-primary-foreground/70" : "text-text-muted"),
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-        compact
-          ? "focus-visible:ring-primary-foreground focus-visible:ring-offset-primary"
-          : "focus-visible:ring-ring focus-visible:ring-offset-background",
-        className,
-      )}
+      className={className}
     >
       {enabled ? <Captions size={compact ? 13 : 14} /> : <CaptionsOff size={compact ? 13 : 14} />}
       {!compact && (enabled ? "Captions" : "Captions off")}
-    </button>
+    </Toggle>
   );
 }

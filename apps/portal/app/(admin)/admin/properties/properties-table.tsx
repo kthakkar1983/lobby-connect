@@ -6,6 +6,7 @@ import { Building2, Plus } from "lucide-react";
 import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { copy } from "@/lib/copy";
 import { Input } from "@/components/ui/input";
 import {
@@ -105,13 +106,9 @@ export function PropertiesTable({ properties }: Props) {
                   </TableCell>
                   <TableCell>
                     {p.active ? (
-                      <span className="inline-flex items-center rounded-pill bg-live/15 px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-live-foreground">
-                        Active
-                      </span>
+                      <StatusBadge variant="live">Active</StatusBadge>
                     ) : (
-                      <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                        Inactive
-                      </span>
+                      <StatusBadge variant="muted">Inactive</StatusBadge>
                     )}
                   </TableCell>
                 </TableRow>

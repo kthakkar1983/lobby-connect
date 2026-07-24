@@ -148,13 +148,20 @@ describe("CallToggleButton", () => {
     const { rerender } = render(
       <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />,
     );
-    // `disabled:opacity-50` from the Button base is fine — it only applies to a
-    // control that IS disabled. An UNPREFIXED opacity would dim this one.
+    // The Toggle primitive's recipe never carries an opacity utility at all
+    // (state is the border/fill/icon, never a dimmed element) — this stays
+    // true regardless of the pressed state below.
     expect(screen.getByRole("button").className).not.toMatch(/(^|\s)opacity-/);
 
     rerender(<CallToggleButton label="Mute" icon={null} pressed title="on" onToggle={vi.fn()} />);
     const btn = screen.getByRole("button");
-    expect(btn.className).toContain("bg-accent/10");
+    // Qualified by data-state: since the Toggle primitive migration (Batch 5b
+    // Task 6), BOTH branches' classes sit in the static className at once —
+    // Radix's `data-state` attribute (not React conditional rendering) is what
+    // actually selects one at paint time. An unqualified `.toContain("bg-accent/10")`
+    // would pass even if this token were wired to the wrong state, so the check
+    // must pin the state-qualified selector to mean anything.
+    expect(btn.className).toContain("data-[state=on]:bg-accent/10");
     expect(btn.className).not.toMatch(/(^|\s)opacity-/);
     expect(btn.hasAttribute("disabled")).toBe(false);
   });
@@ -178,14 +185,18 @@ describe("CallToggleButton", () => {
     const { rerender } = render(
       <CallToggleButton label="Mute" icon={null} pressed title="on" onToggle={vi.fn()} />,
     );
-    expect(screen.getByRole("button").className).toContain("text-foreground");
+    // Qualified by data-state (Toggle primitive migration, Batch 5b Task 6):
+    // both branches' classes are always present in the static className now,
+    // gated only by Radix's `data-state` attribute at paint time — an
+    // unqualified check would pass even if pressed/unpressed were swapped.
+    expect(screen.getByRole("button").className).toContain("data-[state=on]:text-foreground");
     expect(screen.getByRole("button").className).not.toContain("text-accent-text");
 
     rerender(
       <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />,
     );
     // Unpressed sits on the bare control bar (bg-card #FFFFFF): text-text-muted is 5.48:1.
-    expect(screen.getByRole("button").className).toContain("text-text-muted");
+    expect(screen.getByRole("button").className).toContain("data-[state=off]:text-text-muted");
   });
 
   // The icon swaps between glyphs of different advance widths, so a constant

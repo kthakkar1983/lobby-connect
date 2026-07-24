@@ -17,11 +17,11 @@ describe("direction-aware call labels", () => {
     expect(callStateLabel("FAILED", "OUTBOUND")).toBe(callStateLabel("FAILED"));
   });
 
-  it("outbound NO_ANSWER pill is not the blaze/attention class", () => {
+  it("outbound NO_ANSWER pill is not the blaze/attention variant", () => {
     const inbound = callPill("NO_ANSWER", "INBOUND");
     const outbound = callPill("NO_ANSWER", "OUTBOUND");
-    expect(inbound.className).toContain("attention");
-    expect(outbound.className).not.toContain("attention");
+    expect(inbound.variant).toBe("attention");
+    expect(outbound.variant).not.toBe("attention");
     expect(outbound.label).toBe("No answer");
   });
   it("callPill defaults to INBOUND when direction is omitted (byte-identical for existing callers)", () => {

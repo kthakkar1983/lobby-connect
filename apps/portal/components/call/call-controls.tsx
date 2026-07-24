@@ -39,6 +39,7 @@
 import { PhoneOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 
 /** Sits before End call so the terminating control reads isolated (mistap
@@ -142,28 +143,22 @@ export function CallToggleButton({
   readonly className?: string;
 }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-pressed={pressed}
+    <Toggle
+      tone="accent"
+      surface="bar"
+      size="bar"
+      pressed={pressed}
+      onPressedChange={() => onToggle()}
       /* Kept prefixed by the VISIBLE label so WCAG 2.5.3 (Label in Name) holds
          and voice control still matches "click Camera". Absent when there is
          no state to disambiguate, so the name falls back to the content. */
       aria-label={stateLabel ? `${label}, ${stateLabel}` : undefined}
       title={title}
-      onClick={onToggle}
-      className={cn(
-        "w-36 justify-center border",
-        pressed
-          ? "border-accent bg-accent/10 text-foreground hover:bg-accent/10 hover:text-foreground"
-          : "border-border text-text-muted",
-        className,
-      )}
+      className={cn("w-36", className)}
     >
       {icon}
       {label}
-    </Button>
+    </Toggle>
   );
 }
 
