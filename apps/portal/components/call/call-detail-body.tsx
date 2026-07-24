@@ -44,7 +44,7 @@ export function CallDetailBody({
           href={incidentHref as Route}
           className="flex items-center gap-2 rounded-card border border-attention/40 bg-attention/10 p-4 text-sm font-medium text-attention-text hover:bg-attention/15"
         >
-          <Siren className="size-4" aria-hidden="true" /> Emergency — view incident
+          <Siren className="size-4" aria-hidden="true" /> Emergency: view incident
         </Link>
       )}
 

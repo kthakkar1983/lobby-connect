@@ -57,10 +57,10 @@ export function connectErrorMessage(
   // which is right: an exception is not evidence of a missing credential.
   if (outcome.notConfigured) {
     return length === "compact"
-      ? "No credentials — ask an admin."
-      : "No remote access configured — ask an admin.";
+      ? "No credentials. Ask an admin."
+      : "No remote access configured. Ask an admin.";
   }
   return length === "compact"
-    ? "Connect failed — try again."
-    : "Could not fetch credentials — try again.";
+    ? "Connect failed. Try again."
+    : "Could not fetch credentials. Try again.";
 }

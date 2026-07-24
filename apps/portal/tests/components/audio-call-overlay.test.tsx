@@ -141,7 +141,7 @@ describe("AudioCallOverlay", () => {
     await user.click(screen.getByRole("button", { name: /connect/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe("No remote access configured — ask an admin.");
+    expect(alert.textContent).toBe("No remote access configured. Ask an admin.");
   });
 
   it("clears a previous Connect failure once a later attempt launches", async () => {
@@ -155,7 +155,7 @@ describe("AudioCallOverlay", () => {
     const connect = screen.getByRole("button", { name: /connect/i });
     await user.click(connect);
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
 
     // A stale failure left on screen after a working retry reads as "still
@@ -176,7 +176,7 @@ describe("AudioCallOverlay", () => {
     await user.click(screen.getByRole("button", { name: /connect/i }));
 
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
   });
 
@@ -327,7 +327,7 @@ describe("AudioCallOverlay", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /call 911/i }));
-    await user.click(screen.getByRole("button", { name: /yes — call 911/i }));
+    await user.click(screen.getByRole("button", { name: /yes, call 911/i }));
 
     expect(onTriggerEmergency).toHaveBeenCalledOnce();
   });

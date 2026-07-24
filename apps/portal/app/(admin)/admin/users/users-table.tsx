@@ -98,7 +98,7 @@ function CreateUserDialog() {
       });
 
       if (result.ok) {
-        toast.success("User created. Share their temporary password — they'll set their own at first sign-in.");
+        toast.success("User created. Share their temporary password. They'll set their own at first sign-in.");
         setOpen(false);
       } else {
         setError(result.error);
@@ -286,7 +286,7 @@ function ResetPasswordDialog(props: {
         tempPassword: String(formData.get("tempPassword") ?? ""),
       });
       if (result.ok) {
-        toast.success("Password reset. Share the temporary password — they'll set a new one at next sign-in.");
+        toast.success("Password reset. Share the temporary password. They'll set a new one at next sign-in.");
         props.onOpenChange(false);
       } else {
         setError(result.error);

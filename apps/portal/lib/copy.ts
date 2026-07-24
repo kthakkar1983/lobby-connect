@@ -56,7 +56,7 @@ export const copy = {
     global: {
       title: "Something went wrong",
       description:
-        "This screen hit an unexpected error — it's been logged. Try again, or reload the page.",
+        "This screen hit an unexpected error. It's been logged. Try again, or reload the page.",
     },
     segment: {
       title: "Couldn't load this",

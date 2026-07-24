@@ -29,7 +29,7 @@ export function PlaybookCard({ propertyId, version }: Props) {
           win.opener = null; // the signed-URL page can't reach back into the portal
           win.location.replace(body.signedUrl);
         } else {
-          toast.error("Pop-up blocked — allow pop-ups for this site to view the playbook.");
+          toast.error("Pop-up blocked. Allow pop-ups for this site to view the playbook.");
         }
       } else {
         win?.close();

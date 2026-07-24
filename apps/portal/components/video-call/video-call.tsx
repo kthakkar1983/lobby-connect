@@ -507,7 +507,7 @@ export function VideoCall({
         <>
           {audioBlocked && (
             <div className="flex items-center justify-between gap-3 border-b border-attention/40 bg-attention/10 px-4 py-2 text-sm text-attention-text">
-              <span>You can&apos;t hear the guest yet — your browser paused the audio.</span>
+              <span>You can&apos;t hear the guest yet. Your browser paused the audio.</span>
               <button
                 type="button"
                 onClick={() => {
@@ -524,9 +524,9 @@ export function VideoCall({
           {mediaWarning && (
             <div className="border-b border-attention/40 bg-attention/10 px-4 py-1.5 text-xs text-attention-text">
               {mediaWarning === "camera"
-                ? "Your camera is unavailable (in use by another app?). You're connected audio-only — turn the camera on once it's free."
+                ? "Your camera is unavailable (in use by another app?). You're connected audio-only. Turn the camera on once it's free."
                 : mediaWarning === "mic"
-                  ? "Your microphone is unavailable. The guest may not hear you — close other apps using it or check permissions."
+                  ? "Your microphone is unavailable. The guest may not hear you. Close other apps using it, or check permissions."
                   : "Your camera and microphone are unavailable. Close other apps using them or check browser permissions."}
             </div>
           )}
@@ -670,7 +670,7 @@ export function VideoCall({
       bannersBelowBody={
         saveFailed && (
           <div className="flex items-center justify-between gap-3 border-t border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            <span>Couldn&apos;t save notes. They&apos;re still here — retry or discard.</span>
+            <span>Couldn&apos;t save notes. They&apos;re still here. Retry or discard.</span>
             <span className="flex gap-2">
               <button
                 type="button"
@@ -735,7 +735,7 @@ export function VideoCall({
                   : saveState === "saved"
                     ? "Notes saved"
                     : saveState === "failed"
-                      ? "Notes save failed — retries after the call"
+                      ? "Notes save failed. Retries after the call."
                       : ""}
               </span>
             </div>

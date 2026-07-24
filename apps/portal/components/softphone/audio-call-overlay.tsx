@@ -195,7 +195,7 @@ export function AudioCallOverlay({
             <AlertDialogHeader>
               <AlertDialogTitle>Call emergency services (911)?</AlertDialogTitle>
               <AlertDialogDescription>
-                This conferences 911 into the live call — the guest, you, and the dispatcher on one line — and logs a high-priority incident.
+                This conferences 911 into the live call: the guest, you, and the dispatcher on one line. It logs a high-priority incident.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -207,7 +207,7 @@ export function AudioCallOverlay({
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={onTriggerEmergency} className="bg-destructive text-destructive-foreground">
-                Yes — call 911
+                Yes, call 911
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -218,7 +218,7 @@ export function AudioCallOverlay({
         <>
           {emergencyActive && !emergencyFailed && (
             <div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-              Emergency active — 911 is being conferenced in. Stay on the line and relay the property
+              Emergency active. 911 is being conferenced in. Stay on the line and relay the property
               address and room number.
             </div>
           )}
@@ -352,7 +352,7 @@ export function AudioCallOverlay({
                   : saveState === "saved"
                     ? "Notes saved"
                     : saveState === "failed"
-                      ? "Notes save failed — retries after the call"
+                      ? "Notes save failed. Retries after the call."
                       : ""}
               </span>
             </div>

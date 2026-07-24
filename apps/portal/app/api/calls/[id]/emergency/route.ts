@@ -205,7 +205,7 @@ export async function POST(
       degradedNote,
       dispatchError ? `dispatch error: ${dispatchError}` : null,
       guestStranded
-        ? "guest may be stranded — relay 911 verbally / have guest dial 911 directly"
+        ? "guest may be stranded. Relay 911 verbally, or have the guest dial 911 directly."
         : null,
     ]
       .filter(Boolean)

@@ -16,13 +16,13 @@ describe("connectErrorMessage", () => {
   it("names the fixable cause when the property has no remote access configured", () => {
     // The agent cannot fix this herself mid-call; the message must say who can.
     expect(connectErrorMessage({ launched: false, notConfigured: true })).toBe(
-      "No remote access configured — ask an admin.",
+      "No remote access configured. Ask an admin.",
     );
   });
 
   it("invites a retry when the credential fetch failed", () => {
     expect(connectErrorMessage({ launched: false, notConfigured: false })).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
   });
 
@@ -33,7 +33,7 @@ describe("connectErrorMessage", () => {
     // too, for the same reason: an exception is not evidence of a missing
     // credential.
     expect(connectErrorMessage({ launched: false })).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
   });
 
@@ -49,7 +49,7 @@ describe("connectErrorMessage", () => {
 
     it("keeps 'ask an admin' — the actionable half survives the shortening", () => {
       const msg = connectErrorMessage({ launched: false, notConfigured: true }, "compact");
-      expect(msg).toBe("No credentials — ask an admin.");
+      expect(msg).toBe("No credentials. Ask an admin.");
       expect(msg!.length).toBeLessThan(
         connectErrorMessage({ launched: false, notConfigured: true })!.length,
       );
@@ -57,13 +57,13 @@ describe("connectErrorMessage", () => {
 
     it("keeps 'try again' — likewise", () => {
       const msg = connectErrorMessage({ launched: false }, "compact");
-      expect(msg).toBe("Connect failed — try again.");
+      expect(msg).toBe("Connect failed. Try again.");
       expect(msg!.length).toBeLessThan(connectErrorMessage({ launched: false })!.length);
     });
 
     it("defaults to the full wording, so a caller has to ask to be terse", () => {
       expect(connectErrorMessage({ launched: false, notConfigured: true })).toBe(
-        "No remote access configured — ask an admin.",
+        "No remote access configured. Ask an admin.",
       );
     });
   });

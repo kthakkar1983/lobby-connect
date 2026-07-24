@@ -58,7 +58,7 @@ describe("ConnectButton", () => {
     });
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
-        "No remote access configured — ask an admin.",
+        "No remote access configured. Ask an admin.",
       ),
     );
 
@@ -78,7 +78,7 @@ describe("ConnectButton", () => {
     });
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
-        "No remote access configured — ask an admin.",
+        "No remote access configured. Ask an admin.",
       ),
     );
   });
@@ -92,7 +92,7 @@ describe("ConnectButton", () => {
     });
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
-        "Could not fetch credentials — try again.",
+        "Could not fetch credentials. Try again.",
       ),
     );
   });

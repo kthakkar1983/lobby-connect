@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { copy } from "@/lib/copy";
+import { connectErrorMessage } from "@/lib/remote-access/connect-error";
 
 describe("empty-state copy is person-facing (Batch 4)", () => {
   it("ownerHome points to the admin, not the widget", () => {
@@ -54,6 +55,32 @@ describe("empty-state copy is person-facing (Batch 4)", () => {
   it("no empty-state description narrates the widget", () => {
     for (const v of Object.values(copy.empty)) {
       expect(v.description).not.toMatch(/will (appear|show|chart)/i);
+    }
+  });
+});
+
+describe("no em dashes in centralized copy (Batch 4)", () => {
+  const strings: string[] = [];
+  (function walk(o: unknown) {
+    if (typeof o === "string") strings.push(o);
+    else if (o && typeof o === "object") Object.values(o).forEach(walk);
+  })(copy);
+
+  it("copy.ts values have no em dash", () => {
+    for (const s of strings) expect(s).not.toContain("—");
+  });
+
+  it("connectErrorMessage outputs have no em dash", () => {
+    const outcomes: Array<Parameters<typeof connectErrorMessage>[0]> = [
+      { launched: false, notConfigured: true },
+      { launched: false, notConfigured: false },
+      { launched: false },
+    ];
+    for (const outcome of outcomes) {
+      for (const length of ["full", "compact"] as const) {
+        const msg = connectErrorMessage(outcome, length);
+        if (msg) expect(msg).not.toContain("—");
+      }
     }
   });
 });

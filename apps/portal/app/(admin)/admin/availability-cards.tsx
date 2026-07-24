@@ -34,7 +34,7 @@ export function AvailabilityToggle({
       <Switch
         checked={on}
         onCheckedChange={toggle}
-        aria-label={`Covering — ${propertyName}`}
+        aria-label={`Covering: ${propertyName}`}
       />
     </div>
   );

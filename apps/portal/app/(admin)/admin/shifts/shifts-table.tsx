@@ -368,7 +368,7 @@ function EditShiftDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit shift — {row.name}</DialogTitle>
+          <DialogTitle>Edit shift: {row.name}</DialogTitle>
           <DialogDescription>
             Adjust the start and end time. Leave End blank to reopen this shift
             as on-duty.

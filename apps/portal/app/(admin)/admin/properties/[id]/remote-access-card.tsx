@@ -106,8 +106,8 @@ export function RemoteAccessCard({
       <div className="flex flex-col gap-4">
         <p className="text-xs text-text-muted">
           RustDesk unattended-access credentials for this property&apos;s
-          hotel PC. Stored for the Connect deep link on the agent dashboard —
-          never shown to agents directly.
+          hotel PC. Stored for the Connect deep link on the agent dashboard.
+          Never shown to agents directly.
         </p>
 
         <div className="flex flex-col gap-1.5">

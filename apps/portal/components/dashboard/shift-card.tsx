@@ -90,7 +90,7 @@ function NotificationsBlockedHint() {
   return (
     <p className="flex items-start gap-1.5 text-xs text-attention-text">
       <BellOff size={14} aria-hidden="true" className="mt-px shrink-0" />
-      Notifications blocked — rings still work in this tab
+      Notifications blocked. Rings still work in this tab.
     </p>
   );
 }
