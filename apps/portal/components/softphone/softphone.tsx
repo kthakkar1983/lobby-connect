@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 
 import { AudioCallOverlay } from "@/components/softphone/audio-call-overlay";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Toggle } from "@/components/ui/toggle";
 import { useCallSurfaceOptional } from "@/components/dashboard/call-surface-provider";
 import { useDutyOptional } from "@/components/dashboard/duty-provider";
 import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
@@ -956,15 +957,14 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
                 {onDuty ? "You're on. We'll ring you." : "Ready when you are."}
               </p>
               {role === "AGENT" && (
-                <button
-                  type="button"
-                  onClick={() => guard(toggleReady)}
-                  aria-pressed={acceptingNow}
+                <Toggle
+                  tone="live"
+                  surface="bar"
+                  size="block"
+                  pressed={acceptingNow}
+                  onPressedChange={() => guard(toggleReady)}
                   className={cn(
-                    "mt-3 w-full rounded-button border px-3 py-2 font-medium transition-colors",
-                    acceptingNow
-                      ? "border-transparent bg-live/15 text-live-foreground"
-                      : "border-border text-text-muted",
+                    "mt-3",
                     // Gated reads as unavailable WITHOUT being unavailable (spec
                     // §3.4): the control stays enabled and focusable so the click
                     // can be intercepted and answered with "start your shift?".
@@ -976,11 +976,10 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
                     // visibly recessed, still passing. The border is left alone so
                     // the control's boundary is unchanged.
                     gated && "bg-muted",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   )}
                 >
                   {acceptingNow ? "Accepting calls" : "Not accepting calls"}
-                </button>
+                </Toggle>
               )}
             </>
           )}
