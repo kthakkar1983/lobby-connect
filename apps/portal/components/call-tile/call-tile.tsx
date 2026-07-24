@@ -293,6 +293,21 @@ export function CallTile(): React.JSX.Element | null {
             <AlertTriangle size={13} /> {armed ? "Confirm 911" : "911"}
           </button>
         )}
+        {/* Armed-state warning — brings the tab overlay's 911-confirm message
+            into the PiP's space. The tile is too small for the full AlertDialog,
+            so the two-tap arm/confirm above STAYS (byte-identical); this only
+            surfaces WHY the second tap matters. Audio-only like the 911 button
+            (armed can only be set from it), so it never collides with the video
+            face's bottom bar. `pointer-events-none` so the confirm stays the
+            top-right button, not this. */}
+        {armed && (
+          <div
+            role="alert"
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-destructive/90 px-2 py-1.5 text-center text-[11px] font-medium leading-snug text-destructive-foreground"
+          >
+            Conferences 911 into the call. Genuine emergencies only. Tap again to confirm.
+          </div>
+        )}
         {active.channel === "VIDEO" ? (
           chatMode === "chat" ? (
             <div className="relative flex-1 overflow-hidden rounded-md bg-[var(--color-call)]">
