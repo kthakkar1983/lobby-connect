@@ -4,6 +4,7 @@ import {
   incidentStatusLabel,
   presenceLabel,
   presenceDotClass,
+  presenceBadgeVariant,
   isLivePresence,
   formatTimeOnly,
   formatDuration,
@@ -44,6 +45,16 @@ describe("presenceDotClass (brand tokens)", () => {
     expect(presenceDotClass("AWAY")).toBe("bg-muted-foreground");
     expect(presenceDotClass("BREAK")).toBe("bg-muted-foreground");
     expect(presenceDotClass("OFFLINE")).toBe("bg-border");
+  });
+});
+
+describe("presenceBadgeVariant (StatusBadge variant map)", () => {
+  it("maps to the StatusBadge variant union", () => {
+    expect(presenceBadgeVariant("AVAILABLE")).toBe("live");
+    expect(presenceBadgeVariant("ON_CALL")).toBe("accent");
+    expect(presenceBadgeVariant("AWAY")).toBe("muted");
+    expect(presenceBadgeVariant("BREAK")).toBe("muted");
+    expect(presenceBadgeVariant("OFFLINE")).toBe("muted");
   });
 });
 

@@ -94,3 +94,21 @@ describe("UsersTable — Role/Status pills via StatusBadge (Batch 5b Task 4)", (
     expect(status.dataset.variant).toBe("attention");
   });
 });
+
+// Batch 5c / Task 4: adds the zebra stripe (matching the properties/shifts
+// tables) and renders Presence through StatusBadge instead of raw muted text.
+describe("UsersTable — zebra + presence pill (Batch 5c Task 4)", () => {
+  it("stripes rows with the shared zebra class", () => {
+    render(<UsersTable users={[onCallAgent]} actorId="actor-1" />);
+    const row = screen.getByText("Dilnoza Agent").closest("tr");
+    expect(row?.className).toContain("even:bg-muted/40");
+  });
+
+  it("renders an AVAILABLE agent's presence as a live-variant StatusBadge pill", () => {
+    const available: UserRow = { ...onCallAgent, id: "u5", status: "AVAILABLE" };
+    render(<UsersTable users={[available]} actorId="actor-1" />);
+    const presence = screen.getByText("Available");
+    expect(presence.dataset.slot).toBe("status-badge");
+    expect(presence.dataset.variant).toBe("live");
+  });
+});

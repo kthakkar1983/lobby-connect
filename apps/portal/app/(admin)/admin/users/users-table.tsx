@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { copy } from "@/lib/copy";
 import { roleHasPresence } from "@/lib/voice/presence";
-import { presenceLabel } from "@/lib/owner/format";
+import { presenceLabel, presenceBadgeVariant } from "@/lib/owner/format";
 import type { Role } from "@lc/shared";
 import {
   Dialog,
@@ -530,7 +530,7 @@ export function UsersTable({ users, actorId }: Props) {
             </TableHeader>
             <TableBody>
               {filtered.map((u) => (
-                <TableRow key={u.id}>
+                <TableRow key={u.id} className="even:bg-muted/40">
                   <TableCell className="font-medium text-foreground">
                     {u.full_name}
                   </TableCell>
@@ -549,8 +549,12 @@ export function UsersTable({ users, actorId }: Props) {
                       <StatusBadge variant="live">Active</StatusBadge>
                     )}
                   </TableCell>
-                  <TableCell className="text-text-muted text-xs">
-                    {roleHasPresence(u.role) ? presenceLabel(u.status) : "—"}
+                  <TableCell>
+                    {roleHasPresence(u.role) ? (
+                      <StatusBadge variant={presenceBadgeVariant(u.status)}>{presenceLabel(u.status)}</StatusBadge>
+                    ) : (
+                      <span className="text-text-muted">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />
