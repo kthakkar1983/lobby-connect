@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { copy } from "@/lib/copy";
 import { roleHasPresence } from "@/lib/voice/presence";
-import { presenceLabel } from "@/lib/owner/format";
+import { presenceLabel, presenceBadgeVariant } from "@/lib/owner/format";
 import type { Role } from "@lc/shared";
 import {
   Dialog,
@@ -44,14 +44,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -175,7 +167,7 @@ function CreateUserDialog() {
   );
 }
 
-function EditSheet(props: {
+function EditDialog(props: {
   user: UserRow;
   actorId: string;
   open: boolean;
@@ -208,18 +200,18 @@ function EditSheet(props: {
   }
 
   return (
-    <Sheet open={props.open} onOpenChange={props.onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Edit {props.user.full_name}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {props.user.full_name}</DialogTitle>
+          <DialogDescription>
             {isSelf
               ? "You can edit your name. Role and active status are locked for your own account."
               : "Update the user's name, role, or active status."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="flex flex-col gap-4 px-4 py-4">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-name">Full name</Label>
             <Input
@@ -266,13 +258,13 @@ function EditSheet(props: {
           ) : null}
         </div>
 
-        <SheetFooter>
+        <DialogFooter>
           <Button onClick={onSave} disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -408,7 +400,7 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EditSheet
+      <EditDialog
         user={user}
         actorId={actorId}
         open={editOpen}
@@ -524,7 +516,7 @@ export function UsersTable({ users, actorId }: Props) {
           />
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-card border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -538,7 +530,7 @@ export function UsersTable({ users, actorId }: Props) {
             </TableHeader>
             <TableBody>
               {filtered.map((u) => (
-                <TableRow key={u.id}>
+                <TableRow key={u.id} className="even:bg-muted/40">
                   <TableCell className="font-medium text-foreground">
                     {u.full_name}
                   </TableCell>
@@ -557,8 +549,12 @@ export function UsersTable({ users, actorId }: Props) {
                       <StatusBadge variant="live">Active</StatusBadge>
                     )}
                   </TableCell>
-                  <TableCell className="text-text-muted text-xs">
-                    {roleHasPresence(u.role) ? presenceLabel(u.status) : "—"}
+                  <TableCell>
+                    {roleHasPresence(u.role) ? (
+                      <StatusBadge variant={presenceBadgeVariant(u.status)}>{presenceLabel(u.status)}</StatusBadge>
+                    ) : (
+                      <span className="text-text-muted">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />

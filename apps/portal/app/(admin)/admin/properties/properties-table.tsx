@@ -73,7 +73,7 @@ export function PropertiesTable({ properties }: Props) {
           />
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-card border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

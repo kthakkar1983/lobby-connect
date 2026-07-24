@@ -47,6 +47,19 @@ export function presenceDotClass(status: ProfileStatus): string {
   return PRESENCE_DOTS[status];
 }
 
+/** Presence → `StatusBadge` variant, mirroring `presenceDotClass`'s status coverage. */
+const PRESENCE_BADGE_VARIANTS: Record<ProfileStatus, "live" | "accent" | "muted"> = {
+  AVAILABLE: "live",
+  ON_CALL: "accent",
+  AWAY: "muted",
+  BREAK: "muted",
+  OFFLINE: "muted",
+};
+
+export function presenceBadgeVariant(status: ProfileStatus): "live" | "accent" | "muted" {
+  return PRESENCE_BADGE_VARIANTS[status];
+}
+
 export function isLivePresence(status: ProfileStatus): boolean {
   return status === "AVAILABLE" || status === "ON_CALL";
 }

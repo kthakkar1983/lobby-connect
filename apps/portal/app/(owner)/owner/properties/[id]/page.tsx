@@ -144,14 +144,15 @@ export default async function OwnerPropertyDetailPage({
         initialStyle={(property.kiosk_cta_style ?? "warm") as KioskCtaStyle}
       />
 
-      <SectionCard
-        title="Recent calls"
-        action={
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-label text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+            Recent calls
+          </h2>
           <Link href="/owner/calls" className="text-sm font-medium text-accent-text hover:underline">
             View all
           </Link>
-        }
-      >
+        </div>
         {recentRows.length === 0 ? (
           <EmptyState
             icon={Phone}
@@ -188,7 +189,7 @@ export default async function OwnerPropertyDetailPage({
             })}
           </div>
         )}
-      </SectionCard>
+      </div>
     </div>
   );
 }
