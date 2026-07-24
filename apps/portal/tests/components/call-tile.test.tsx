@@ -291,11 +291,15 @@ describe("CallTile", () => {
     });
 
     const tile = within(pipDoc.body);
+    // The armed-state warning is only present once armed.
+    expect(tile.queryByText(/genuine emergencies only/i)).toBeNull();
     await act(async () => {
       tile.getByText("911").click();
     });
     expect(triggerEmergency).not.toHaveBeenCalled();
     expect(tile.getByText("Confirm 911")).toBeTruthy();
+    // Arming also surfaces the tab overlay's confirm message in the PiP.
+    expect(tile.getByText(/genuine emergencies only/i)).toBeTruthy();
 
     await act(async () => {
       tile.getByText("Confirm 911").click();
