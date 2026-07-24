@@ -9,7 +9,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
-import { Clock, MoreHorizontal, Plus } from "lucide-react";
+import { Clock, MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -487,11 +487,15 @@ function RowActions({ row }: { readonly row: ShiftTimesheetRow }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setEditOpen(true)}>Edit</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+            <Pencil />
+            Edit
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => setDeleteOpen(true)}
             className="text-destructive focus:text-destructive"
           >
+            <Trash2 className="text-destructive" />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>

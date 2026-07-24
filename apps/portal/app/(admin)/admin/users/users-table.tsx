@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { UserRound, UserPlus, MoreHorizontal, KeyRound } from "lucide-react";
+import {
+  UserRound,
+  UserPlus,
+  MoreHorizontal,
+  KeyRound,
+  Pencil,
+  UserX,
+  UserCheck,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -378,14 +387,16 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+            <Pencil />
             Edit
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setResetOpen(true)}>
-            <KeyRound className="mr-2 h-4 w-4" />
+            <KeyRound />
             Reset password
           </DropdownMenuItem>
           {!isSelf ? (
             <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}>
+              {user.active ? <UserX /> : <UserCheck />}
               {user.active ? "Deactivate" : "Reactivate"}
             </DropdownMenuItem>
           ) : null}
@@ -394,6 +405,7 @@ function RowActions({ user, actorId }: { user: UserRow; actorId: string }) {
               onSelect={() => setDeleteOpen(true)}
               className="text-destructive focus:text-destructive"
             >
+              <Trash2 className="text-destructive" />
               Delete permanently
             </DropdownMenuItem>
           ) : null}
