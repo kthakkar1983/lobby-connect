@@ -81,7 +81,7 @@ export function PropertyOverview({
 
       {/* Recent + Incidents + Manage */}
       <div className="grid gap-4 lg:grid-cols-[1fr_minmax(0,18rem)]">
-        <Card className="gap-2 p-5">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h2 className={LABEL}>Recent calls</h2>
             <Link href="/owner/calls" className="text-sm text-accent-text hover:underline">View all</Link>
@@ -91,7 +91,7 @@ export function PropertyOverview({
           ) : (
             <div className="flex flex-col gap-2">{recent.map((c) => <CallRow key={c.detail.id} call={c} />)}</div>
           )}
-        </Card>
+        </div>
 
         <div className="flex flex-col gap-4">
           <Card className="gap-2 p-5">
