@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { copy } from "@/lib/copy";
 import { roleHasPresence } from "@/lib/voice/presence";
+import { presenceLabel } from "@/lib/owner/format";
+import type { Role } from "@lc/shared";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +67,9 @@ import {
   hardDeleteUserAction,
 } from "./actions";
 import { PasswordInput } from "@/components/ui/password-input";
+
+/** Humanized labels for the raw `profiles.role` DB enum — never print ADMIN/AGENT/OWNER. */
+const ROLE_LABELS: Record<Role, string> = { ADMIN: "Admin", AGENT: "Agent", OWNER: "Owner" };
 
 export type UserRow = {
   id: string;
@@ -539,7 +544,7 @@ export function UsersTable({ users, actorId }: Props) {
                   <TableCell className="text-text-muted">{u.email}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground">
-                      {u.role}
+                      {ROLE_LABELS[u.role]}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -558,7 +563,7 @@ export function UsersTable({ users, actorId }: Props) {
                     )}
                   </TableCell>
                   <TableCell className="text-text-muted text-xs">
-                    {roleHasPresence(u.role) ? u.status : "—"}
+                    {roleHasPresence(u.role) ? presenceLabel(u.status) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <RowActions user={u} actorId={actorId} />
