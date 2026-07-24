@@ -559,8 +559,8 @@ describe("Softphone — ring-silence (own ring element)", () => {
 
 /**
  * Error phase: when the line can't register (staging has no Twilio, or the prod
- * line briefly drops), the softphone shows "Phone line disconnected" and hides
- * its line-gated idle chrome (the Accepting toggle + "Incoming calls ring here").
+ * line briefly drops), the softphone shows "Your line dropped" and hides
+ * its line-gated idle chrome (the Accepting toggle + "You're on. We'll ring you.").
  * The token fetch is forced to fail so connect() lands in phase "error".
  *
  * DUTY IS TWILIO-INDEPENDENT AND MUST SURVIVE THIS PHASE. Break/Resume/End shift
@@ -600,20 +600,20 @@ describe("Softphone — error phase (line can't register)", () => {
     cleanup();
   });
 
-  it("shows 'Phone line disconnected' and hides the idle Accepting chrome in the error phase", async () => {
+  it("shows 'Your line dropped' and hides the idle Accepting chrome in the error phase", async () => {
     renderSoftphone("AGENT");
 
     // The line drops to error (token fetch failed) → disconnected message shows.
     await waitFor(() =>
-      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+      expect(screen.getByText(/Your line dropped\. Reload to reconnect/i)).toBeTruthy(),
     );
 
     // The line-gated idle chrome stays hidden in error.
     expect(screen.queryByText(/Accepting calls/i)).toBeNull();
-    expect(screen.queryByText(/Incoming calls ring here/i)).toBeNull();
-    // ...and off-duty sub-copy too: "Phone line disconnected" already says it,
+    expect(screen.queryByText(/You're on\. We'll ring you/i)).toBeNull();
+    // ...and off-duty sub-copy too: "Your line dropped" already says it,
     // and the block only survives this phase to carry the ring.
-    expect(screen.queryByText(/Your line is offline/i)).toBeNull();
+    expect(screen.queryByText(/Ready when you are/i)).toBeNull();
   });
 
   it("still offers Go on duty while the line is down — duty must not ride Twilio", async () => {
@@ -627,7 +627,7 @@ describe("Softphone — error phase (line can't register)", () => {
     renderSoftphone("AGENT");
 
     await waitFor(() =>
-      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+      expect(screen.getByText(/Your line dropped\. Reload to reconnect/i)).toBeTruthy(),
     );
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
 
@@ -650,7 +650,7 @@ describe("Softphone — error phase (line can't register)", () => {
     renderSoftphone("AGENT"); // presence defaults to onDuty: true
 
     await waitFor(() =>
-      expect(screen.getByText(/Phone line disconnected — reload to reconnect/i)).toBeTruthy(),
+      expect(screen.getByText(/Your line dropped\. Reload to reconnect/i)).toBeTruthy(),
     );
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("true"));
 
@@ -957,12 +957,21 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     );
   });
 
-  it("swaps the ring's sub-copy to 'Your line is offline.' while off duty", async () => {
+  it("renders the on-duty idle caption as a person-facing invitation, not mechanism narration", async () => {
+    // Batch 4 / Task 1: the idle face used to narrate the mechanism ("Incoming
+    // calls ring here.") instead of speaking to the person on shift.
+    renderSoftphone("AGENT");
+    await waitFor(() => screen.getByText(/Accepting calls/i)); // hydrated on duty
+    expect(screen.getByText("You're on. We'll ring you.")).toBeTruthy();
+    expect(screen.queryByText("Incoming calls ring here.")).toBeNull();
+  });
+
+  it("swaps the ring's sub-copy to 'Ready when you are.' while off duty", async () => {
     hydration = { onDuty: false, accepting: true };
     renderSoftphone("AGENT");
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
-    expect(screen.getByText("Your line is offline.")).toBeTruthy();
-    expect(screen.queryByText("Incoming calls ring here.")).toBeNull();
+    expect(screen.getByText("Ready when you are.")).toBeTruthy();
+    expect(screen.queryByText("You're on. We'll ring you.")).toBeNull();
     // The caption IS the accessible name (it lives inside the button), so there
     // is only one string to keep true — sighted and screen-reader users cannot
     // be told the control is called two different things.
@@ -978,14 +987,14 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
 
     const status = screen.getByRole("status");
-    expect(status.textContent).toBe("Your line is offline.");
+    expect(status.textContent).toBe("Ready when you are.");
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Go on duty" }));
 
     // Same node, new text — that is what makes it announce. A branch per state
     // would remount it and say nothing.
-    await waitFor(() => expect(status.textContent).toBe("Incoming calls ring here."));
+    await waitFor(() => expect(status.textContent).toBe("You're on. We'll ring you."));
     expect(screen.getByRole("status")).toBe(status);
   });
 
@@ -1000,7 +1009,7 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     await waitFor(() => screen.getByRole("button", { name: "Not accepting calls" }));
     expect(screen.getByTestId("duty-onduty").textContent).toBe("true");
     expect(screen.queryByRole("button", { name: "Go on duty" })).toBeNull();
-    expect(screen.getByText("Incoming calls ring here.")).toBeTruthy();
+    expect(screen.getByText("You're on. We'll ring you.")).toBeTruthy();
   });
 
   it("leaves the ring decorative on a BREAK — go-on-duty must never fire mid-shift", async () => {
@@ -1107,7 +1116,7 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     renderSoftphone("ADMIN");
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
 
-    expect(screen.getByText("You're dialed in for properties set to Covering.")).toBeTruthy();
+    expect(screen.getByText("We'll ring you for any property you're covering.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /accepting calls/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Go on duty" })).toBeTruthy();
   });
@@ -1214,7 +1223,7 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     renderSoftphone("AGENT");
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
     expect(screen.getByText("Off duty")).toBeTruthy();
-    expect(screen.queryByText("Line ready")).toBeNull();
+    expect(screen.queryByText("Ready")).toBeNull();
   });
 
   it('the line pill is phase-driven (never "Off duty") while on duty (spec §6)', async () => {
@@ -1390,7 +1399,7 @@ describe("Softphone — chromeless mode (Task 2)", () => {
       "rounded-card border border-border bg-card p-4 text-sm shadow-md",
     );
     expect(screen.getByText("Softphone")).toBeTruthy();
-    expect(screen.getByText("Line ready")).toBeTruthy();
+    expect(screen.getByText("Ready")).toBeTruthy();
     // The seam-ring idle brand moment (decorative while on duty) still renders.
     expect(document.querySelector(".lc-seam-drift")).toBeTruthy();
   });
@@ -1413,7 +1422,7 @@ describe("Softphone — chromeless mode (Task 2)", () => {
     // state reads from the ring + the shift row. The interior duty content (the
     // idle ring) still renders.
     expect(screen.queryByText("Softphone")).toBeNull();
-    expect(screen.queryByText("Line ready")).toBeNull();
+    expect(screen.queryByText("Ready")).toBeNull();
     expect(document.querySelector(".lc-seam-drift")).toBeTruthy();
   });
 });
