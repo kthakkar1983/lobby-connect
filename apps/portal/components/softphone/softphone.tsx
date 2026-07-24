@@ -11,7 +11,6 @@ import { useDutyGuard } from "@/components/dashboard/off-duty-prompt";
 import { docPipSupported } from "@/lib/duty-tile/call-tile-manager";
 import { attachTokenAutoRefresh, shouldReconnectDevice } from "@/lib/voice/device-resilience";
 import type { PresenceStatus } from "@/lib/voice/presence";
-import { useLineStatus } from "@/lib/dashboard/line-status";
 import { useRingingTabTitle } from "@/lib/hooks/use-ringing-tab-title";
 import { createRingtone, type Ringtone } from "@/lib/video/ringtone";
 import { primeRingtone } from "@/lib/video/prime";
@@ -273,12 +272,6 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
       void beatNowRef.current();
     }
   }, []);
-
-  // Beacon: report line phase to the LineStatusContext so the greeting widget
-  // can reflect live status. The default context is a no-op, so this is safe
-  // in layouts that don't mount a provider (admin layout).
-  const { report } = useLineStatus();
-  useEffect(() => { report(phase); }, [phase, report]);
 
   // Phase-3 (Task 7): PUBLISH the audio incoming ring + active-call info into the
   // CallSurfaceProvider so the property cards can show + answer them. This mirrors

@@ -21,7 +21,6 @@ import userEvent from "@testing-library/user-event";
 
 import {
   CallControlDivider,
-  CallControlTray,
   CallToggleButton,
   EndCallButton,
 } from "@/components/call/call-controls";
@@ -209,66 +208,38 @@ describe("CallToggleButton", () => {
   });
 });
 
-// Spec §5.4's whole purpose is that Connect and End call are visually separate
-// from the mic toggle — Connect hands off to RustDesk and End call terminates a
-// guest's call, neither of which belongs next to a mute button. A reviewer
-// demonstrated that replacing the divider's body with `return null` AND
-// stripping the tray to a bare flex row left the entire suite green, so the one
-// part of §5 with a stated safety purpose had no coverage at all.
-describe("CallControlTray / CallControlDivider (spec §5.4 grouping)", () => {
-  it("wraps the adjust-controls in one tray, together and apart from the rest", () => {
+// Spec §5.4: End call / Connect read isolated from the mic toggle via a real
+// divider — Connect hands off to RustDesk and End call terminates a guest's
+// call, neither of which belongs beside a mute button. A reviewer showed that
+// replacing the divider body with `return null` left the whole suite green, so
+// the one part of §5 with a stated safety purpose needs its own coverage. (The
+// old CallControlTray wrapper this block also exercised was removed in Batch 5a
+// — both overlays sequence the controls as flat siblings now.)
+describe("CallControlDivider (spec §5.4 isolation)", () => {
+  it("renders a real divider between the toggle and Connect", () => {
     render(
       <div>
-        <CallControlTray>
-          <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />
-          <CallToggleButton label="Camera" icon={null} pressed={false} title="off" onToggle={vi.fn()} />
-        </CallControlTray>
-        <CallControlDivider />
-        <button type="button">Connect</button>
-      </div>,
-    );
-
-    const tray = screen.getByTestId("call-control-tray");
-    expect(tray.contains(screen.getByRole("button", { name: /^mute$/i }))).toBe(true);
-    expect(tray.contains(screen.getByRole("button", { name: /^camera\b/i }))).toBe(true);
-    // Connect is the control the grouping exists to hold OUT of the tray.
-    expect(tray.contains(screen.getByRole("button", { name: "Connect" }))).toBe(false);
-
-    // The tray must be a fill, not a bare flex row — stripping its background
-    // leaves the DOM grouping intact and everything above green while erasing
-    // the grouping on screen. Deliberately loose about WHICH fill: the current
-    // token reads at only 1.08:1 against the control bar and may have to change
-    // once someone looks at it on hardware. Pinning the token here would fight
-    // that; pinning that a fill EXISTS will not.
-    expect(tray.className).toMatch(/(^|\s)bg-/);
-  });
-
-  it("renders a real divider between the tray and Connect", () => {
-    render(
-      <div>
-        <CallControlTray>
-          <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />
-        </CallControlTray>
+        <CallToggleButton label="Mute" icon={null} pressed={false} title="off" onToggle={vi.fn()} />
         <CallControlDivider />
         <button type="button">Connect</button>
       </div>,
     );
 
     const divider = screen.getByTestId("call-control-divider");
-    // A `return null` divider would leave the DOM order intact and every other
-    // assertion green — so pin that it renders something with a visible fill.
+    // A `return null` divider would leave DOM order intact and every other
+    // assertion green — pin that it renders something with a visible fill.
     expect(divider.className).toContain("bg-border");
     expect(divider.getAttribute("aria-hidden")).toBe("true");
 
-    const tray = screen.getByTestId("call-control-tray");
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4: divider sits after the toggle and
+    // before Connect (the control the isolation exists to hold apart).
+    const mute = screen.getByRole("button", { name: /^mute$/i });
     const connect = screen.getByRole("button", { name: "Connect" });
-    // Node.DOCUMENT_POSITION_FOLLOWING === 4: the divider comes after the tray
-    // and before Connect.
-    expect(tray.compareDocumentPosition(divider) & 4).toBeTruthy();
+    expect(mute.compareDocumentPosition(divider) & 4).toBeTruthy();
     expect(divider.compareDocumentPosition(connect) & 4).toBeTruthy();
   });
 
-  it("fires onToggle when clicked", async () => {
+  it("fires onToggle when the toggle is clicked", async () => {
     const user = userEvent.setup();
     const onToggle = vi.fn();
     render(

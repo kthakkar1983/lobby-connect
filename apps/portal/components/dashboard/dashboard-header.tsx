@@ -54,8 +54,8 @@ export function DashboardHeader({
   readonly firstName: string;
   readonly children?: React.ReactNode;
 }) {
-  // Time-aware, mirroring GreetingLine: render a neutral default on the server and
-  // resolve the greeting on the client so the local hour never mismatches hydration.
+  // Time-aware: render a neutral default on the server and resolve the greeting on
+  // the client so the local hour never mismatches hydration.
   const [greeting, setGreeting] = useState("Welcome back");
   useEffect(() => {
     setGreeting(greetingForHour(new Date().getHours()));
