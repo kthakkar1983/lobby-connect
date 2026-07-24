@@ -91,7 +91,7 @@ export default async function OwnerHomePage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
       <AutoRefresh />
-      <h1 className="sr-only">Your hotel</h1>
+      <h1 className="sr-only">Your properties</h1>
       <DashboardHeader firstName={firstName} />
       {props.length === 1 ? (
         <SingleHotel supabase={supabase} property={props[0]!} now={now} />

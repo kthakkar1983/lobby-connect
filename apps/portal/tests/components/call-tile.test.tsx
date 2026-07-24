@@ -628,6 +628,31 @@ describe("CallTile", () => {
     expect(pipDoc.body.querySelector('[data-testid="hotel-clock-chip"]')).toBeNull();
   });
 
+  // Copy fix (2026-07-23, uiux-polish-batch4-copy): the copy guide
+  // (docs/brand/ui-copy-guide.md) settles on ONE noun for a property,
+  // "Property" — "Hotel" was the odd one out on both tile faces. The
+  // data-testid stays "hotel-clock-chip" (a code identifier, out of scope
+  // for this pass); only the visible labels change.
+  it('labels the video clock-chip "Property", not "Hotel"', async () => {
+    const track = { kind: "video" } as unknown as MediaStreamTrack;
+    const { pipDoc } = renderTile({ active: videoActiveTz, controls: makeControls(), track });
+    await act(async () => screen.getByText("publish active").click());
+    await act(async () => screen.getByText("publish track").click());
+    await openTile();
+    const tile = within(pipDoc.body);
+    expect(tile.getByText("Property")).toBeTruthy();
+    expect(tile.queryByText("Hotel")).toBeNull();
+  });
+
+  it('labels the audio face clock "Property local time", not "Hotel local time"', async () => {
+    const { pipDoc } = renderTile({ active: audioActive, controls: makeControls() });
+    await act(async () => screen.getByText("publish active").click());
+    await openTile();
+    const tile = within(pipDoc.body);
+    expect(tile.getByText("Property local time")).toBeTruthy();
+    expect(tile.queryByText("Hotel local time")).toBeNull();
+  });
+
   it("shows the caption band in the tile only after captions are turned on (default OFF)", async () => {
     const track = { kind: "video" } as unknown as MediaStreamTrack;
     const { pipDoc } = renderTile({ active: videoActive, controls: makeControls(), track });

@@ -67,16 +67,16 @@ describe("AudioCallOverlay", () => {
     expect(screen.getByRole("button", { name: /911 active/i })).toHaveProperty("disabled", true);
   });
 
-  it("shows hotel local time only when a timezone is provided", () => {
+  it("shows property local time only when a timezone is provided", () => {
     const { rerender } = render(<AudioCallOverlay {...baseProps} timeZone={null} />);
-    expect(screen.queryByText(/hotel local time/i)).toBeNull();
+    expect(screen.queryByText(/property local time/i)).toBeNull();
     rerender(<AudioCallOverlay {...baseProps} timeZone="America/New_York" />);
-    expect(screen.getByText(/hotel local time/i)).toBeTruthy();
+    expect(screen.getByText(/property local time/i)).toBeTruthy();
   });
 
   it("hides local time for an invalid timezone (no crash)", () => {
     render(<AudioCallOverlay {...baseProps} timeZone="Not/AZone" />);
-    expect(screen.queryByText(/hotel local time/i)).toBeNull();
+    expect(screen.queryByText(/property local time/i)).toBeNull();
   });
 
   it("renders the caption band with the guest's words", () => {

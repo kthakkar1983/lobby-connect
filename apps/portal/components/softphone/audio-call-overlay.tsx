@@ -263,7 +263,7 @@ export function AudioCallOverlay({
             </span>
             {localTime && (
               <div className="text-center">
-                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-live">Hotel local time</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-live">Property local time</div>
                 <div className="mt-0.5 font-mono text-2xl font-extrabold uppercase tracking-wide">{localTime}</div>
               </div>
             )}

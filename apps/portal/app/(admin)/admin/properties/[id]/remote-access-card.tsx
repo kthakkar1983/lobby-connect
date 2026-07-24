@@ -89,7 +89,7 @@ export function RemoteAccessCard({
                 <AlertDialogTitle>Remove remote-access credentials?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Agents won&apos;t be able to Connect to this property&apos;s
-                  hotel PC until new credentials are saved.
+                  PC until new credentials are saved.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -106,7 +106,7 @@ export function RemoteAccessCard({
       <div className="flex flex-col gap-4">
         <p className="text-xs text-text-muted">
           RustDesk unattended-access credentials for this property&apos;s
-          hotel PC. Stored for the Connect deep link on the agent dashboard.
+          PC. Stored for the Connect deep link on the agent dashboard.
           Never shown to agents directly.
         </p>
 

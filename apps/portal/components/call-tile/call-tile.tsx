@@ -323,7 +323,7 @@ export function CallTile(): React.JSX.Element | null {
                   data-testid="hotel-clock-chip"
                   className="absolute left-2 top-2 z-10 flex flex-col gap-0.5 rounded-button bg-black/40 px-2 py-1"
                 >
-                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-live">Hotel</span>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-live">Property</span>
                   <span className="flex items-center gap-1 font-mono text-xs font-semibold">
                     <Clock size={11} /> {localTime}
                   </span>
@@ -340,7 +340,7 @@ export function CallTile(): React.JSX.Element | null {
             <p className="font-mono text-xs text-primary-foreground/70">{formatElapsed(elapsed)}</p>
             <div className="mt-1">
               <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-live">
-                Hotel local time
+                Property local time
               </div>
               <div className="font-mono text-lg font-extrabold">{localTime ?? "—"}</div>
             </div>

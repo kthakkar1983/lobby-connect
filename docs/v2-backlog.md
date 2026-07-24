@@ -217,3 +217,7 @@ the clean-alias `/onboarding`; no hard delete required; already-active users sti
 **Observation.** A kiosk video call placed while the target set is empty (assigned agent off duty/lapsed, all admins `covering=false`) rings out the FULL ring window before the guest sees the apology — nobody is polled/pushed, but nothing tells the kiosk that upfront, so the guest waits ~120s for a call that can never be answered. (Audio already short-circuits: the voice webhook's presence-gated dial plays the apology immediately on an empty target set + Sentry-warns.)
 
 **Fix sketch.** Mirror the audio behavior at video-call creation: `POST /api/kiosk/call-started` (or the shared target resolver) computes the eligible-target set; when it's empty, finalize the row NO_ANSWER immediately and return a "no one available" signal so the kiosk jumps straight to the apology screen + Sentry warning (uncovered-property observability, same as audio). Care: keep fail-open — only short-circuit on a CLEAN empty set, never on a resolver error.
+
+## Marketing-site SEO — industry positioning (added 2026-07-23)
+
+The portal `<meta description>` was made industry-neutral ("After-hours front desk, staffed by real people.") because the portal is auth-gated and does no real SEO. When a public marketing site exists, decide the real keyword/positioning trade-off there: "hotels" (accurate for the pilot, strong keyword) vs. industry-neutral (Lobby Connect will serve other industries). Owner: Kumar. Not a code change in the app.
