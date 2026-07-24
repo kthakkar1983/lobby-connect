@@ -1108,17 +1108,22 @@ describe("Softphone — D13 duty hydration + gated beats", () => {
     expect(liveToggle.className).not.toContain("bg-muted");
   });
 
-  it("leaves ADMIN with the static Covering copy and no Accepting toggle, ring control included", async () => {
+  it("leaves ADMIN without the Accepting toggle or a blurb below the status line, ring control included", async () => {
     // The Accepting toggle is AGENT-only and stays that way: an admin is dialed
-    // in via each property's Covering flag, not a personal AWAY switch. Duty
-    // itself is not role-scoped though, so the ring is still her way on shift.
+    // in via each property's Covering flag, not a personal AWAY switch. The old
+    // "We'll ring you for any property you're covering." blurb was removed as
+    // redundant — the status line already reads "Ready when you are." off duty
+    // (and "You're on. We'll ring you." on duty), so the admin idle face is just
+    // the ring + that one status line. Duty itself is not role-scoped though, so
+    // the ring is still her way on shift.
     hydration = { onDuty: false, accepting: true };
     renderSoftphone("ADMIN");
     await waitFor(() => expect(screen.getByTestId("duty-onduty").textContent).toBe("false"));
 
-    expect(screen.getByText("We'll ring you for any property you're covering.")).toBeTruthy();
+    expect(screen.queryByText("We'll ring you for any property you're covering.")).toBeNull();
     expect(screen.queryByRole("button", { name: /accepting calls/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Go on duty" })).toBeTruthy();
+    expect(screen.getByText("Ready when you are.")).toBeTruthy();
   });
 
   it("OFFERS to start the shift when the gated toggle is clicked (the guard's other half)", async () => {

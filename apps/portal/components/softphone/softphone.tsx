@@ -961,7 +961,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
               >
                 {onDuty ? "You're on. We'll ring you." : "Ready when you are."}
               </p>
-              {role === "AGENT" ? (
+              {role === "AGENT" && (
                 <button
                   type="button"
                   onClick={() => guard(toggleReady)}
@@ -987,10 +987,6 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
                 >
                   {acceptingNow ? "Accepting calls" : "Not accepting calls"}
                 </button>
-              ) : (
-                <p className="mt-3 text-center text-xs text-text-muted">
-                  We&apos;ll ring you for any property you&apos;re covering.
-                </p>
               )}
             </>
           )}
