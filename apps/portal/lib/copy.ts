@@ -15,27 +15,27 @@ export const copy = {
   empty: {
     ownerHome: {
       title: "No properties yet",
-      description: "Properties assigned to you will appear here.",
+      description: "Your admin assigns them.",
     },
     ownerCalls: {
       title: "No calls yet",
-      description: "Calls to the front desk will show up here.",
+      description: "It's been quiet.",
     },
     ownerPropertyCalls: {
       title: "No calls yet",
-      description: "This property's calls will show up here.",
+      description: "It's been quiet here.",
     },
     ownerIncidents: {
       title: "No emergencies",
-      description: "Active and resolved emergencies will appear here.",
+      description: "Nothing's come up.",
     },
     agentProperties: {
       title: "No properties assigned",
-      description: "An admin will assign the properties you cover.",
+      description: "Your admin will assign the properties you cover.",
     },
     agentCalls: {
       title: "No calls yet",
-      description: "Calls you answer tonight will appear here.",
+      description: "Nothing yet tonight.",
     },
     adminUsers: {
       title: "No users yet",
@@ -47,7 +47,7 @@ export const copy = {
     },
     adminAudit: {
       title: "No activity yet",
-      description: "Account activity will appear here as your team works.",
+      description: "Nothing logged yet.",
     },
   } satisfies Record<string, EmptyCopy>,
 
@@ -56,7 +56,7 @@ export const copy = {
     global: {
       title: "Something went wrong",
       description:
-        "This screen hit an unexpected error — it's been logged. Try again, or reload the page.",
+        "This screen hit an unexpected error. It's been logged. Try again, or reload the page.",
     },
     segment: {
       title: "Couldn't load this",

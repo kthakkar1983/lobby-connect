@@ -49,7 +49,7 @@ export function CallFilters({
     <div className="flex flex-col gap-2">
       {properties.length > 1 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className={LABEL}>Hotel</span>
+          <span className={LABEL}>Property</span>
           <Pill href={href({ property: null })} label="All" active={!activeProperty} />
           {properties.map((p) => (
             <Pill key={p.id} href={href({ property: p.id })} label={p.name} active={activeProperty === p.id} />

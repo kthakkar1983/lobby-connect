@@ -29,7 +29,7 @@ export function KioskLinkCard({ propertyId }: { readonly propertyId: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Couldn't copy — select the link and copy manually.");
+      setError("Couldn't copy. Select the link and copy manually.");
     }
   }
 
@@ -48,7 +48,7 @@ export function KioskLinkCard({ propertyId }: { readonly propertyId: string }) {
       <div className="flex flex-col gap-3">
         <p className="text-sm text-text-muted">
           Open this URL once on the tablet to pair it to this property. It carries
-          a long-lived signed token — treat it like a password.
+          a long-lived signed token. Treat it like a password.
         </p>
 
         {url ? (

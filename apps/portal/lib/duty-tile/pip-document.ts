@@ -26,7 +26,7 @@ export function preparePipDocument(target: Document): HTMLElement {
     }
   }
 
-  target.title = "Lobby Connect — deskphone";
+  target.title = "Lobby Connect deskphone";
   target.documentElement.className = document.documentElement.className;
   target.body.className = "bg-primary";
   target.body.style.margin = "0";

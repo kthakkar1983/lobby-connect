@@ -41,7 +41,7 @@ export async function resolveIncidentAction(
     .eq("id", incidentId);
 
   if (error) {
-    return { ok: false, error: "Couldn't resolve — please refresh and try again." };
+    return { ok: false, error: "Couldn't resolve. Please refresh and try again." };
   }
 
   await logAuditEvent({

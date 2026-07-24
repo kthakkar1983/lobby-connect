@@ -275,7 +275,7 @@ describe("CallBackShortcut", () => {
       screen.getByRole("button", { name: "Call Marlin back" }).click();
     });
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Could not start the call — try again."),
+      expect(screen.getByRole("alert").textContent).toBe("Could not start the call. Try again."),
     );
     expect(screen.getByRole("button", { name: "Call Marlin back" })).toBeTruthy();
   });
@@ -299,7 +299,7 @@ describe("CallBackShortcut", () => {
       screen.getByRole("button", { name: "Call Marlin back" }).click();
     });
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Already on a call — try again shortly."),
+      expect(screen.getByRole("alert").textContent).toBe("Already on a call. Try again shortly."),
     );
   });
 
@@ -327,7 +327,7 @@ describe("CallBackShortcut", () => {
       screen.getByRole("button", { name: "Call Marlin back" }).click();
     });
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Already on a call — try again shortly."),
+      expect(screen.getByRole("alert").textContent).toBe("Already on a call. Try again shortly."),
     );
 
     // Cycle 2: a new, unrelated call with Property B ends. Publishing

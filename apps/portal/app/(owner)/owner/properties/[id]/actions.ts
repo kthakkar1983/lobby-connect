@@ -76,7 +76,7 @@ export async function updateKioskContentAction(
     .eq("id", propertyId);
 
   if (error) {
-    return { ok: false, error: "Couldn't save — please refresh and try again." };
+    return { ok: false, error: "Couldn't save. Please refresh and try again." };
   }
 
   for (const a of audits) {

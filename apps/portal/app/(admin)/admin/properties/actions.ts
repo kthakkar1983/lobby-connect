@@ -427,7 +427,7 @@ export async function setPrimaryAgentAction(
     if (insertError.code === "23505") {
       return {
         ok: false,
-        error: "This assignment just changed — please refresh and try again.",
+        error: "This assignment just changed. Please refresh and try again.",
       };
     }
     return { ok: false, error: `Failed to assign agent: ${insertError.message}` };

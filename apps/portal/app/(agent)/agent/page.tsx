@@ -133,7 +133,7 @@ export default async function AgentDashboardPage() {
             <EmptyState
               icon={Phone}
               title="No calls yet tonight"
-              description="Calls you handle will chart here through the shift."
+              description="Quiet so far tonight."
               className="py-8"
             />
           )}

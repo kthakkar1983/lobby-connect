@@ -27,7 +27,7 @@
  *
  * Deliberately absent (spec D4/D5): a "calls tonight" figure (already on the
  * chart) and a "last shift" readout (net-new agent-facing plumbing for a state
- * lasting seconds). "Line ready" and "Accepting" belong to the softphone card
+ * lasting seconds). "Ready" and "Accepting" belong to the softphone card
  * directly above -- duplicating them here would be worse than the dead space
  * this card fills.
  */
@@ -90,7 +90,7 @@ function NotificationsBlockedHint() {
   return (
     <p className="flex items-start gap-1.5 text-xs text-attention-text">
       <BellOff size={14} aria-hidden="true" className="mt-px shrink-0" />
-      Notifications blocked — rings still work in this tab
+      Notifications blocked. Rings still work in this tab.
     </p>
   );
 }

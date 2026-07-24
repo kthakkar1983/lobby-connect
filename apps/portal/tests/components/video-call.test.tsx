@@ -378,7 +378,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await user.click(screen.getByRole("button", { name: /connect/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe("No remote access configured — ask an admin.");
+    expect(alert.textContent).toBe("No remote access configured. Ask an admin.");
     expect(remoteAccess.launchRustdesk).not.toHaveBeenCalled();
   });
 
@@ -395,7 +395,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     const connect = screen.getByRole("button", { name: /connect/i });
     await user.click(connect);
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
 
     // A stale failure left on screen after a working retry would read as "still
@@ -428,7 +428,7 @@ describe("VideoCall — provider-neutral behavior (livekit harness)", () => {
     await user.click(screen.getByRole("button", { name: /connect/i }));
 
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Could not fetch credentials — try again.",
+      "Could not fetch credentials. Try again.",
     );
   });
 

@@ -816,7 +816,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
       {/* The "SOFTPHONE" label + line pill are the standalone card's header.
           Chromeless (in the merged DutyCard) they're redundant clutter: the card
           is obviously the duty control, and duty/line state reads from the ring
-          ("Go on duty"/"Line ready") + the shift row below. So drop the header
+          ("Go on duty"/"Ready") + the shift row below. So drop the header
           in chromeless mode. */}
       {!chromeless && (
         <div className="flex items-center justify-between">
@@ -944,10 +944,10 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
           )}
           {/* Everything below describes a line that can actually carry a call, so
               none of it may claim to be true in the error phase — the ring above
-              is the one thing here that still works. `Phone line disconnected —
-              reload to reconnect.` (rendered further down) is the honest reading
-              of the line's state, and repeating "Your line is offline." above it
-              would only say it twice. */}
+              is the one thing here that still works. `Your line dropped. Reload
+              to reconnect.` (rendered further down) is the honest reading of the
+              line's state, and repeating "Ready when you are." above it would
+              only say it twice. */}
           {lineChrome && (
             <>
               {/* One persistent element, not a branch per state — activating the ring
@@ -959,7 +959,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
                 role="status"
                 className={cn("text-center text-text-muted", onDuty ? "mt-3" : "mt-1")}
               >
-                {onDuty ? "Incoming calls ring here." : "Your line is offline."}
+                {onDuty ? "You're on. We'll ring you." : "Ready when you are."}
               </p>
               {role === "AGENT" ? (
                 <button
@@ -989,7 +989,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
                 </button>
               ) : (
                 <p className="mt-3 text-center text-xs text-text-muted">
-                  You&apos;re dialed in for properties set to Covering.
+                  We&apos;ll ring you for any property you&apos;re covering.
                 </p>
               )}
             </>
@@ -1039,7 +1039,7 @@ export function Softphone({ role, chromeless = false }: SoftphoneProps) {
 
       {phase === "error" && (
         <p className="mt-3 text-text-muted">
-          Phone line disconnected — reload to reconnect.
+          Your line dropped. Reload to reconnect.
         </p>
       )}
     </div>
@@ -1055,7 +1055,7 @@ function LinePill({ phase, offDuty }: { readonly phase: Phase; readonly offDuty:
       : phase === "incoming"
         ? "Incoming"
         : phase === "ready"
-          ? "Line ready"
+          ? "Ready"
           : phase === "error"
             ? "Offline"
             : "Connecting";

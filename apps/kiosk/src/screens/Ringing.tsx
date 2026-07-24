@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Phone, ShieldCheck } from "lucide-react";
+import { Phone } from "lucide-react";
 import type { VideoTrackHandle } from "../lib/video/types";
 import { FloatingPaths } from "../components/floating-paths";
 import { CallControls } from "./CallControls";
@@ -43,10 +43,6 @@ export function Ringing({
         </div>
         <div className="font-display text-3xl font-semibold">{copy.ringing.title}</div>
         <div className="font-mono text-sm text-white/65">{copy.ringing.subtitle}</div>
-        <div className="mt-1 flex items-center gap-1.5 text-xs text-white/45">
-          <ShieldCheck className="size-3.5" strokeWidth={1.8} />
-          {copy.ringing.recordingNote}
-        </div>
       </div>
 
       <CallControls

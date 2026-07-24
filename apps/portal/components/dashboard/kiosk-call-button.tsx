@@ -76,8 +76,8 @@ export function KioskCallButton({
       r.ok
         ? null
         : r.busy
-          ? "Already on a call — try again shortly."
-          : "Could not start the call — try again.",
+          ? "Already on a call. Try again shortly."
+          : "Could not start the call. Try again.",
     );
   }
 

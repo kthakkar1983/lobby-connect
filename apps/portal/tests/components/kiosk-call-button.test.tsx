@@ -186,7 +186,7 @@ describe("KioskCallButton", () => {
       screen.getByRole("button", { name: "Kiosk" }).click();
     });
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Could not start the call — try again."),
+      expect(screen.getByRole("alert").textContent).toBe("Could not start the call. Try again."),
     );
   });
 
@@ -198,7 +198,7 @@ describe("KioskCallButton", () => {
       screen.getByRole("button", { name: "Kiosk" }).click();
     });
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("Already on a call — try again shortly."),
+      expect(screen.getByRole("alert").textContent).toBe("Already on a call. Try again shortly."),
     );
   });
 

@@ -198,7 +198,7 @@ export function DutyProvider({ children }: { readonly children: React.ReactNode 
       // gated beat does self-heal this, but a heartbeat interval of believing
       // she is covered is exactly the window that loses a guest's call. Roll
       // back instead: the ring returns, which IS the retry affordance, and
-      // "Your line is offline." goes back to being true. The inverse error (the
+      // "Ready when you are." goes back to being true. The inverse error (the
       // POST landed but its response was lost) is the safe one and converges on
       // its own via the off-duty resync read.
       if (!res || !res.ok) {

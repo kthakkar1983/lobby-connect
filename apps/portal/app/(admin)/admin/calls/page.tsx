@@ -95,7 +95,7 @@ export default async function AdminCallsPage({
 
       {rows.length === 0 ? (
         <Card className="p-0">
-          <EmptyState icon={Phone} title="No calls match" description="Try a different filter, or check back as the shift runs." />
+          <EmptyState icon={Phone} title="No calls match" description="Try a different filter." />
         </Card>
       ) : (
         <div className="flex flex-col gap-4">

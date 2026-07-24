@@ -11,7 +11,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "Lobby Connect",
-  description: "After-hours front desk for hotels.",
+  description: "After-hours front desk, staffed by real people.",
 };
 
 export default function RootLayout({

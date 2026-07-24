@@ -238,7 +238,7 @@ describe("PropertyActionButton", () => {
       <PropertyActionButton
         label="Connect"
         onAction={vi.fn()}
-        error="No remote access configured — ask an admin."
+        error="No remote access configured. Ask an admin."
       />,
     );
     expect(screen.getByRole("alert").textContent).toContain("No remote access configured");
@@ -267,7 +267,7 @@ describe("PropertyActionButton", () => {
         label="Connect"
         onAction={vi.fn()}
         errorPlacement="float"
-        error="Could not fetch credentials — try again."
+        error="Could not fetch credentials. Try again."
       />,
     );
     const alert = screen.getByRole("alert");
@@ -276,7 +276,7 @@ describe("PropertyActionButton", () => {
     expect(alert.className).toContain("max-w-64");
     expect(alert.className).toContain("line-clamp-2");
     // Clamped text still has to be readable in full somewhere.
-    expect(alert.getAttribute("title")).toBe("Could not fetch credentials — try again.");
+    expect(alert.getAttribute("title")).toBe("Could not fetch credentials. Try again.");
   });
 
   it("keeps the error in flow by default, where the row is the card's own", () => {
@@ -295,7 +295,7 @@ describe("PropertyActionButton", () => {
         onAction={vi.fn()}
         surface="dark"
         errorPlacement="float"
-        error="No credentials — ask an admin."
+        error="No credentials. Ask an admin."
       />,
     );
     // The tile floats over the guest's face; transparent text on it is a
@@ -337,7 +337,7 @@ describe("PropertyActionButton", () => {
         label="Connect"
         onAction={vi.fn()}
         surface="dark"
-        error="Could not fetch credentials — try again."
+        error="Could not fetch credentials. Try again."
       />,
     );
     expect(screen.getByRole("alert").className).toContain("text-attention");
